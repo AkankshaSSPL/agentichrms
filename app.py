@@ -42,9 +42,8 @@ with st.sidebar:
     st.markdown("### 🤖 HR Assistant")
     st.divider()
     
-    db_ok = os.path.exists(DB_PATH)
     chroma_ok = os.path.exists(CHROMA_DIR)
-    st.caption(f"DB: {'🟢' if db_ok else '🔴'} | Vector: {'🟢' if chroma_ok else '🔴'}")
+    st.caption(f"Policy Docs: {'🟢' if chroma_ok else '🔴'}")
     
     uploaded = st.file_uploader("Upload docs", type=["pdf", "md", "csv", "xlsx", "txt"], accept_multiple_files=True)
     if uploaded:
@@ -56,7 +55,7 @@ with st.sidebar:
             with st.spinner("Ingesting..."):
                 subprocess.run([sys.executable, "ingest_docs.py"], cwd=os.path.dirname(__file__))
     
-    queries = ["Headcount by dept", "Leave balance Rahul", "Maternity policy", "Onboarding Amit", "What is moonlighting disclosure?"]
+    queries = ["Maternity policy", "What is moonlighting disclosure?", "Remote work policy", "What are the leave types?", "Onboarding guidelines"]
     for q in queries:
         if st.button(q, key=q, use_container_width=True):
             st.session_state.current_query = q
@@ -260,6 +259,18 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
     user_msg = st.session_state.messages[-1]["content"]
     
     with st.spinner("Thinking..."):
+        # Greeting detection — handle without calling the agent
+        greeting_words = {"hi", "hello", "hey", "good morning", "good afternoon",
+                          "good evening", "greetings", "howdy", "hola", "namaste"}
+        if user_msg.strip().lower().rstrip("!.,") in greeting_words:
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": "How should I help you today?",
+                "steps": [],
+                "sources": []
+            })
+            st.rerun()
+
         try:
             graph = load_graph()
             inputs = {"messages": [HumanMessage(content=user_msg)], "sources": []}
@@ -278,7 +289,7 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                                 steps.append({"type": "tool", "name": tc.get("name")})
                     elif key == "tools":
                         if "sources" in value and value["sources"]:
-                            sources = value["sources"]
+                            sources.extend(value["sources"])
             
             # Filter and clean
             sources = filter_existing_sources(sources)

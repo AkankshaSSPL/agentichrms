@@ -1,4 +1,4 @@
-"""Retrieval tools with source tracking."""
+"""Retrieval tools with source tracking – returns structured data."""
 import os
 import sys
 import chromadb
@@ -18,25 +18,25 @@ class SourceTrackedRetriever:
         self.client = chromadb.PersistentClient(path=str(CHROMA_DIR))
         self.collection = self.client.get_or_create_collection(name="hr_docs_v2")
         self.model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
-    
+
     def retrieve_with_sources(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """Retrieve documents with source tracking."""
         query_embedding = self.model.encode(query).tolist()
-        
+
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=k,
             include=["documents", "metadatas", "distances"]
         )
-        
+
         if not results["documents"] or not results["documents"][0]:
             return []
-        
+
         sources = []
         for i in range(len(results["documents"][0])):
             metadata = results["metadatas"][0][i]
             doc_text = results["documents"][0][i]
-            
+
             source_info = {
                 "content": doc_text,
                 "source_file": metadata.get("source", "Unknown"),
@@ -46,7 +46,7 @@ class SourceTrackedRetriever:
                 "score": 1 - results["distances"][0][i]
             }
             sources.append(source_info)
-        
+
         return sources
 
 
@@ -54,21 +54,19 @@ _retriever = SourceTrackedRetriever()
 
 
 @tool
-def search_policies(query: str) -> str:
+def search_policies(query: str) -> Dict[str, Any]:
     """
-    Search HR policies and documents.
+    Search HR policies and documents. Returns both answer text and source list.
     """
     sources = _retriever.retrieve_with_sources(query, k=5)
-    
+
     if not sources:
-        return "No relevant documents found for this query."
-    
-    # Store for UI retrieval
-    if not hasattr(search_policies, '_last_sources'):
-        search_policies._last_sources = []
-    search_policies._last_sources = sources
-    
-    # Format results for LLM
+        return {
+            "answer": "No relevant documents found for this query.",
+            "sources": []
+        }
+
+    # Format results for LLM (the "answer" part)
     results = []
     for i, src in enumerate(sources, 1):
         results.append(
@@ -77,10 +75,10 @@ def search_policies(query: str) -> str:
             f"Lines {src['start_line']}-{src['end_line']}]\n\n"
             f"{src['content'][:1200]}{'...' if len(src['content']) > 1200 else ''}"
         )
-    
-    return "\n\n---\n\n".join(results)
 
+    answer = "\n\n---\n\n".join(results)
 
-def get_last_retrieved_sources() -> List[Dict[str, Any]]:
-    """Get sources from last retrieval call."""
-    return getattr(search_policies, '_last_sources', [])
+    return {
+        "answer": answer,
+        "sources": sources
+    }
