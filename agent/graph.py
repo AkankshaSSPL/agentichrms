@@ -89,7 +89,7 @@ def tools_node(state: AgentState):
                 else:
                     answer = result
             except Exception as e:
-                answer = f"Error executing tool {tool_name}: {e}"
+                answer = {"answer": f"Error executing tool {tool_name}: {e}", "sources": []}
 
         # Create a ToolMessage for the LLM
         tool_message = ToolMessage(content=str(answer), tool_call_id=tool_call["id"])

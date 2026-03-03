@@ -13,7 +13,7 @@ CHROMA_DIR = DATA_DIR / "chroma_db"
 DOCS_DIR = DEMO_DIR / "documents"
 
 # OpenAI
-OPENAI_API_KEY = os.getenv("AI_KEY")
+OPENAI_API_KEY = os.getenv("AI_KEY") or os.getenv("OPENAI_API_KEY")
 AGENT_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 
 # Email Settings
