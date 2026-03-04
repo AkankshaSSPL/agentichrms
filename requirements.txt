@@ -6,7 +6,9 @@ sentence-transformers
 langgraph
 langchain-openai
 langchain-core
+langchain
 pydantic
 pypdf
 openpyxl
 pandas
+python-docx

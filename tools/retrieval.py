@@ -19,7 +19,7 @@ class SourceTrackedRetriever:
         self.collection = self.client.get_or_create_collection(name="hr_docs_v2")
         self.model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
 
-    def retrieve_with_sources(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+    def retrieve_with_sources(self, query: str, k: int = 8) -> List[Dict[str, Any]]:
         """Retrieve documents with source tracking."""
         query_embedding = self.model.encode(query).tolist()
 
@@ -58,7 +58,7 @@ def search_policies(query: str) -> Dict[str, Any]:
     """
     Search HR policies and documents. Returns both answer text and source list.
     """
-    sources = _retriever.retrieve_with_sources(query, k=5)
+    sources = _retriever.retrieve_with_sources(query, k=8)
 
     if not sources:
         return {
