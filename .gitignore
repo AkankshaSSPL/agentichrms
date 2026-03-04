@@ -2,8 +2,8 @@ venv/
 .env
 __pycache__/
 *.pyc
-chroma_db/venv/ 
-.env 
-__pycache__/ 
-*.pyc 
-chroma_db/ 
+data/chroma_db/
+data/hr_database.sqlite
+node_modules/
+frontend/dist/
+.gemini/
