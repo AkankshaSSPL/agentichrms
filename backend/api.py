@@ -5,10 +5,11 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Optional
+import re
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 
 # Add project root to path
@@ -64,6 +65,7 @@ class DocumentPreviewRequest(BaseModel):
     source_file: str
     start_line: int = 1
     end_line: int = 10
+    section: Optional[str] = None
 
 
 # ── Endpoints ────────────────────────────────────────────────
@@ -129,6 +131,19 @@ def list_documents():
     return {"documents": files}
 
 
+@app.get("/docs/{filename:path}")
+async def serve_document(filename: str):
+    # Security: block path traversal attempts
+    if ".." in filename or filename.startswith("/") or filename.startswith("\\"):
+        raise HTTPException(400, "Invalid file path")
+    
+    file_path = os.path.join(DOCS_DIR, filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(404, "File not found")
+    
+    return FileResponse(file_path, media_type="application/pdf")
+
+
 @app.post("/api/upload")
 async def upload_files(files: list[UploadFile] = File(...)):
     os.makedirs(DOCS_DIR, exist_ok=True)
@@ -192,8 +207,25 @@ def document_preview(req: DocumentPreviewRequest):
             "highlight_start": start,
             "highlight_end": end,
         }
+    elif ext == ".pdf":
+        page = None
+        if req.section:
+            match = re.search(r"page\s*(\d+)", req.section, re.IGNORECASE)
+            if match:
+                page = int(match.group(1))
+
+        file_url = f"/docs/{os.path.basename(resolved)}"
+
+        return {
+            "type": "pdf",
+            "url": file_url,
+            "page": page,
+            "start_line": req.start_line,
+            "end_line": req.end_line,
+            "snippet": None,
+        }
     else:
-        # For PDF/DOCX/Excel — return the chunk content from the request
+        # For DOCX/Excel — return the chunk content from the request
         return {
             "type": "binary",
             "message": f"Binary file: {source_file}",

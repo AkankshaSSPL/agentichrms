@@ -1,14 +1,11 @@
-"""Document viewer — source preview for .md/.txt (line viewer) and .pdf (content snippet).
-
-No regex citation parsing. Sources come structured from the tool pipeline.
-Only responsibility: render previews and strip raw citation markers from display text.
-"""
+"""Document viewer — source preview with full page support for PDFs."""
 import os
 import re
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
+import pdfplumber
 
 try:
     from config import DOCS_DIR
@@ -39,12 +36,11 @@ def document_exists(source_file: str) -> bool:
 
 
 def strip_citation_markers(text: str) -> str:
-    """Remove ALL [Source: ...] markers from LLM output — one greedy sweep."""
+    """Remove ALL [Source: ...] markers from LLM output."""
     return re.sub(r'\[Source:[^\]]*\]', '', text).strip()
 
 
 def deduplicate_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Remove duplicate sources based on source_file."""
     seen = set()
     out = []
     for src in sources:
@@ -55,9 +51,16 @@ def deduplicate_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def filter_existing_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Keep only sources whose files exist on disk."""
-    return [s for s in sources if document_exists(s.get("source_file", ""))]
+@st.cache_data
+def get_pdf_page_text(filepath: str, page_num: int) -> str:
+    """Extract text using pdfplumber for better accuracy."""
+    try:
+        with pdfplumber.open(filepath) as pdf:
+            if 1 <= page_num <= len(pdf.pages):
+                return pdf.pages[page_num - 1].extract_text() or ""
+    except Exception as e:
+        print(f"Error: {e}")
+    return ""
 
 
 # ── Renderers ───────────────────────────────────────────────
@@ -80,34 +83,51 @@ def render_document_preview_html(source: Dict[str, Any]) -> None:
 
 
 def _render_pdf_preview(source: Dict[str, Any]) -> None:
-    """Show the chunk content from the PDF — we already have it in source['content']."""
+    """Render PDF preview showing specific page with highlighted chunks."""
     source_file = source.get("source_file", "Unknown")
-    section = source.get("section", "Page 1")
-    content = source.get("content", "")
-
-    if content:
-        escaped = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        html = f'''
-        <div style="background:#0a0c10; border:1px solid #252a35; border-radius:10px;
-                    padding:16px; font-family:'DM Mono',monospace; font-size:12px;
-                    color:#c9d1d9; max-height:350px; overflow-y:auto; line-height:1.7;
-                    white-space:pre-wrap; word-break:break-word;">
-            <div style="color:#4f8ef7; font-size:10px; font-weight:600;
-                        letter-spacing:1.2px; text-transform:uppercase;
-                        margin-bottom:10px; padding-bottom:8px;
-                        border-bottom:1px solid #252a35;">
-                📄 {source_file} — {section}
-            </div>
-            {escaped}
+    page_num = source.get("page", 1)
+    
+    # Resolve file path
+    filepath = resolve_doc_path(source_file)
+    if not filepath:
+        st.warning(f"PDF not found: {source_file}")
+        return
+    
+    # Extract page text
+    full_text = get_pdf_page_text(str(filepath), page_num)
+    
+    if not full_text:
+        st.warning(f"Could not extract text from page {page_num}")
+        return
+    
+    # Get chunks to highlight
+    chunks = source.get("chunks", [])
+    
+    # Build HTML with highlights
+    escaped = full_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    
+    # Highlight each chunk
+    for chunk in chunks:
+        chunk_clean = chunk.strip()
+        if chunk_clean in full_text:
+            chunk_esc = chunk_clean.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            escaped = escaped.replace(chunk_esc, f'<mark style="background-color: #fbbf24; color: #000; padding: 2px 4px; border-radius: 3px;">{chunk_esc}</mark>')
+    
+    html = f'''
+    <div style="background:#0a0c10; border:1px solid #252a35; border-radius:10px;
+                padding:16px; font-family:'DM Mono',monospace; font-size:12px;
+                color:#c9d1d9; max-height:350px; overflow-y:auto; line-height:1.7;
+                white-space:pre-wrap; word-break:break-word;">
+        <div style="color:#4f8ef7; font-size:10px; font-weight:600;
+                    letter-spacing:1.2px; text-transform:uppercase;
+                    margin-bottom:10px; padding-bottom:8px;
+                    border-bottom:1px solid #252a35;">
+            📄 {source_file} — Page {page_num}
         </div>
-        '''
-        components.html(html, height=370, scrolling=True)
-    else:
-        resolved = resolve_doc_path(source_file)
-        if resolved:
-            st.info(f"📄 **{source_file}** — {section} referenced.")
-        else:
-            st.warning(f"⚠️ PDF not found on disk: {source_file}")
+        {escaped}
+    </div>
+    '''
+    components.html(html, height=370, scrolling=True)
 
 
 def _render_text_preview(source: Dict[str, Any]) -> None:

@@ -7,7 +7,7 @@ import os
 import sys
 import chromadb
 import pandas as pd
-import pypdf
+import pyplumber
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -42,6 +42,7 @@ def extract_text_from_pdf(filepath):
                 "metadata": {
                     "source": filename,
                     "section": f"Page {page_idx + 1}",
+                    "page": page_idx + 1,                     # <-- PAGE NUMBER
                     "start_line": approx_start,
                     "end_line": approx_end,
                 },
@@ -101,7 +102,6 @@ def extract_text_from_txt(filepath):
         content = f.read()
     if not content.strip():
         return []
-    lines = content.split("\n")
     sub_chunks = splitter.split_text(content)
     chunks = []
     char_offset = 0
@@ -236,15 +236,36 @@ def main():
     model = SentenceTransformer(LOCAL_EMBEDDING_MODEL)
 
     print(f"Initializing ChromaDB at {CHROMA_DIR} ...")
+    # Ensure directory exists
+    os.makedirs(CHROMA_DIR, exist_ok=True)
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 
-    # Wipe old collection to avoid stale/duplicate chunks
+    # List existing collections
+    collections = client.list_collections()
+    print(f"Existing collections: {[col.name for col in collections]}")
+
+    # Delete the collection if it exists
+    collection_name = "hr_docs_v2"
+    if any(col.name == collection_name for col in collections):
+        try:
+            client.delete_collection(collection_name)
+            print(f"  Deleted existing {collection_name} collection.")
+        except Exception as e:
+            print(f"  Error deleting collection: {e}")
+            # If deletion fails, we might need to handle differently
+            # For now, we'll try to continue and see if we can create anyway
+    else:
+        print(f"  No existing {collection_name} collection to delete.")
+
+    # Create a new collection
     try:
-        client.delete_collection("hr_docs_v2")
-        print("  Deleted old hr_docs_v2 collection.")
-    except Exception:
-        pass
-    collection = client.create_collection(name="hr_docs_v2")
+        collection = client.create_collection(name=collection_name)
+        print(f"  Created new {collection_name} collection.")
+    except Exception as e:
+        print(f"  Error creating collection: {e}")
+        # If creation fails, perhaps the collection still exists? Try get_or_create as fallback
+        collection = client.get_or_create_collection(name=collection_name)
+        print(f"  Using existing {collection_name} collection (may contain old data).")
 
     print(f"Scanning {DOCS_DIR} ...")
     if not os.path.exists(DOCS_DIR):
@@ -294,7 +315,6 @@ def main():
         return
 
     print(f"\nUpserting {len(all_chunks)} chunks into ChromaDB ...")
-    # Chroma has a batch limit; upsert in batches of 500
     batch = 500
     for start in range(0, len(all_chunks), batch):
         end = min(start + batch, len(all_chunks))

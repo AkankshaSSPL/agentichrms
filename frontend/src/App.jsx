@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 
 const API = '/api'
 
@@ -13,13 +14,34 @@ const QUICK_QUESTIONS = [
     'Check leave balance for Rahul',
 ]
 
+// Helper to escape HTML special characters
+function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// Generate highlighted HTML from full page text and chunks
+function generateHighlightedHtml(fullText, chunks) {
+    if (!fullText) return '<p>No text available</p>';
+    let html = escapeHtml(fullText).replace(/\n/g, '<br>');
+    chunks.forEach(chunk => {
+        const escapedChunk = escapeHtml(chunk);
+        // Simple replacement – works if chunks are exact substrings
+        html = html.replace(escapedChunk, `<mark>${escapedChunk}</mark>`);
+    });
+    return html;
+}
+
 export default function App() {
     const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [docCount, setDocCount] = useState(0)
     const [expandedIdx, setExpandedIdx] = useState(null)
-    const [previewLines, setPreviewLines] = useState(null)
+    const [previewData, setPreviewData] = useState(null) // stores { type, content/lines/html }
     const chatEnd = useRef(null)
 
     useEffect(() => {
@@ -44,7 +66,7 @@ export default function App() {
         setInput('')
         setLoading(true)
         setExpandedIdx(null)
-        setPreviewLines(null)
+        setPreviewData(null)
 
         try {
             const res = await fetch(`${API}/chat`, {
@@ -73,13 +95,14 @@ export default function App() {
     async function togglePreview(idx, source) {
         if (expandedIdx === idx) {
             setExpandedIdx(null)
-            setPreviewLines(null)
+            setPreviewData(null)
             return
         }
         setExpandedIdx(idx)
 
         const ext = source.source_file.split('.').pop().toLowerCase()
-        if (['md', 'txt'].includes(ext)) {
+        if (['md', 'txt', 'pdf'].includes(ext)) {
+            // Fetch structured preview from backend
             try {
                 const res = await fetch(`${API}/document-preview`, {
                     method: 'POST',
@@ -88,15 +111,17 @@ export default function App() {
                         source_file: source.source_file,
                         start_line: source.start_line,
                         end_line: source.end_line,
+                        section: source.section,
                     }),
                 })
                 const data = await res.json()
-                setPreviewLines(data)
+                setPreviewData(data)
             } catch {
-                setPreviewLines(null)
+                setPreviewData(null)
             }
         } else {
-            setPreviewLines({ type: 'content', content: source.content })
+            // Fallback: show the raw snippet (source.content)
+            setPreviewData({ type: 'content', content: source.content || 'No content available.' })
         }
     }
 
@@ -134,7 +159,7 @@ export default function App() {
                 <button className="sidebar-clear" onClick={() => {
                     setMessages([])
                     setExpandedIdx(null)
-                    setPreviewLines(null)
+                    setPreviewData(null)
                 }}>
                     🗑 Clear conversation
                 </button>
@@ -241,24 +266,41 @@ export default function App() {
                                         </button>
                                     </div>
 
-                                    {isExpanded && previewLines && (
-                                        previewLines.type === 'text' ? (
-                                            <div className="code-viewer">
-                                                {previewLines.lines.map((line, li) => (
-                                                    <div key={li} className={`code-line${line.highlighted ? ' highlighted' : ''}`}>
-                                                        <span className="line-num">{line.num}</span>
-                                                        <span className="line-text">{line.text}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="pdf-content-preview">
-                                                <div className="pdf-label">
-                                                    📄 {src.source_file} — {src.section}
+                                    {isExpanded && previewData && (
+                                        <>
+                                            {previewData.type === 'text' && (
+                                                <div className="code-viewer">
+                                                    {previewData.lines.map((line, li) => (
+                                                        <div key={li} className={`code-line${line.highlighted ? ' highlighted' : ''}`}>
+                                                            <span className="line-num">{line.num}</span>
+                                                            <span className="line-text">{line.text}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                {previewLines.content || src.content || 'Content not available for preview.'}
-                                            </div>
-                                        )
+                                            )}
+                                            {previewData.type === 'pdf' && (
+                                                <div className="pdf-viewer">
+                                                    <iframe
+                                                        src={`${previewData.url}${previewData.page ? '#page=' + previewData.page : ''}`}
+                                                        title="PDF Preview"
+                                                        width="100%"
+                                                        height="500px"
+                                                        style={{ border: 'none' }}
+                                                    />
+                                                    {previewData.snippet && (
+                                                        <div className="pdf-snippet">
+                                                            <strong>Excerpt:</strong>
+                                                            <p>{previewData.snippet}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {previewData.type === 'content' && (
+                                                <div className="pdf-content-preview">
+                                                    <pre>{previewData.content}</pre>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             )
