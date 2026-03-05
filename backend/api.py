@@ -5,11 +5,10 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Optional
-import re
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 # Add project root to path
@@ -55,17 +54,20 @@ class SourceInfo(BaseModel):
     end_line: int
     content: Optional[str] = None
     score: Optional[float] = None
+    # PDF-specific fields (optional, but now allowed)
+    full_content: Optional[list[dict]] = None
+    chunks: Optional[list[str]] = None
+    page: Optional[int] = None
 
 class ChatResponse(BaseModel):
     answer: str
-    sources: list[dict]
+    sources: list[SourceInfo]   # <-- now using the model that includes PDF fields
     steps: list[dict]
 
 class DocumentPreviewRequest(BaseModel):
     source_file: str
     start_line: int = 1
     end_line: int = 10
-    section: Optional[str] = None
 
 
 # ── Endpoints ────────────────────────────────────────────────
@@ -101,16 +103,10 @@ def chat(req: ChatRequest):
     sources = deduplicate_sources(sources)
     display_answer = strip_citation_markers(full_response)
 
+    # ✅ FIX: pass the full source objects – no field stripping
     return ChatResponse(
         answer=display_answer,
-        sources=[{
-            "source_file": s.get("source_file", ""),
-            "section": s.get("section", ""),
-            "start_line": s.get("start_line", 1),
-            "end_line": s.get("end_line", 5),
-            "content": s.get("content", ""),
-            "score": s.get("score", 0),
-        } for s in sources],
+        sources=sources,          # ← now includes full_content, chunks, page for PDFs
         steps=steps,
     )
 
@@ -129,19 +125,6 @@ def list_documents():
                 "ext": os.path.splitext(f)[1].lower(),
             })
     return {"documents": files}
-
-
-@app.get("/docs/{filename:path}")
-async def serve_document(filename: str):
-    # Security: block path traversal attempts
-    if ".." in filename or filename.startswith("/") or filename.startswith("\\"):
-        raise HTTPException(400, "Invalid file path")
-    
-    file_path = os.path.join(DOCS_DIR, filename)
-    if not os.path.isfile(file_path):
-        raise HTTPException(404, "File not found")
-    
-    return FileResponse(file_path, media_type="application/pdf")
 
 
 @app.post("/api/upload")
@@ -184,14 +167,20 @@ def document_preview(req: DocumentPreviewRequest):
     if not resolved:
         raise HTTPException(404, f"File not found: {source_file}")
 
-    if ext in (".md", ".txt"):
-        with open(resolved, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.read().split("\n")
+    if ext in (".md", ".txt", ".docx"):
+        if ext == ".docx":
+            import docx
+            doc = docx.Document(resolved)
+            lines = [p.text for p in doc.paragraphs]
+        else:
+            with open(resolved, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.read().split("\n")
+                
         total = len(lines)
         start = max(1, min(req.start_line, total))
         end = max(start, min(req.end_line, total))
-        window_start = max(0, start - 5)
-        window_end = min(total, end + 10)
+        window_start = max(0, start - 10) # Show a bit more context for DOCX
+        window_end = min(total, end + 30)
 
         return {
             "type": "text",
@@ -207,25 +196,8 @@ def document_preview(req: DocumentPreviewRequest):
             "highlight_start": start,
             "highlight_end": end,
         }
-    elif ext == ".pdf":
-        page = None
-        if req.section:
-            match = re.search(r"page\s*(\d+)", req.section, re.IGNORECASE)
-            if match:
-                page = int(match.group(1))
-
-        file_url = f"/docs/{os.path.basename(resolved)}"
-
-        return {
-            "type": "pdf",
-            "url": file_url,
-            "page": page,
-            "start_line": req.start_line,
-            "end_line": req.end_line,
-            "snippet": None,
-        }
     else:
-        # For DOCX/Excel — return the chunk content from the request
+        # For PDF/DOCX/Excel — return the chunk content from the request
         return {
             "type": "binary",
             "message": f"Binary file: {source_file}",

@@ -8,6 +8,7 @@ import sys
 import chromadb
 import pandas as pd
 import pyplumber
+import pypdf
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 

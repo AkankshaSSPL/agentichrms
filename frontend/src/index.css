@@ -112,27 +112,7 @@ body {
   color: var(--green);
 }
 
-.pdf-content-preview {
-  background: #0a0c10;
-  border: 1px solid #252a35;
-  border-radius: 8px;
-  padding: 16px;
-  font-family: 'DM Mono', monospace;
-  font-size: 12px;
-  color: #c9d1d9;
-  max-height: 350px;
-  overflow-y: auto;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
 
-.pdf-content-preview mark {
-  background-color: #fbbf24;
-  color: #000;
-  padding: 2px 4px;
-  border-radius: 3px;
-}
 
 .sidebar-status .dot {
   width: 6px;
@@ -285,6 +265,7 @@ body {
   line-height: 1.75;
   color: var(--text-primary);
   margin-bottom: 8px;
+  overflow-wrap: break-word;
 }
 
 .answer-card .sources-list {
@@ -441,8 +422,18 @@ body {
 .preview-panel {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow-y: scroll;
+  /* Force scrollbar visibility for clarity */
   background: var(--bg-secondary);
+}
+
+.preview-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.preview-panel::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 6px;
 }
 
 .preview-header {
@@ -546,11 +537,10 @@ body {
 /* Code viewer */
 .code-viewer {
   border-top: 1px solid var(--border);
-  max-height: 320px;
-  overflow-y: auto;
-  font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.65;
+  overflow-wrap: anywhere;
+  /* Removed max-height to allow panel-level vertical scroll */
 }
 
 .code-viewer::-webkit-scrollbar {
@@ -582,42 +572,102 @@ body {
   padding: 1px 12px;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--text-secondary);
+  min-width: 0;
 }
 
 .code-line.highlighted {
-  background: var(--yellow-dim);
-  border-left: 2px solid var(--yellow);
+  background: rgba(251, 191, 36, 0.2);
+  border-left: 2px solid #fbbf24;
 }
 
 .code-line.highlighted .line-num {
-  color: var(--yellow);
+  color: #fbbf24;
   font-weight: 600;
 }
 
 .code-line.highlighted .line-text {
-  color: var(--text-primary);
+  color: #fff;
+}
+
+/* Consistent highlight style for <mark> tags used in PDFs */
+mark {
+  background-color: #fbbf24;
+  color: #000;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 500;
 }
 
 /* PDF content preview */
-.pdf-content-preview {
+.pdf-preview-container {
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--border);
-  padding: 16px;
-  font-family: var(--mono);
+}
+
+.pdf-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--bg-card-hover);
+  border-bottom: 1px solid var(--border);
+}
+
+.pdf-nav-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 4px 10px;
+  border-radius: 4px;
   font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.pdf-nav-btn:hover:not(:disabled) {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pdf-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pdf-page-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pdf-page-count {
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.pdf-content-preview {
+  padding: 16px;
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 320px;
-  overflow-y: auto;
+  overflow-wrap: anywhere;
+  /* Removed max-height to allow panel-level vertical scroll */
 }
 
-.pdf-viewer iframe {
-  border: none;
-  width: 100%;
-  height: 500px;
-  background: #f5f5f5;
+.pdf-content-preview pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: inherit;
 }
 
 .pdf-content-preview .pdf-label {
@@ -674,24 +724,60 @@ body {
   font-family: var(--mono);
 }
 
-.pdf-content-preview {
-  background: #0a0c10;
-  border: 1px solid #252a35;
-  border-radius: 8px;
-  padding: 16px;
-  font-family: 'DM Mono', monospace;
-  font-size: 12px;
-  color: #c9d1d9;
-  max-height: 350px;
-  overflow-y: auto;
+/* Markdown Content Formatting */
+.markdown-content {
+  font-size: 14.5px;
   line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
+  color: var(--text-secondary);
 }
 
-.pdf-content-preview mark {
-  background-color: #fbbf24;
-  color: #000;
-  padding: 2px 4px;
-  border-radius: 3px;
+.markdown-content p {
+  margin-bottom: 14px;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 14px;
+  padding-left: 22px;
+}
+
+.markdown-content li {
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.markdown-content ul li::marker {
+  color: var(--accent);
+}
+
+.markdown-content strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(226, 232, 240, 0.1);
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  color: var(--text-primary);
+  margin-top: 20px;
+  margin-bottom: 10px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.markdown-content h1 {
+  font-size: 1.3em;
+}
+
+.markdown-content h2 {
+  font-size: 1.15em;
+}
+
+.markdown-content h3 {
+  font-size: 1.1em;
 }

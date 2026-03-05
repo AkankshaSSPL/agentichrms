@@ -41,13 +41,27 @@ def strip_citation_markers(text: str) -> str:
 
 
 def deduplicate_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    seen = set()
+    """Deduplicate sources based on file name, expanding line ranges."""
+    seen = {}
     out = []
     for src in sources:
-        key = src.get("source_file", "Unknown")
-        if key not in seen:
-            seen.add(key)
-            out.append(src)
+        file = src.get("source_file", "Unknown")
+        
+        if file not in seen:
+            new_src = dict(src)
+            seen[file] = new_src
+            out.append(new_src)
+        else:
+            existing = seen[file]
+            if src.get("start_line") is not None and existing.get("start_line") is not None:
+                existing["start_line"] = min(existing["start_line"], src["start_line"])
+            if src.get("end_line") is not None and existing.get("end_line") is not None:
+                existing["end_line"] = max(existing["end_line"], src["end_line"])
+                
+            # Optionally update section to indicate multiple
+            if existing.get("section") != src.get("section") and "Multiple" not in existing.get("section", ""):
+                existing["section"] = "Multiple Sections"
+                
     return out
 
 
@@ -58,6 +72,21 @@ def get_pdf_page_text(filepath: str, page_num: int) -> str:
         with pdfplumber.open(filepath) as pdf:
             if 1 <= page_num <= len(pdf.pages):
                 return pdf.pages[page_num - 1].extract_text() or ""
+    except Exception as e:
+        print(f"Error: {e}")
+    return ""
+
+
+@st.cache_data
+def get_full_pdf_text(filepath: str) -> str:
+    """Extract full text of all pages in a PDF using pdfplumber."""
+    try:
+        parts = []
+        with pdfplumber.open(filepath) as pdf:
+            for i, page in enumerate(pdf.pages, 1):
+                text = page.extract_text() or ""
+                parts.append(f"--- Page {i} ---\n{text}")
+        return "\n\n".join(parts)
     except Exception as e:
         print(f"Error: {e}")
     return ""
