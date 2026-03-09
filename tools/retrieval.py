@@ -283,40 +283,80 @@ def search_policies(query: str) -> Dict[str, Any]:
             "verification_score": max([g.get("verification_score", 0) for g in group]),
         })
 
-    # Process non-PDF chunks (markdown, docx, etc.)
-    other_sources = []
+    # Group other chunks (TXT, MD, DOCX) by file and create precise segments
+    final_other_chunks = []
+    other_groups = defaultdict(list)
     for src in other_chunks:
-        other_sources.append({
-            "source_file": src["source_file"],
-            "section": src["section"],
-            "content": src["content"],
-            "start_line": src["start_line"],
-            "end_line": src["end_line"],
-            "relevance_score": src.get("relevance_score", 0),
-            "verification_score": src.get("verification_score", 0),
-            "policy_type": src.get("policy_type", "General"),
+        other_groups[src["source_file"]].append(src)
+        
+    for filename, group in other_groups.items():
+        # Sort chunks by starting line
+        sorted_group = sorted(group, key=lambda x: x.get("start_line", 0))
+        
+        # 1. Split into strictly contiguous segments with a cap
+        refined_segments = []
+        if not sorted_group: continue
+        
+        current_sub = [sorted_group[0]]
+        for g in sorted_group[1:]:
+            # Gap 0 = strictly contiguous or overlapping
+            is_contig = g.get("start_line", 0) <= current_sub[-1].get("end_line", 0) + 0
+            # Rough line count check
+            total_l = g.get("end_line", 0) - current_sub[0].get("start_line", 0)
+            
+            if is_contig and total_l <= 25:
+                current_sub.append(g)
+            else:
+                refined_segments.append(current_sub)
+                current_sub = [g]
+        refined_segments.append(current_sub)
+
+        # 2. Prepare aggregated data
+        file_segments = []
+        ranges = []
+        for segment_group in refined_segments:
+            s_line = segment_group[0].get("start_line", 1)
+            e_line = segment_group[-1].get("end_line", 1)
+            
+            file_segments.append({
+                "start_line": s_line,
+                "end_line": e_line,
+                "content": "\n".join([c.get("content", "") for c in segment_group]),
+                "section": segment_group[0].get("section", "Source")
+            })
+            ranges.append(f"{s_line}-{e_line}")
+
+        # 3. Create one single source card for this file
+        final_other_chunks.append({
+            "source_file": filename,
+            "section": f"Lines {', '.join(ranges)}",
+            "segments": file_segments, 
+            "content": file_segments[0]["content"], # Backwards compatibility
+            "start_line": file_segments[0]["start_line"],
+            "end_line": file_segments[-1]["end_line"],
         })
 
     # Combine all sources
-    final_sources = pdf_sources + other_sources
+    final_sources = pdf_sources + final_other_chunks
 
-    # Build answer string from top chunk_sources
+    # Build answer context for the LLM using refined, aggregated sources
+    # This ensures the LLM sees the precise multi-range section strings
     results = []
-    for i, src in enumerate(chunk_sources, 1):
-        # Add verification badge to text
-        v_badge = ""
-        if src.get("verification_score", 0) > 0.5:
-            v_badge = " [Verified]"
-        elif src.get("policy_match"):
-            v_badge = " [Policy Match]"
-            
+    for i, src in enumerate(final_sources[:6], 1): 
+        content_preview = ""
+        if "full_content" in src and src["full_content"]:
+            # For PDFs, show first matched page snippet
+            content_preview = src["full_content"][0]["text"][:1000]
+        elif "segments" in src and src["segments"]:
+            # For other docs, show first matched segment
+            content_preview = src["segments"][0]["content"][:1000]
+        else:
+            content_preview = src.get("content", "")[:1000]
+
         results.append(
-            f"RESULT {i}{v_badge}:\n"
-            f"[Source: {src['source_file']} | Section: {src['section']} | "
-            f"Lines {src['start_line']}-{src['end_line']}]\n"
-            f"[Relevance: {src.get('relevance_score', 0):.2f} | "
-            f"Verification: {src.get('verification_score', 0):.2f}]\n\n"
-            f"{src['content'][:1200]}{'...' if len(src['content']) > 1200 else ''}"
+            f"RESULT {i}:\n"
+            f"[Source: {src['source_file']} | {src['section']}]\n\n"
+            f"{content_preview}{'...' if len(content_preview) > 1000 else ''}"
         )
     answer = "\n\n---\n\n".join(results)
 

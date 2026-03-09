@@ -24,33 +24,43 @@ function escapeHtml(text) {
 }
 
 // Generate highlighted HTML from full page text and chunks fuzzily
-function generateHighlightedHtml(fullText, chunks, answer = '') {
-    if (!fullText) return '<p>No text available</p>';
+function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true, query = '') {
+    if (!fullText) return isSnippet ? { html: '', lines: [] } : '<p>No text available</p>';
 
-    // 1. Collect potential search terms: long chunks + major phrases from the AI answer
+    // 1. Collect potential search terms: query + bold terms + chunks + phrases 
     let searchTerms = [];
 
-    // Use retriever chunks if they are reasonably long (avoid false positives on short snippets)
-    (chunks || []).forEach(c => {
-        if (c && c.trim().length > 25) searchTerms.push(c.trim());
-    });
-
-    // Extract key sentences from the AI answer to ensure we highlight what the user actually read
-    if (answer) {
-        // Clean markdown symbols from the answer for better text-matching
-        const cleanAnswer = answer.replace(/[\*\_#\>~`\[\]\(\)]/g, ' ');
-        const sentences = cleanAnswer.split(/[.!?\n]/).filter(s => s.trim().length > 18);
-        searchTerms = sentences.map(s => s.trim());
-    } else {
-        // Fallback to chunks only if no answer context is available (e.g. initial loading)
-        (chunks || []).forEach(c => {
-            if (c && c.trim().length > 25) searchTerms.push(c.trim());
-        });
+    // Prioritize user's query
+    if (query && query.trim().length > 3) {
+        searchTerms.push(query.trim());
+        const words = query.trim().split(/\s+/).filter(w => w.length > 4);
+        searchTerms = [...searchTerms, ...words];
     }
 
-    const sortedChunks = searchTerms.filter(c => c).sort((a, b) => b.length - a.length);
-    let ranges = [];
+    // Use retriever chunks
+    (chunks || []).forEach(c => {
+        if (c && c.trim().length > 15) searchTerms.push(c.trim());
+    });
 
+    // Extract key sentences and BOLD TERMS from the AI answer
+    if (answer) {
+        const boldMatches = answer.match(/\*\*(.*?)\*\*/g);
+        if (boldMatches) {
+            boldMatches.forEach(m => {
+                const cleanBold = m.replace(/\*\*/g, '').trim();
+                if (cleanBold.length > 3) searchTerms.push(cleanBold);
+            });
+        }
+        const cleanAnswer = answer.replace(/[\*\_#\>~`\[\]\(\)"']/g, ' ').replace(/\s+/g, ' ');
+        const sentences = cleanAnswer.split(/[.!?\n]/).filter(s => s.trim().length > 18);
+        searchTerms = [...searchTerms, ...sentences.map(s => s.trim())];
+    }
+
+    const sortedChunks = Array.from(new Set(searchTerms)).filter(c => c).sort((a, b) => b.length - a.length);
+    const lines = fullText.split('\n');
+    let matchedLineIndices = new Set();
+
+    // Find matches
     sortedChunks.forEach(chunk => {
         const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regexStr = escapedChunk.split(/\s+/).filter(w => w.length > 0).join('\\s+');
@@ -58,42 +68,92 @@ function generateHighlightedHtml(fullText, chunks, answer = '') {
 
         try {
             const regex = new RegExp(regexStr, 'gi');
-            let match;
-            while ((match = regex.exec(fullText)) !== null) {
-                ranges.push({ start: match.index, end: match.index + match[0].length });
-            }
-        } catch (e) {
-            console.error("Regex error", e);
+
+            // For snippet building, identify matching lines
+            lines.forEach((line, idx) => {
+                // Normalize spaces to handle different encodings/nbsp
+                const normLine = line.replace(/\s+/g, ' ');
+                if (regex.test(normLine)) matchedLineIndices.add(idx);
+            });
+        } catch (e) { }
+    });
+
+    // ─── Paragraph Block Logic ───
+    // Group lines into contiguous non-empty blocks
+    let blocks = [];
+    let currentBlock = [];
+    lines.forEach((line, idx) => {
+        if (line.trim().length > 0) {
+            currentBlock.push(idx);
+        } else {
+            if (currentBlock.length > 0) blocks.push(currentBlock);
+            currentBlock = [];
+        }
+    });
+    if (currentBlock.length > 0) blocks.push(currentBlock);
+
+    // If any line in a block is matched, highlight the entire block
+    let finalHighlights = new Set();
+    blocks.forEach(block => {
+        const hasMatch = block.some(idx => matchedLineIndices.has(idx));
+        if (hasMatch) {
+            block.forEach(idx => finalHighlights.add(idx));
         }
     });
 
-    ranges.sort((a, b) => a.start - b.start);
-    let mergedRanges = [];
-    for (let r of ranges) {
-        if (mergedRanges.length === 0) {
-            mergedRanges.push(r);
+    // Identify windows of interest (any highlighted line +/- 5 context lines)
+    if (isSnippet) {
+        let contextIndices = new Set();
+        if (finalHighlights.size === 0) {
+            // FALLBACK: If no matches, show first 50 lines so the doc isn't "empty"
+            for (let i = 0; i < Math.min(lines.length, 50); i++) contextIndices.add(i);
         } else {
-            let last = mergedRanges[mergedRanges.length - 1];
-            if (r.start <= last.end) {
-                last.end = Math.max(last.end, r.end);
-            } else {
-                mergedRanges.push(r);
-            }
+            finalHighlights.forEach(idx => {
+                for (let i = Math.max(0, idx - 5); i <= Math.min(lines.length - 1, idx + 5); i++) {
+                    contextIndices.add(i);
+                }
+            });
         }
+
+        const sortedIndices = Array.from(contextIndices).sort((a, b) => a - b);
+        let resultLines = [];
+        let lastIdx = -1;
+
+        sortedIndices.forEach(idx => {
+            if (lastIdx !== -1 && idx > lastIdx + 1) {
+                resultLines.push({ num: '...', text: '...', html: '<div class="preview-ellipsis">...</div>', highlighted: false });
+            }
+            const lineText = lines[idx];
+            const isHighlighted = finalHighlights.has(idx);
+
+            // Recursive call for inner highlighting (not snippet mode)
+            const lineHtml = generateHighlightedHtml(lineText, chunks, answer, false, query);
+
+            resultLines.push({
+                num: idx + 1,
+                text: lineText,
+                html: lineHtml,
+                highlighted: isHighlighted
+            });
+            lastIdx = idx;
+        });
+
+        return { html: '', lines: resultLines };
     }
 
-    let resultHtml = '';
-    let lastIndex = 0;
-    for (let r of mergedRanges) {
-        resultHtml += escapeHtml(fullText.substring(lastIndex, r.start)).replace(/\n/g, '<br>');
-        resultHtml += '<mark>';
-        resultHtml += escapeHtml(fullText.substring(r.start, r.end)).replace(/\n/g, '<br>');
-        resultHtml += '</mark>';
-        lastIndex = r.end;
-    }
-    resultHtml += escapeHtml(fullText.substring(lastIndex)).replace(/\n/g, '<br>');
+    // Full text highlighting mode (fallback or single line)
+    let finalHtml = escapeHtml(fullText);
+    sortedChunks.forEach(chunk => {
+        const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regexStr = escapedChunk.split(/\s+/).filter(w => w.length > 0).join('\\s+');
+        if (!regexStr) return;
+        try {
+            const regex = new RegExp(regexStr, 'gi');
+            finalHtml = finalHtml.replace(regex, (match) => `<mark>${match}</mark>`);
+        } catch (e) { }
+    });
 
-    return resultHtml;
+    return finalHtml.replace(/\n/g, '<br>');
 }
 
 export default function App() {
@@ -120,18 +180,28 @@ export default function App() {
         return []
     })()
 
-    // Handle PDF pagination
-    const handlePdfPageChange = (direction) => {
-        if (!previewData || previewData.type !== 'pdf-html' || !previewData.pages) return;
+    // Get the user's last query for highlighting context
+    const lastUserQuery = (() => {
+        const rev = [...messages].reverse();
+        const found = rev.find(m => m.role === 'user');
+        return found ? found.content : '';
+    })()
 
-        const newIndex = previewData.currentIndex + direction;
-        if (newIndex >= 0 && newIndex < previewData.pages.length) {
-            const pageObj = previewData.pages[newIndex];
-            const html = generateHighlightedHtml(pageObj.text, previewData.chunks, previewData.answerContext || '');
+    // Handle pagination (PDF pages or Text segments)
+    const handlePageChange = (direction) => {
+        if (!previewData) return;
+        const list = previewData.pages || previewData.segments;
+        if (!list) return;
+
+        const newIdx = previewData.currentIndex + direction;
+        if (newIdx >= 0 && newIdx < list.length) {
+            const item = list[newIdx];
+            const text = item.text || item.content || '';
+            const result = generateHighlightedHtml(text, previewData.chunks, previewData.answerContext, true, lastUserQuery);
             setPreviewData({
                 ...previewData,
-                currentIndex: newIndex,
-                html: html
+                currentIndex: newIdx,
+                lines: result.lines || []
             });
         }
     };
@@ -178,50 +248,33 @@ export default function App() {
         setExpandedIdx(idx)
 
         const ext = source.source_file.split('.').pop().toLowerCase()
+        const lastMsg = [...messages].reverse().find(m => m.role === 'assistant');
+        const answerContext = lastMsg ? lastMsg.content : '';
 
-        // Find the latest assistant answer to provide context for highlighting
-        const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
-        const answerContext = lastAssistantMsg ? lastAssistantMsg.content : '';
+        if (ext === 'pdf' && Array.isArray(source.full_content)) {
+            const mIdx = source.full_content.findIndex(p => p.page === source.page);
+            const startIdx = mIdx >= 0 ? mIdx : 0;
+            const res = generateHighlightedHtml(source.full_content[startIdx].text, source.chunks || [], answerContext, true, lastUserQuery);
 
-        if (ext === 'pdf' && Array.isArray(source.full_content) && source.full_content.length > 0) {
-            // Find the index of the matched page in the loaded pages
-            const matchedIndex = source.full_content.findIndex(p => p.page === source.page);
-            const startIndex = matchedIndex >= 0 ? matchedIndex : 0;
-
-            const currentPage = source.full_content[startIndex];
-            const html = generateHighlightedHtml(currentPage.text, source.chunks || [], answerContext);
             setPreviewData({
-                type: 'pdf-html',
-                html: html,
-                pages: source.full_content, // [{page, text}, ...]
-                currentIndex: startIndex,
+                type: 'pdf-snippet',
+                lines: res.lines,
+                pages: source.full_content,
+                currentIndex: startIdx,
                 chunks: source.chunks || [],
                 answerContext: answerContext
-            })
+            });
         } else if (['md', 'txt', 'docx'].includes(ext)) {
-            // Fetch line-by-line preview from backend
-            try {
-                const res = await fetch(`${API}/document-preview`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        source_file: source.source_file,
-                        start_line: source.start_line,
-                        end_line: source.end_line,
-                    }),
-                })
-                const data = await res.json()
-                // Add chunks and answer context for granular highlighting in text view
-                setPreviewData({
-                    ...data,
-                    chunks: source.chunks || [],
-                    answerContext: answerContext
-                })
-            } catch {
-                setPreviewData(null)
-            }
+            const res = generateHighlightedHtml(source.content || '', source.chunks || [], answerContext, true, lastUserQuery);
+            setPreviewData({
+                type: 'text-snippet',
+                lines: res.lines,
+                segments: source.segments || [{ content: source.content }],
+                currentIndex: 0,
+                chunks: source.chunks || [],
+                answerContext: answerContext
+            });
         } else {
-            // Fallback: show the raw snippet (source.content)
             setPreviewData({ type: 'content', content: source.content || 'No content available.' })
         }
     }
@@ -357,7 +410,7 @@ export default function App() {
                                                     {src.source_file}
                                                 </div>
                                                 <div className="source-card-loc">
-                                                    📍 {src.section} · {ext === 'pdf' ? `Page ${src.page}` : `Lines ${src.start_line}–${src.end_line}`}
+                                                    📍 {src.section || 'General'}
                                                 </div>
                                             </div>
                                             <button
@@ -370,51 +423,45 @@ export default function App() {
 
                                         {isExpanded && previewData && (
                                             <>
-                                                {previewData.type === 'text' && (
-                                                    <div className="code-viewer">
-                                                        {previewData.lines.map((line, li) => (
-                                                            <div key={li} className={`code-line${line.highlighted ? ' highlighted' : ''}`}>
-                                                                <span className="line-num">{line.num}</span>
-                                                                <span
-                                                                    className="line-text"
-                                                                    dangerouslySetInnerHTML={{
-                                                                        __html: DOMPurify.sanitize(
-                                                                            generateHighlightedHtml(line.text, previewData.chunks, previewData.answerContext)
-                                                                        )
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {previewData.type === 'pdf-html' && (
+                                                {['pdf-snippet', 'text-snippet'].includes(previewData.type) && (
                                                     <div className="pdf-preview-container">
-                                                        {previewData.pages && previewData.pages.length > 1 && (
+                                                        {(previewData.pages?.length > 1 || previewData.segments?.length > 1) && (
                                                             <div className="pdf-pagination">
                                                                 <button
-                                                                    onClick={() => handlePdfPageChange(-1)}
+                                                                    onClick={() => handlePageChange(-1)}
                                                                     disabled={previewData.currentIndex === 0}
                                                                     className="pdf-nav-btn"
                                                                 >
                                                                     ← Prev
                                                                 </button>
                                                                 <span className="pdf-page-indicator">
-                                                                    Page {previewData.pages[previewData.currentIndex].page}
-                                                                    <span className="pdf-page-count">({previewData.currentIndex + 1} of {previewData.pages.length})</span>
+                                                                    {previewData.pages ? `Page ${previewData.pages[previewData.currentIndex].page}` : `Segment ${previewData.currentIndex + 1}`}
+                                                                    <span className="pdf-page-count">
+                                                                        ({previewData.currentIndex + 1} of {(previewData.pages || previewData.segments).length})
+                                                                    </span>
                                                                 </span>
                                                                 <button
-                                                                    onClick={() => handlePdfPageChange(1)}
-                                                                    disabled={previewData.currentIndex === previewData.pages.length - 1}
+                                                                    onClick={() => handlePageChange(1)}
+                                                                    disabled={previewData.currentIndex === (previewData.pages || previewData.segments).length - 1}
                                                                     className="pdf-nav-btn"
                                                                 >
                                                                     Next →
                                                                 </button>
                                                             </div>
                                                         )}
-                                                        <div
-                                                            className="pdf-content-preview"
-                                                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewData.html) }}
-                                                        />
+                                                        <div className="code-viewer">
+                                                            {(previewData.lines || []).map((line, li) => (
+                                                                <div key={li} className={`code-line${line.highlighted ? ' highlighted' : ''}`}>
+                                                                    <span className="line-num">{line.num}</span>
+                                                                    <span
+                                                                        className="line-text"
+                                                                        dangerouslySetInnerHTML={{
+                                                                            __html: DOMPurify.sanitize(line.html)
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 )}
                                                 {previewData.type === 'content' && (
