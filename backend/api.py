@@ -179,7 +179,7 @@ def document_preview(req: DocumentPreviewRequest):
         total = len(lines)
         start = max(1, min(req.start_line, total))
         end = max(start, min(req.end_line, total))
-        window_start = max(0, start - 10) # Show a bit more context for DOCX
+        window_start = max(0, start - 10)
         window_end = min(total, end + 30)
 
         return {

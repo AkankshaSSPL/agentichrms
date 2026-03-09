@@ -4,6 +4,7 @@ Uses RecursiveCharacterTextSplitter to break every document into ~500-char
 chunks so that embeddings are focused and retrieval is precise.
 """
 import os
+import re  
 import sys
 import chromadb
 import pandas as pd
@@ -162,38 +163,61 @@ def extract_text_from_docx(filepath):
 
 
 def split_markdown_by_headers(content: str, filename: str):
-    """Split markdown by headers, then sub-chunk large sections."""
+    """Split markdown by headers, detect policy sections, and sub-chunk large sections."""
     lines = content.split("\n")
     raw_sections = []
 
     current_chunk_lines = []
     current_header = "General"
+    current_policy = "General"  # Track the parent policy section
     start_line = 1
 
     for i, line in enumerate(lines):
         line_num = i + 1
-        if line.strip().startswith("#"):
+        
+        # Detect main policy headers (e.g., "**8) Whistle Blower Policy**")
+        if re.match(r'^\s*\*\*\d+\)\s+.*Policy\*\*', line):
+            current_policy = line.strip().lstrip('*').strip()
+            current_header = current_policy
             if current_chunk_lines:
                 text = "\n".join(current_chunk_lines).strip()
                 if len(text) > 30:
                     raw_sections.append({
                         "text": text,
                         "header": current_header,
+                        "policy": current_policy,  # Add policy tracking
                         "start_line": start_line,
                         "end_line": line_num - 1,
                     })
-            current_header = line.strip().lstrip("#").strip()
+            current_chunk_lines = [line]
+            start_line = line_num
+            
+        # Detect sub-headers (e.g., "**Policy Objective**")
+        elif line.strip().startswith("**") and line.strip().endswith("**"):
+            if current_chunk_lines:
+                text = "\n".join(current_chunk_lines).strip()
+                if len(text) > 30:
+                    raw_sections.append({
+                        "text": text,
+                        "header": current_header,
+                        "policy": current_policy,  # Inherit parent policy
+                        "start_line": start_line,
+                        "end_line": line_num - 1,
+                    })
+            current_header = line.strip().lstrip('*').strip()
             current_chunk_lines = [line]
             start_line = line_num
         else:
             current_chunk_lines.append(line)
 
+    # Don't forget the last section
     if current_chunk_lines:
         text = "\n".join(current_chunk_lines).strip()
         if len(text) > 20:
             raw_sections.append({
                 "text": text,
                 "header": current_header,
+                "policy": current_policy,
                 "start_line": start_line,
                 "end_line": len(lines),
             })
@@ -201,12 +225,16 @@ def split_markdown_by_headers(content: str, filename: str):
     # Sub-chunk any section that exceeds splitter limit
     chunks = []
     for sec in raw_sections:
+        # Add policy type to metadata for better filtering
+        policy_type = sec.get("policy", "General")
+        
         if len(sec["text"]) <= 500:
             chunks.append({
                 "text": sec["text"],
                 "metadata": {
                     "source": filename,
                     "section": sec["header"],
+                    "policy_type": policy_type,  # Add this for filtering
                     "start_line": sec["start_line"],
                     "end_line": sec["end_line"],
                 },
@@ -223,6 +251,7 @@ def split_markdown_by_headers(content: str, filename: str):
                     "metadata": {
                         "source": filename,
                         "section": sec["header"],
+                        "policy_type": policy_type,  # Add this for filtering
                         "start_line": chunk_start,
                         "end_line": chunk_end,
                     },
