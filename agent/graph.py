@@ -83,7 +83,7 @@ RULES:
 10. If someone just greets you (hi, hello, etc.), respond warmly and ask how you can help.
 11. When showing employee data or leave info, format it clearly with line breaks and structure.
 
-IMPORTANT: When policy information has been provided in the conversation (as a "Relevant policy information" message), you MUST base your answer on that information and not call search_policies again unless the user asks a new question not covered by the provided info.
+IMPORTANT: When policy information has been provided in the conversation (as a "Here is information retrieved from company policies" message), you MUST base your answer on that information and not call search_policies again unless the user asks a new question not covered by the provided info.
 """
 
 def agent_node(state: AgentState):
@@ -102,7 +102,6 @@ def agent_node(state: AgentState):
 
     # ---- STEP 0: Direct decline for clearly non-HR queries ----
     if user_msg:
-        # Expanded list of non-HR patterns
         non_hr_patterns = [
             "two plus two", "2+2", "what is 2+2", "what is two plus two",
             "capital of", "weather in", "who is the president", "math",
@@ -111,7 +110,6 @@ def agent_node(state: AgentState):
         ]
         lower = user_msg.lower()
         if any(pattern in lower for pattern in non_hr_patterns):
-            # Return decline message immediately – no LLM call
             return {
                 "messages": [
                     AIMessage(
@@ -120,32 +118,56 @@ def agent_node(state: AgentState):
                 ]
             }
 
-    # ---- STEP 1: Decide whether to retrieve policies (only for queries that passed) ----
-    retrieve_policies = True
-    if user_msg:
-        # Additional keyword filter for borderline cases (optional)
-        non_hr_keywords = [
-            "math", "calculate", "weather", "geography",
-            "trivia", "entertainment", "movie", "song", "sports"
-        ]
-        lower_query = user_msg.lower()
-        if any(keyword in lower_query for keyword in non_hr_keywords):
-            retrieve_policies = False
+    # ---- STEP 1: Check if we already have a policy info message for this turn ----
+    already_has_policy_info = False
+    for msg in messages:
+        if isinstance(msg, SystemMessage) and msg.content.startswith("Here is information retrieved from company policies"):
+            already_has_policy_info = True
+            break
 
-    # ---- STEP 2: Retrieve policy information if allowed ----
-    if user_msg and retrieve_policies:
+    # ---- STEP 2: Retrieve policy information only if not already present ----
+    if user_msg and not already_has_policy_info:
         try:
             policy_result = search_policies.invoke({"query": user_msg})
-            if isinstance(policy_result, dict) and policy_result.get("answer"):
-                answer_text = policy_result["answer"].strip()
-                # Avoid injecting "no relevant documents" messages
+            if isinstance(policy_result, dict):
+                answer_text = policy_result.get("answer", "").strip()
+                sources = policy_result.get("sources", [])
+
+                # Debug: print the structure of sources to console
+                print("=== Retrieved sources ===")
+                for i, src in enumerate(sources):
+                    print(f"Source {i}: {list(src.keys())}")
+
+                # Build a comprehensive info block
+                info_parts = []
                 if answer_text and "no relevant" not in answer_text.lower():
-                    sources = policy_result.get("sources", [])
-                    source_str = "\n".join([f"- {s['filename']} (page {s.get('page', 'N/A')})" for s in sources])
+                    info_parts.append(f"Summary/Answer: {answer_text}\n")
+
+                if sources:
+                    info_parts.append("Relevant document excerpts (use these to answer):")
+                    for src in sources:
+                        filename = src.get('filename', 'Unknown')
+                        page = src.get('page', 'N/A')
+                        # Try to extract text from various possible field names
+                        content = None
+                        for key in ['content', 'text', 'excerpt', 'snippet', 'page_content', 'chunk', 'text_content']:
+                            if key in src and src[key]:
+                                content = src[key]
+                                break
+                        if not content:
+                            # If still no content, use a fallback and note that text is missing
+                            content = "[Text not available in source - only metadata]"
+                        info_parts.append(f"\n--- {filename} (page {page}) ---\n{content}")
+
+                if info_parts:
+                    full_info = "\n".join(info_parts)
                     retrieval_msg = SystemMessage(
-                        content=f"Relevant policy information:\n{answer_text}\n\nSources:\n{source_str}\n\nUse this information to answer the user's question. Do not rely on your own knowledge. If the information fully answers the question, you do not need to call search_policies again."
+                        content=f"Here is information retrieved from company policies:\n\n{full_info}\n\n"
+                                "You MUST answer the user's question using ONLY the excerpts above. "
+                                "Do not use your own knowledge. If the excerpts do not contain the answer, "
+                                "politely state that the information could not be found in the policies."
                     )
-                    # Insert after the main system prompt (position 1)
+                    # Insert after the main system prompt
                     messages.insert(1, retrieval_msg)
         except Exception as e:
             print(f"Policy retrieval error: {e}")
