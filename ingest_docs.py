@@ -4,11 +4,10 @@ Uses RecursiveCharacterTextSplitter to break every document into ~500-char
 chunks so that embeddings are focused and retrieval is precise.
 """
 import os
-import re  
+import re
 import sys
 import chromadb
 import pandas as pd
-import pyplumber
 import pypdf
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -18,11 +17,12 @@ from config import CHROMA_DIR, DOCS_DIR, LOCAL_EMBEDDING_MODEL
 
 # ── shared splitter ─────────────────────────────────────────
 splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=80,
+    chunk_size=1500,
+    chunk_overlap=300,
     separators=["\n\n", "\n", ". ", " ", ""],
 )
 
+MIN_CHUNK_LENGTH = 50   # skip chunks shorter than this
 
 # ── Extractors ──────────────────────────────────────────────
 
@@ -37,6 +37,9 @@ def extract_text_from_pdf(filepath):
             continue
         sub_chunks = splitter.split_text(text)
         for ci, sub in enumerate(sub_chunks):
+            # Filter out very short chunks
+            if len(sub.strip()) < MIN_CHUNK_LENGTH:
+                continue
             approx_start = ci * 400 + 1          # rough line estimate
             approx_end = approx_start + len(sub.split("\n"))
             chunks.append({
@@ -65,6 +68,8 @@ def extract_text_from_excel(filepath):
         full_text = f"Sheet: {sheet_name}\n\n{text}"
         sub_chunks = splitter.split_text(full_text)
         for ci, sub in enumerate(sub_chunks):
+            if len(sub.strip()) < MIN_CHUNK_LENGTH:
+                continue
             chunks.append({
                 "text": sub,
                 "metadata": {
@@ -85,6 +90,8 @@ def extract_text_from_csv(filepath):
     sub_chunks = splitter.split_text(text)
     chunks = []
     for ci, sub in enumerate(sub_chunks):
+        if len(sub.strip()) < MIN_CHUNK_LENGTH:
+            continue
         chunks.append({
             "text": sub,
             "metadata": {
@@ -108,6 +115,8 @@ def extract_text_from_txt(filepath):
     chunks = []
     char_offset = 0
     for ci, sub in enumerate(sub_chunks):
+        if len(sub.strip()) < MIN_CHUNK_LENGTH:
+            continue
         pos = content.find(sub, char_offset)
         if pos == -1:
             start_line = 1 + ci * 10
@@ -143,6 +152,8 @@ def extract_text_from_docx(filepath):
     chunks = []
     char_offset = 0
     for ci, sub in enumerate(sub_chunks):
+        if len(sub.strip()) < MIN_CHUNK_LENGTH:
+            continue
         pos = full_text.find(sub, char_offset)
         if pos == -1:
             start_line = 1 + ci * 10
@@ -228,6 +239,10 @@ def split_markdown_by_headers(content: str, filename: str):
         # Add policy type to metadata for better filtering
         policy_type = sec.get("policy", "General")
         
+        # Check length of the whole section before sub-splitting
+        if len(sec["text"].strip()) < MIN_CHUNK_LENGTH:
+            continue
+        
         if len(sec["text"]) <= 500:
             chunks.append({
                 "text": sec["text"],
@@ -244,6 +259,8 @@ def split_markdown_by_headers(content: str, filename: str):
             total = len(sub_chunks)
             line_span = sec["end_line"] - sec["start_line"]
             for ci, sub in enumerate(sub_chunks):
+                if len(sub.strip()) < MIN_CHUNK_LENGTH:
+                    continue
                 chunk_start = sec["start_line"] + int(ci / total * line_span)
                 chunk_end = sec["start_line"] + int((ci + 1) / total * line_span)
                 chunks.append({

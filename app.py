@@ -210,7 +210,7 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                     if "sources" in value and value["sources"]:
                         sources.extend(value["sources"])
 
-        sources = deduplicate_sources(sources)
+        # sources = deduplicate_sources(sources)
 
         st.session_state.messages.append({
             "role": "assistant",

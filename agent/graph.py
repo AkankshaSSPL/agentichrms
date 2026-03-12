@@ -49,6 +49,7 @@ def get_tool_descriptions():
 # ── System Prompt with Clear Tool Selection Guide ─────────────────────────────
 SYSTEM_PROMPT = """You are an expert HR Assistant with access to specific company tools. Your job is to select and use the CORRECT tool for each query.
 
+
 AVAILABLE TOOLS:
 {tool_descriptions}
 
@@ -194,9 +195,6 @@ workflow.add_conditional_edges("agent", route_logic, {"tools": "tools", END: END
 workflow.add_edge("tools", "agent")
 
 graph = workflow.compile()
-
-
-
 
 
 # === ADD AT BOTTOM OF YOUR ENTRY FILE (app.py/run.py/etc) ===
