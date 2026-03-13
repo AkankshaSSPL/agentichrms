@@ -1,14 +1,12 @@
 """FastAPI backend for the HR Assistant React frontend."""
 import os
 import sys
-import json
 import subprocess
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 # Add project root to path
@@ -22,16 +20,24 @@ from utils.document_viewer import (
 
 app = FastAPI(title="HR Assistant API")
 
-# CORS for React dev server
+# ── GAP-006 FIX: Restrict CORS to known origins only ─────────────────────────
+# In production, replace with your actual frontend domain.
+# Read from env so it can be overridden without code changes.
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8501")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
 
-# ── Lazy-load the agent graph ────────────────────────────────
+# ── GAP-033 FIX: Maximum upload file size (50 MB) ────────────────────────────
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))  # 50 MB default
+
+# ── Lazy-load the agent graph ─────────────────────────────────────────────────
 _graph = None
 
 def get_graph():
@@ -42,7 +48,7 @@ def get_graph():
     return _graph
 
 
-# ── Request/Response Models ──────────────────────────────────
+# ── Request / Response Models ─────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
     message: str
@@ -54,14 +60,13 @@ class SourceInfo(BaseModel):
     end_line: int
     content: Optional[str] = None
     score: Optional[float] = None
-    # PDF-specific fields (optional, but now allowed)
     full_content: Optional[list[dict]] = None
     chunks: Optional[list[str]] = None
     page: Optional[int] = None
 
 class ChatResponse(BaseModel):
     answer: str
-    sources: list[SourceInfo]   # <-- now using the model that includes PDF fields
+    sources: list[SourceInfo]
     steps: list[dict]
 
 class DocumentPreviewRequest(BaseModel):
@@ -70,73 +75,157 @@ class DocumentPreviewRequest(BaseModel):
     end_line: int = 10
 
 
-# ── Endpoints ────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _safe_filename(raw_name: str) -> str:
+    """
+    GAP-001 / GAP-020 FIX: Strip any directory components from a filename so
+    that path traversal payloads like '../../.env' are reduced to just '.env'
+    and then blocked by the extension/character checks below.
+
+    Returns the sanitised basename, or raises HTTPException(400) if the name
+    is empty or contains characters that are not safe for a filename.
+    """
+    # os.path.basename handles both '/' and '\\' separators
+    name = os.path.basename(raw_name.strip())
+    if not name or name.startswith("."):
+        raise HTTPException(400, "Invalid filename.")
+    # Disallow remaining traversal characters and shell-special characters
+    forbidden = set('<>:"/\\|?*')
+    if any(ch in forbidden for ch in name):
+        raise HTTPException(400, f"Filename contains forbidden characters: {name}")
+    return name
+
+
+def _safe_resolved_path(source_file: str) -> Path:
+    """
+    GAP-001 / GAP-020 FIX: Resolve a document path and assert it sits inside
+    DOCS_DIR. Raises HTTPException(400) on traversal, HTTPException(404) if the
+    file does not exist.
+    """
+    safe_name = _safe_filename(source_file)
+    docs_root = Path(DOCS_DIR).resolve()
+    candidate = (docs_root / safe_name).resolve()
+
+    # Ensure the resolved path is still inside DOCS_DIR
+    try:
+        candidate.relative_to(docs_root)
+    except ValueError:
+        raise HTTPException(400, "Access to that path is not permitted.")
+
+    if not candidate.exists():
+        raise HTTPException(404, f"File not found: {safe_name}")
+
+    return candidate
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "chroma_exists": os.path.exists(CHROMA_DIR), "db_exists": os.path.exists(DB_PATH)}
+    return {
+        "status": "ok",
+        "chroma_exists": os.path.exists(CHROMA_DIR),
+        "db_exists": os.path.exists(DB_PATH),
+    }
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
+    """
+    GAP-011 FIX: Wrap the entire agent pipeline in try/except so that
+    exceptions return a clean 500 instead of leaking stack traces.
+    """
     from langchain_core.messages import HumanMessage
 
-    graph = get_graph()
-    inputs = {"messages": [HumanMessage(content=req.message)], "sources": []}
+    try:
+        graph = get_graph()
+        inputs = {"messages": [HumanMessage(content=req.message)], "sources": []}
 
-    full_response = ""
-    steps = []
-    sources = []
+        full_response = ""
+        steps = []
+        sources = []
 
-    for event in graph.stream(inputs):
-        for key, value in event.items():
-            if key == "agent":
-                msg = value["messages"][0]
-                full_response += msg.content or ""
-                if hasattr(msg, "tool_calls"):
-                    for tc in msg.tool_calls or []:
-                        steps.append({"type": "tool", "name": tc.get("name")})
-            elif key == "tools":
-                if "sources" in value and value["sources"]:
-                    sources.extend(value["sources"])
+        for event in graph.stream(inputs):
+            for key, value in event.items():
+                if key == "agent":
+                    msg = value["messages"][0]
+                    full_response += msg.content or ""
+                    if hasattr(msg, "tool_calls"):
+                        for tc in msg.tool_calls or []:
+                            steps.append({"type": "tool", "name": tc.get("name")})
+                elif key == "tools":
+                    if "sources" in value and value["sources"]:
+                        sources.extend(value["sources"])
 
-    sources = deduplicate_sources(sources)
-    display_answer = strip_citation_markers(full_response)
+        sources = deduplicate_sources(sources)
+        display_answer = strip_citation_markers(full_response)
 
-    # ✅ FIX: pass the full source objects – no field stripping
-    return ChatResponse(
-        answer=display_answer,
-        sources=sources,          # ← now includes full_content, chunks, page for PDFs
-        steps=steps,
-    )
+        return ChatResponse(answer=display_answer, sources=sources, steps=steps)
+
+    except Exception as e:
+        # Log full details server-side; return a safe message to the client
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while processing your request. Please try again.",
+        )
 
 
 @app.get("/api/documents")
-def list_documents():
+def list_documents(skip: int = 0, limit: int = 50):
+    """
+    GAP-038 FIX: Add skip/limit pagination so the endpoint doesn't return
+    an unbounded list when thousands of documents are present.
+    """
     if not os.path.exists(DOCS_DIR):
-        return {"documents": []}
-    files = []
+        return {"documents": [], "total": 0, "skip": skip, "limit": limit}
+
+    all_files = []
     for f in sorted(os.listdir(DOCS_DIR)):
         fpath = os.path.join(DOCS_DIR, f)
         if os.path.isfile(fpath):
-            files.append({
+            all_files.append({
                 "name": f,
                 "size": os.path.getsize(fpath),
                 "ext": os.path.splitext(f)[1].lower(),
             })
-    return {"documents": files}
+
+    total = len(all_files)
+    page = all_files[skip: skip + limit]
+    return {"documents": page, "total": total, "skip": skip, "limit": limit}
 
 
 @app.post("/api/upload")
 async def upload_files(files: list[UploadFile] = File(...)):
+    """
+    GAP-001 FIX: Sanitise every filename with _safe_filename() before writing.
+    GAP-033 FIX: Reject files that exceed MAX_UPLOAD_BYTES.
+    """
     os.makedirs(DOCS_DIR, exist_ok=True)
     saved = []
+
     for f in files:
-        path = os.path.join(DOCS_DIR, f.filename)
+        # Sanitise filename — raises 400 on traversal attempt
+        safe_name = _safe_filename(f.filename or "")
+
         content = await f.read()
-        with open(path, "wb") as out:
+
+        # Size guard
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                413,
+                f"File '{safe_name}' exceeds the maximum allowed size of "
+                f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+            )
+
+        dest = os.path.join(DOCS_DIR, safe_name)
+        with open(dest, "wb") as out:
             out.write(content)
-        saved.append(f.filename)
+
+        saved.append(safe_name)
+
     return {"uploaded": saved}
 
 
@@ -146,9 +235,10 @@ def ingest():
     result = subprocess.run(
         [sys.executable, str(PROJECT_ROOT / "ingest_docs.py")],
         cwd=str(PROJECT_ROOT),
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
-    # Reset the graph so it picks up new data
+    # Reset the graph so it picks up new ChromaDB data
     _graph = None
     return {
         "success": result.returncode == 0,
@@ -159,13 +249,15 @@ def ingest():
 
 @app.post("/api/document-preview")
 def document_preview(req: DocumentPreviewRequest):
-    """Return document content for the preview panel."""
-    source_file = req.source_file
-    ext = os.path.splitext(source_file)[1].lower()
+    """
+    GAP-020 FIX: Validate source_file through _safe_resolved_path() which
+    enforces that the resolved path stays inside DOCS_DIR. Previously,
+    passing '/etc/passwd' as source_file would resolve and be read.
+    """
+    ext = os.path.splitext(req.source_file)[1].lower()
 
-    resolved = resolve_doc_path(source_file)
-    if not resolved:
-        raise HTTPException(404, f"File not found: {source_file}")
+    # Raises 400 on traversal, 404 if not found — no raw resolve_doc_path call
+    resolved = _safe_resolved_path(req.source_file)
 
     if ext in (".md", ".txt", ".docx"):
         if ext == ".docx":
@@ -173,9 +265,9 @@ def document_preview(req: DocumentPreviewRequest):
             doc = docx.Document(resolved)
             lines = [p.text for p in doc.paragraphs]
         else:
-            with open(resolved, "r", encoding="utf-8", errors="ignore") as f:
-                lines = f.read().split("\n")
-                
+            with open(resolved, "r", encoding="utf-8", errors="ignore") as fh:
+                lines = fh.read().split("\n")
+
         total = len(lines)
         start = max(1, min(req.start_line, total))
         end = max(start, min(req.end_line, total))
@@ -197,10 +289,9 @@ def document_preview(req: DocumentPreviewRequest):
             "highlight_end": end,
         }
     else:
-        # For PDF/DOCX/Excel — return the chunk content from the request
         return {
             "type": "binary",
-            "message": f"Binary file: {source_file}",
+            "message": f"Binary file: {req.source_file}",
             "section": f"Lines {req.start_line}–{req.end_line}",
         }
 

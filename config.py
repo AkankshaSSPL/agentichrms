@@ -16,6 +16,16 @@ DOCS_DIR = DEMO_DIR / "documents"
 OPENAI_API_KEY = os.getenv("AI_KEY") or os.getenv("OPENAI_API_KEY")
 AGENT_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 
+# GAP-012 FIX: Fail loudly at import time if the API key is missing.
+# Previously OPENAI_API_KEY silently became None, and the application started
+# successfully but crashed with a confusing AuthenticationError on the very
+# first user query.
+if not OPENAI_API_KEY:
+    raise ValueError(
+        "Missing OpenAI API key. Set AI_KEY or OPENAI_API_KEY in your .env file.\n"
+        "Example: AI_KEY=sk-..."
+    )
+
 # Email Settings
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")

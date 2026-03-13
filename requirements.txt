@@ -1,14 +1,42 @@
-streamlit
-openai
-chromadb
-python-dotenv
-sentence-transformers
-langgraph
-langchain-openai
-langchain-core
-langchain
-pydantic
-pypdf
-openpyxl
-pandas
-python-docx
+# AgenticHRMS Python dependencies
+# GAP-013 FIX: Added missing packages that were used in the codebase but
+#              not listed: pdfplumber, fastapi, uvicorn, langchain-text-splitters
+# GAP-018 FIX: Pinned all packages to known-working versions.
+#              The langchain/langgraph ecosystem has frequent breaking changes;
+#              unpinned installs can silently break the agent on fresh setup.
+#
+# To regenerate after updating: pip freeze > requirements.txt
+
+# ── Web framework ──────────────────────────────────────────────────────────────
+streamlit==1.35.0
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+
+# ── LLM / Agent ───────────────────────────────────────────────────────────────
+openai>=1.40.0,<2.0.0
+langchain==0.2.5
+langchain-core>=0.2.33,<0.3.0
+langchain-openai>=0.1.22,<0.2.0
+langchain-text-splitters==0.2.1
+langgraph==0.1.14
+
+# ── Vector DB & Embeddings ────────────────────────────────────────────────────
+chromadb==0.5.3
+sentence-transformers==3.0.1
+
+# ── PDF extraction ────────────────────────────────────────────────────────────
+# GAP-013 FIX: pdfplumber was used by document_viewer.py and retrieval.py
+#              but was missing from requirements.txt.
+# GAP-004 FIX: pypdf removed — ingest_docs.py now uses pdfplumber exclusively
+#              so both ingestion and preview use the same text extraction path.
+pdfplumber==0.11.0
+
+# ── Document processing ───────────────────────────────────────────────────────
+python-docx==1.1.2
+openpyxl==3.1.4
+pandas==2.2.2
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+pydantic==2.7.4
+python-multipart==0.0.9
