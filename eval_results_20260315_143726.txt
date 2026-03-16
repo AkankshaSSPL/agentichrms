@@ -1,0 +1,397 @@
+================================================================================
+AgenticHRMS RAG Eval  |  2026-03-15 14:37:26
+Docs: Holiday List, NDA, HR Policy Review, Expense Policy
+Questions: 22
+================================================================================
+
+================================================================================
+Q01 [Holiday List]  ✓ ANSWERED
+Q: What holidays does the company observe in 2025?
+Tools: search_policies
+Sources:
+  • Holiday List for the Year 2025.pdf | Page 1
+
+Answer:
+  The company observes the following holidays in 2025:  - **01 Jan (Wed)** —
+  New Year - **26 Jan (Sun)** — Republic Day - **30 Mar (Sun)** — Gudhi
+  Padwa - **01 May (Thu)** — Maharashtra Day - **15 Aug (Fri)** —
+  Independence Day - **27 Aug (Wed)** — Ganesh Chaturthi - **06 Sept (Sat)**
+  — Anant Chaturthi - **02 Oct (Thu)** — Durga Pooja (Dussehra) & Gandhi
+  Jayanti - **20 Oct (Mon)** — Naraka Chaturdashi - **21 Oct (Tue)** — Laxmi
+  Pujan - **22 Oct (Wed)** — Diwali Padwa - **25 Dec (Thu)** — Christmas Day
+
+================================================================================
+Q02 [Holiday List]  ✓ ANSWERED
+Q: When is Diwali in 2025?
+Tools: (none)
+Sources:
+  (no sources)
+
+Answer:
+  I can only assist with HR-related queries. Please ask about company
+  policies, leave, employees, onboarding, or workplace matters.
+
+================================================================================
+Q03 [Holiday List]  ✓ ANSWERED
+Q: How many public holidays are there in 2025?
+Tools: (none)
+Sources:
+  (no sources)
+
+Answer:
+  I can only assist with HR-related queries. Please ask about company
+  policies, leave, employees, onboarding, or workplace matters.
+
+================================================================================
+Q04 [Holiday List]  ✓ ANSWERED
+Q: Is Ganesh Chaturthi a company holiday?
+Tools: search_policies
+Sources:
+  • Holiday List for the Year 2025.pdf | Page 1
+
+Answer:
+  Yes, Ganesh Chaturthi is a company holiday. In 2025, it is observed on
+  **27 August** (Wednesday).
+
+================================================================================
+Q05 [NDA]  ✓ ANSWERED
+Q: What is the moonlighting disclosure policy?
+Tools: search_policies
+Sources:
+  • NDA letter head copy.pdf | Page 4
+
+Answer:
+  The moonlighting disclosure policy requires employees to inform the
+  company about any consulting work, directorships, or similar relationships
+  with other entities during their employment. This disclosure is essential
+  to avoid conflicts of interest and obligations. The company will treat
+  such disclosures confidentially, aiming to prevent any potential conflicts
+  between the employee's work for the company and their external
+  commitments.  Additionally, employees must inform the company of any
+  apparent conflicts related to confidentiality obligations or rights to
+  inventions before engaging in outside work. Failure to disclose such
+  information may lead the company to assume no conflict exists, and the
+  employee may forfeit the right to make claims against the company
+  regarding these matters.
+
+================================================================================
+Q06 [NDA]  ✓ ANSWERED
+Q: What happens if I breach the confidentiality policy?
+Tools: search_policies, search_policies
+Sources:
+  • NDA letter head copy.pdf | Pages 1-7
+
+Answer:
+  If you breach the confidentiality policy, several consequences may follow:
+  - **Legal Action**: The company reserves the right to initiate legal
+  proceedings against you for any unauthorized disclosure of confidential
+  information. - **Disciplinary Measures**: Breaching the confidentiality
+  policy may lead to disciplinary actions, which can include termination of
+  employment. - **Financial Liability**: You may be held financially
+  responsible for any damages caused by the breach, including loss of
+  business or reputation for the company. - **Injunctions**: The company may
+  seek an injunction to prevent further disclosures or to protect its
+  confidential information.  It is crucial to adhere to the confidentiality
+  policy to avoid these serious repercussions.
+
+================================================================================
+Q07 [NDA]  ✓ ANSWERED
+Q: For how long does the non-compete clause apply after leaving?
+Tools: search_policies
+Sources:
+  • NDA letter head copy.pdf | Pages 1-4
+
+Answer:
+  The non-compete clause applies for a period of **two (2) years**
+  immediately after leaving the company. During this time, you are
+  prohibited from engaging in any business that competes with the company or
+  from having professional relationships with its competitors, suppliers, or
+  customers without written consent from management.   Additionally, there
+  is a restriction on soliciting other employees or consultants of the
+  company for the same duration.
+
+================================================================================
+Q08 [NDA]  ✓ ANSWERED
+Q: Can I publish work-related articles without permission?
+Tools: search_policies, search_policies
+Sources:
+  • NDA letter head copy.pdf | Pages 1-6
+
+Answer:
+  You cannot publish work-related articles without permission. According to
+  the company's Confidentiality and Non-Competition Policy, you must obtain
+  advance written clearance from the Head of HR & Commercial or another
+  authorized officer before submitting any writing for publication or
+  delivering any speech that contains information related to the company's
+  business. Failure to comply with this requirement may result in immediate
+  dismissal and other legal consequences.
+
+================================================================================
+Q09 [NDA]  ✓ ANSWERED
+Q: Who owns inventions I create during employment?
+Tools: search_policies, search_policies
+Sources:
+  • NDA letter head copy.pdf | Multiple Sections
+
+Answer:
+  According to the company's policy, all inventions, discoveries, ideas, and
+  related intellectual property created during your employment are owned
+  exclusively by the company. This includes any work conceived, developed,
+  or reduced to practice, whether during regular working hours or on company
+  premises.   Key points include: - All inventions related to the company's
+  products, services, or tasks assigned during employment are considered the
+  company's sole property. - The employee agrees to assign all rights,
+  including copyrights and patents, to the company. - The company retains
+  the right to file for patents and other protections for these inventions.
+  This policy ensures that any intellectual contributions made by employees
+  in the course of their work are legally recognized as belonging to the
+  company.
+
+================================================================================
+Q10 [HR Policy]  ✓ ANSWERED
+Q: How many annual leaves do employees get?
+Tools: search_policies
+Sources:
+  • HR Policy Review and Recommendations.pdf | Pages 1-2
+
+Answer:
+  Employees are entitled to **24 annual leaves** per year, which equates to
+  **2 leaves per month**. Unused leaves can be carried forward to the next
+  year, but any remaining leaves will lapse at the end of the calendar year
+  (January to December).
+
+================================================================================
+Q11 [HR Policy]  ✓ ANSWERED
+Q: What documents are required at the time of joining?
+Tools: search_policies, search_policies
+Sources:
+  • NDA letter head copy.pdf | Multiple Sections
+  • HR Policy Review and Recommendations.pdf | Page 1
+
+Answer:
+  At the time of joining, the following documents are required:  -
+  **Government ID Proof** (mandatory):   - Aadhaar Card   - PAN Card   -
+  Voter ID / Passport / Driving License (if available)  - **Address Proof**
+  (if different from ID proof):   - Recent utility bill, rent agreement, or
+  bank statement  - **Photographs**:   - 2–4 passport-sized photos (both
+  physical and digital copies)  - **Educational & Professional Documents**:
+  - Mark sheets and certificates for:     - 10th grade     - 12th grade
+  - Graduation     - Post-Graduation   - Professional certifications (if
+  applicable)  - **Previous Employment Documents**:   - Relieving letter   -
+  Experience letter   - Last 3 months' salary slips   - UAN number (for PF
+  transfer)  These documents are essential for the onboarding process and to
+  ensure compliance with company policies.
+
+================================================================================
+Q12 [HR Policy]  ✓ ANSWERED
+Q: Is there a defined probation period policy?
+Tools: search_policies
+Sources:
+  • HR Policy Review and Recommendations.pdf | Pages 1-2
+
+Answer:
+  There is currently no defined probation period policy in place. The
+  existing HR documentation does not outline probation confirmation periods,
+  evaluation criteria, or timelines for new hires. This indicates a gap in
+  the policy framework that may need to be addressed to establish clear
+  guidelines for probationary periods.   Recommendations include documenting
+  a formal probation policy that specifies the duration, evaluation process,
+  and confirmation criteria for new employees.
+
+================================================================================
+Q13 [HR Policy]  ✓ ANSWERED
+Q: What is the notice period for trainees?
+Tools: search_policies
+Sources:
+  • HR Policy Review and Recommendations.pdf | Page 1
+
+Answer:
+  The notice period for trainees is **2 months** prior to their exit. There
+  is no defined notice period for employees and consultants.
+
+================================================================================
+Q14 [HR Policy]  ✓ ANSWERED
+Q: What is missing from the current HR policies?
+Tools: (none)
+Sources:
+  (no sources)
+
+Answer:
+  I can only assist with HR-related queries. Please ask about company
+  policies, leave, employees, onboarding, or workplace matters.
+
+================================================================================
+Q15 [HR Policy]  ✓ ANSWERED
+Q: What is the POSH policy status?
+Tools: search_policies
+Sources:
+  • HR Policy Review and Recommendations.pdf | Page 2
+
+Answer:
+  The current status of the POSH (Prevention of Sexual Harassment) Policy is
+  that it has been **implemented since April 25**. However, it is
+  recommended to ensure that an Internal Committee (IC) is formed and that
+  employees receive annual training on the policy.  Additionally, there is a
+  suggestion to create a formal grievance handling mechanism with clear
+  escalation levels and resolution timelines, as this is currently not
+  available.  Next steps include documenting all missing policies and
+  circulating them for acknowledgment, along with creating standard
+  templates for various HR documents.
+
+================================================================================
+Q16 [Expense]  ✗ RETRIEVAL MISS
+Q: What is the expense reimbursement policy?
+Tools: search_policies, search_policies, search_policies
+Sources:
+  • NDA letter head copy.pdf | Multiple Sections
+  • HR Policy Review and Recommendations.pdf | Page 1
+
+Answer:
+  I couldn't find that information.
+
+================================================================================
+Q17 [Expense]  ✓ ANSWERED
+Q: What expenses can employees claim?
+Tools: search_policies, search_policies
+Sources:
+  • NDA letter head copy.pdf | Pages 6-7
+  • HR Policy Review and Recommendations.pdf | Page 1
+
+Answer:
+  Employees can claim expenses related to the following categories:  -
+  **Travel Expenses**: Costs incurred for business-related travel, including
+  transportation, lodging, and meals. - **Office Supplies**: Purchases of
+  necessary supplies for work purposes. - **Training and Development**: Fees
+  for courses or training sessions that enhance job skills. -
+  **Communication Expenses**: Costs for phone calls or internet services
+  used for work. - **Client Entertainment**: Expenses related to
+  entertaining clients, such as meals or events.  It's important to keep
+  receipts and follow the company's specific reimbursement procedures to
+  ensure claims are processed correctly.
+
+================================================================================
+Q18 [Cross-doc]  ✓ ANSWERED
+Q: What are all the leave-related policies in the company?
+Tools: search_policies
+Sources:
+  • HR Policy Review and Recommendations.pdf | Pages 1-2
+  • NDA letter head copy.pdf | Page 6
+
+Answer:
+  The company's leave-related policies include the following key points:  -
+  **Annual Leave**: Employees are entitled to **24 annual leaves** (2 per
+  month). Unused leaves can be carried forward to the next year, but any
+  remaining leaves will lapse at the end of the calendar year (January to
+  December). - **Consultants**: There is no formal leave policy in place for
+  consultants. - **Probation and Confirmation**: There is currently no
+  defined policy regarding probation periods, evaluation criteria, or
+  confirmation timelines for new hires. - **Working Hours**: No specific
+  policy exists regarding overtime, late arrivals, or flexible working
+  hours. - **Notice Period**: For trainees, a **2-month notice** is
+  required. However, there is no defined notice period for employees and
+  consultants. - **Exit Process**: Employees must return company assets
+  (like laptops and tools) and complete an exit form for final settlement.
+  These policies highlight the company's approach to leave entitlements and
+  related processes, indicating areas where formal policies may be lacking
+  or need improvement.
+
+================================================================================
+Q19 [Cross-doc]  ✓ ANSWERED
+Q: Summarise all HR policies currently in place.
+Tools: search_policies
+Sources:
+  • HR Policy Review and Recommendations.pdf | Pages 1-2
+  • NDA letter head copy.pdf | Pages 1-7
+
+Answer:
+  The current HR policies in place include the following key points:  1.
+  **Leave Policy**:    - Employees are entitled to **24 annual leaves** (2
+  per month), which can be carried forward, but any remaining leaves lapse
+  at the end of the year.    - There is no formal leave policy for
+  consultants.  2. **Probation and Confirmation**:    - There is no defined
+  policy regarding probation periods, evaluation criteria, or confirmation
+  timelines for new hires.  3. **Working Hours**:    - No defined policy
+  exists for overtime, late arrivals, or flexible working hours.  4.
+  **Notice Period and Exit Policy**:    - Trainees must provide **2 months'
+  notice**.    - There is no defined notice period for employees and
+  consultants.    - The exit process includes returning company assets and
+  completing an exit form.  5. **Employment Mode**:    - Consultants are
+  hired on a fixed-term basis with monthly pay and are responsible for their
+  own taxes.    - Employees are on the company payroll with statutory
+  deductions and eligible for benefits.  6. **Documentation Requirements**:
+  - Mandatory government ID proofs include Aadhaar Card and PAN Card, along
+  with other documents like educational certificates and previous employment
+  letters.  7. **Missing Policies**:    - A **POSH Policy** has been
+  implemented, but an Internal Committee needs to be formed.    - A formal
+  **Grievance Redressal Policy** is needed.    - The **Work From Home (WFH)
+  Policy** requires definition regarding eligibility and approval processes.
+  - A **Code of Conduct** and **Equal Opportunity Policy** are not
+  documented.    - Performance management processes need formalization.  8.
+  **Confidentiality and Non-Competition Policy**:    - Employees must
+  maintain confidentiality regarding company information and are subject to
+  non-competition clauses.  Next steps include documenting all missing
+  policies and creating standard templates for various HR documents.
+
+================================================================================
+Q20 [Cross-doc]  ✓ ANSWERED
+Q: What should a new employee know on their first day?
+Tools: search_policies, get_onboarding_checklist
+Sources:
+  • HR Policy Review and Recommendations.pdf | Pages 1-2
+  • NDA letter head copy.pdf | Page 4
+
+Answer:
+  On their first day, a new employee should be aware of the following key
+  points:  - **Documentation**: Ensure all necessary documents are
+  submitted, including:   - Government ID Proof (Aadhaar Card, PAN Card,
+  etc.)   - Address Proof (utility bill, rent agreement)   - Educational and
+  professional documents (mark sheets, certificates)   - Previous employment
+  documents (relieving letter, experience letter)  - **Attendance and Leave
+  Policy**: Familiarize yourself with the attendance policy, which includes
+  **24 annual leaves** (2 per month) that can be carried forward, but
+  remaining leaves lapse at the end of the year.  - **Working Hours**:
+  Understand the working hours and any policies regarding overtime or
+  flexible working arrangements.  - **Code of Conduct**: Be aware of the
+  expectations regarding professional behavior and any policies related to
+  confidentiality and conflicts of interest.  - **Training and
+  Development**: Look into available training programs and benefits that the
+  company offers to support your growth.  - **Team Introduction**: Meet your
+  team members and understand the organizational structure, including your
+  direct manager and colleagues.  - **Workspace Setup**: Ensure your
+  workspace is set up with the necessary tools and access to systems.  -
+  **Company Culture**: Take time to learn about the company culture, values,
+  and mission to align your work with organizational goals.  These points
+  will help ensure a smooth transition into the new role and foster a
+  positive start to the employee's journey within the company.
+
+================================================================================
+Q21 [Out-of-scope]  ✓ CORRECTLY DECLINED
+Q: What is the weather in Pune today?
+Tools: (none)
+Sources:
+  (no sources)
+
+Answer:
+  I can only assist with HR-related queries. Please ask about company
+  policies, leave, employees, onboarding, or workplace matters.
+
+================================================================================
+Q22 [Out-of-scope]  ✓ CORRECTLY DECLINED
+Q: Who won the IPL last year?
+Tools: (none)
+Sources:
+  (no sources)
+
+Answer:
+  I can only assist with HR-related queries. Please ask about company
+  policies, leave, employees, onboarding, or workplace matters.
+
+
+================================================================================
+SUMMARY
+================================================================================
+Total questions    : 22
+In-scope answered  : 19 / 20
+Retrieval misses   : 1
+Out-of-scope OK    : 2 / 2
+================================================================================
