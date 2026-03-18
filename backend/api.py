@@ -56,8 +56,8 @@ class ChatRequest(BaseModel):
 class SourceInfo(BaseModel):
     source_file: str
     section: str
-    start_line: int
-    end_line: int
+    start_line: Optional[int] = None  # INTEGRATION-001 FIX
+    end_line: Optional[int] = None
     content: Optional[str] = None
     score: Optional[float] = None
     full_content: Optional[list[dict]] = None
@@ -71,8 +71,8 @@ class ChatResponse(BaseModel):
 
 class DocumentPreviewRequest(BaseModel):
     source_file: str
-    start_line: int = 1
-    end_line: int = 10
+    start_line: Optional[int] = None  # INTEGRATION-001 FIX = 1
+    end_line: Optional[int] = None = 10
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -150,7 +150,9 @@ def chat(req: ChatRequest):
             for key, value in event.items():
                 if key == "agent":
                     msg = value["messages"][0]
-                    full_response += msg.content or ""
+                    content = msg.content or ""
+                    if content:
+                        full_response = content
                     if hasattr(msg, "tool_calls"):
                         for tc in msg.tool_calls or []:
                             steps.append({"type": "tool", "name": tc.get("name")})

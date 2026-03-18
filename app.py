@@ -264,7 +264,9 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
             for key, value in event.items():
                 if key == "agent":
                     msg = value["messages"][0]
-                    full_response += msg.content or ""
+                    content = msg.content or ""
+                    if content:
+                        full_response = content
                     if hasattr(msg, "tool_calls"):
                         for tc in msg.tool_calls or []:
                             steps.append({"type": "tool", "name": tc.get("name")})
