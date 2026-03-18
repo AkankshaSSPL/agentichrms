@@ -165,6 +165,7 @@ export default function App() {
     const [previewData, setPreviewData] = useState(null)
     const [previewLoading, setPreviewLoading] = useState(false)
     const chatEnd = useRef(null)
+    const isSubmitting = useRef(false)
 
     useEffect(() => {
         fetch(`${API}/documents`).then(r => r.json()).then(d => setDocCount(d.documents.length)).catch(() => { })
@@ -208,7 +209,8 @@ export default function App() {
     };
 
     async function sendMessage(text) {
-        if (!text.trim() || loading) return
+        if (!text.trim() || loading || isSubmitting.current) return
+        isSubmitting.current = true
         const userMsg = { role: 'user', content: text }
         setMessages(prev => [...prev, userMsg])
         setInput('')
@@ -237,7 +239,10 @@ export default function App() {
                 steps: [],
             }])
         }
-        setLoading(false)
+        } finally {
+            isSubmitting.current = false
+            setLoading(false)
+        }
     }
 
     async function togglePreview(idx, source) {

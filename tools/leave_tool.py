@@ -16,13 +16,13 @@ def _get_conn():
 
 def _count_business_days(start: datetime, end: datetime) -> int:
     """Count business days (Mon-Fri) between two dates, inclusive."""
+    from datetime import timedelta
     # GAP-014 FIX: Use business days instead of raw calendar days
     total = 0
     current = start
     while current <= end:
         if current.weekday() < 5:  # 0=Mon ... 4=Fri
             total += 1
-        from datetime import timedelta
         current += timedelta(days=1)
     return total
 

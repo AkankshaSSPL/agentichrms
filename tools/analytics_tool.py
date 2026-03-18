@@ -42,7 +42,7 @@ def get_department_summary() -> str:
         with _get_conn() as conn:
             rows = conn.cursor().execute(
                 "SELECT department, COUNT(*), "
-                "AVG(JULIANDAY('now') - JULIANDAY(join_date)) "
+                "AVG(CASE WHEN join_date IS NOT NULL AND join_date != '' THEN JULIANDAY('now') - JULIANDAY(join_date) END) "
                 "FROM employees WHERE status='active' "
                 "GROUP BY department ORDER BY COUNT(*) DESC"
             ).fetchall()
