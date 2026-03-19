@@ -1,0 +1,703 @@
+{
+  "audit_metadata": {
+    "project": "AgenticHRMS",
+    "scope": "Full tools directory diagnostic — ALL tools except email_tool.py and onboarding_tool.py",
+    "timestamp": "2026-03-17T15:00:00+05:30",
+    "purpose": "Hand this file to any LLM chat. It contains EVERY issue found, with exact file paths, line numbers, root causes, and copy-paste-ready fix code. The LLM should be able to resolve every issue without making assumptions.",
+    "how_to_use": "Give this entire JSON to an LLM and say: 'Here is a diagnostic of our tools directory. Fix every issue listed. Each issue has the exact file, line numbers, root cause, and fix code. Apply them one by one.'",
+    "project_root": "/home/gunesh/Development/sspl_REVIEW/akanksha/agentichrms-main",
+    "python_version": "3.x",
+    "key_dependencies": {
+      "langchain": "0.2.5",
+      "langgraph": "0.1.14",
+      "chromadb": "0.5.3",
+      "sentence-transformers": "3.0.1",
+      "pdfplumber": "0.11.0",
+      "fastapi": "0.111.0",
+      "streamlit": "1.35.0"
+    }
+  },
+
+  "database_schema": {
+    "file": "seed_db.py",
+    "db_path": "data/hr_database.sqlite",
+    "tables": {
+      "employees": "id INTEGER PK, name TEXT, email TEXT, department TEXT, designation TEXT, manager TEXT, join_date TEXT, phone TEXT, status TEXT DEFAULT 'active'",
+      "leave_balances": "id INTEGER PK AUTOINCREMENT, employee_id INTEGER FK, leave_type TEXT, days_remaining INTEGER, UNIQUE(employee_id, leave_type)",
+      "leaves": "id INTEGER PK AUTOINCREMENT, employee_id INTEGER FK, leave_type TEXT, start_date TEXT, end_date TEXT, status TEXT DEFAULT 'Pending', reason TEXT, rejection_reason TEXT, applied_on TEXT DEFAULT CURRENT_TIMESTAMP",
+      "onboarding_tasks": "id INTEGER PK, task_name TEXT, category TEXT, description TEXT, is_mandatory INTEGER DEFAULT 1",
+      "employee_onboarding": "id INTEGER PK AUTOINCREMENT, employee_id INTEGER FK, task_id INTEGER FK, status TEXT DEFAULT 'Pending', completed_at TEXT"
+    },
+    "seed_data": "20 employees, 100 leave_balances (5 types x 20), 3 leave records, 14 onboarding tasks, 280 onboarding assignments"
+  },
+
+  "tool_files": [
+    {
+      "file": "tools/base.py",
+      "path": "tools/base.py",
+      "lines": 8,
+      "status": "WORKING",
+      "description": "Provides the @hr_tool decorator that wraps langchain_core.tools.tool. All other tool modules import from here.",
+      "functions": [
+        {
+          "name": "hr_tool",
+          "type": "decorator",
+          "lines": "5-7",
+          "purpose": "Wraps any function as a LangChain-compatible tool for the agent to call",
+          "status": "WORKING",
+          "issues": []
+        }
+      ],
+      "issues": []
+    },
+
+    {
+      "file": "tools/analytics_tool.py",
+      "path": "tools/analytics_tool.py",
+      "lines": 67,
+      "status": "WORKING — 2 minor issues",
+      "description": "Two analytics tools that query the SQLite database for aggregate HR statistics. Used by the agent when user asks about department summaries or leave reports.",
+      "imports": ["sqlite3", "sys", "os", "tools.base.hr_tool", "config.DB_PATH"],
+      "functions": [
+        {
+          "name": "_get_conn",
+          "type": "helper (not a tool)",
+          "lines": "11-12",
+          "purpose": "Creates and returns a new sqlite3 connection to DB_PATH",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "get_leave_summary",
+          "type": "@hr_tool",
+          "lines": "15-34",
+          "purpose": "Returns a text summary of all leave records grouped by leave_type and status with counts",
+          "parameters": "None",
+          "returns": "String with leave summary or error message",
+          "status": "WORKING",
+          "sql_query": "SELECT leave_type, status, COUNT(*) FROM leaves GROUP BY leave_type, status ORDER BY leave_type",
+          "issues": [
+            {
+              "id": "ANALYTICS-001",
+              "severity": "LOW",
+              "title": "No date-range filter on leave summary",
+              "line_range": "21-24",
+              "description": "The query returns ALL leave records ever created, including ancient ones. There is no way to filter by year or date range. As data grows, this will return an ever-growing summary mixing current and historical data.",
+              "root_cause": "The SQL query has no WHERE clause filtering by date.",
+              "impact": "For a production system with years of data, the summary becomes noisy and unhelpful. User asks 'leave summary' and gets stats from 3 years ago mixed with current year.",
+              "fix_code": "To add a current-year filter, change the SQL on lines 22-24 to:\n\nrows = conn.cursor().execute(\n    \"SELECT leave_type, status, COUNT(*) FROM leaves \"\n    \"WHERE start_date >= date('now', 'start of year') \"\n    \"GROUP BY leave_type, status ORDER BY leave_type\"\n).fetchall()",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        },
+        {
+          "name": "get_department_summary",
+          "type": "@hr_tool",
+          "lines": "37-67",
+          "purpose": "Returns department-wise headcount and average tenure for active employees",
+          "parameters": "None",
+          "returns": "String with department stats or error message",
+          "status": "WORKING",
+          "sql_query": "SELECT department, COUNT(*), AVG(JULIANDAY('now') - JULIANDAY(join_date)) FROM employees WHERE status='active' GROUP BY department ORDER BY COUNT(*) DESC",
+          "issues": [
+            {
+              "id": "ANALYTICS-002",
+              "severity": "LOW",
+              "title": "Tenure calculation assumes join_date is always valid ISO format",
+              "line_range": "43-48",
+              "description": "JULIANDAY(join_date) will return NULL if join_date is not a valid date string, which then makes the AVG return NULL for the whole group if any employee has a bad join_date. The code handles the NULL case (lines 62-65) but a single corrupt join_date silently poisons the average for the entire department.",
+              "root_cause": "No data-quality check on join_date format in the database. SQLite does not enforce date types.",
+              "impact": "One employee with join_date='TBD' or '' will cause the entire department's average tenure to be NULL/0.",
+              "fix_code": "Add a CASE expression to skip invalid dates:\n\nrows = conn.cursor().execute(\n    \"SELECT department, COUNT(*), \"\n    \"AVG(CASE WHEN join_date IS NOT NULL AND join_date != '' \"\n    \"THEN JULIANDAY('now') - JULIANDAY(join_date) END) \"\n    \"FROM employees WHERE status='active' \"\n    \"GROUP BY department ORDER BY COUNT(*) DESC\"\n).fetchall()",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "file": "tools/employee_tool.py",
+      "path": "tools/employee_tool.py",
+      "lines": 103,
+      "status": "WORKING — 3 issues (1 medium, 2 low)",
+      "description": "Three tools for employee lookup, department counts, and team retrieval. All query the employees table.",
+      "imports": ["sqlite3", "sys", "os", "tools.base.hr_tool", "config.DB_PATH"],
+      "functions": [
+        {
+          "name": "_get_conn",
+          "type": "helper",
+          "lines": "11-12",
+          "purpose": "Creates and returns a new sqlite3 connection",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "lookup_employee",
+          "type": "@hr_tool",
+          "lines": "15-60",
+          "purpose": "Search employees by name, department, or designation using LIKE matching",
+          "parameters": "name: str = None, department: str = None, designation: str = None",
+          "returns": "String listing matching employees with their details",
+          "status": "WORKING",
+          "issues": [
+            {
+              "id": "EMP-001",
+              "severity": "MEDIUM",
+              "title": "LIKE '%name%' matching can return unexpected results for common substrings",
+              "line_range": "23-31",
+              "description": "Searching for name='an' will match 'Ananya', 'Sanjay', 'Lakshmi Venkat', etc. The agent typically passes full names or reasonable substrings, but an adversarial or vague query could return many wrong results. The tool doesn't limit results either — with 1000 employees, a short search term could return hundreds.",
+              "root_cause": "LIKE '%x%' matches any substring occurrence, and there's no LIMIT clause.",
+              "impact": "Agent could get overwhelmed with matches and produce a very long response. Also, the LLM sends the entire result string back to OpenAI, and very long tool results eat context window and cost money.",
+              "fix_code": "Add a LIMIT clause and result-count warning. Change line 41-44 to:\n\nrows = conn.cursor().execute(\n    f\"SELECT name, email, department, designation, manager, join_date, status \"\n    f\"FROM employees WHERE {' AND '.join(conditions)} LIMIT 20\",\n    params,\n).fetchall()\n\nAnd after line 49, add:\nif len(rows) == 20:\n    result = f\"Showing first 20 of potentially more matches:\\n\\n\"",
+              "fix_difficulty": "EASY"
+            },
+            {
+              "id": "EMP-002",
+              "severity": "LOW",
+              "title": "No phone number in lookup results despite being in the schema",
+              "line_range": "41-59",
+              "description": "The SELECT query fetches name, email, department, designation, manager, join_date, status but NOT phone. The phone column exists in the employees table and is seeded with data, but lookup_employee never returns it.",
+              "root_cause": "phone column was omitted from the SELECT columns.",
+              "impact": "Users asking 'What is Rahul's phone number?' will get his details but won't see the phone number.",
+              "fix_code": "Change line 41 to include phone:\n\nrows = conn.cursor().execute(\n    f\"SELECT name, email, department, designation, manager, join_date, status, phone \"\n    f\"FROM employees WHERE {' AND '.join(conditions)}\",\n    params,\n).fetchall()\n\nAnd update the result formatting (lines 53-59) to include phone:\nresult += (\n    f\"Name: {r[0]}\\n\"\n    f\"  Role: {r[3]}, {r[2]} Department\\n\"\n    f\"  Email: {r[1]}\\n\"\n    f\"  Phone: {r[7] or 'Not available'}\\n\"\n    f\"  Manager: {r[4] or 'None'}\\n\"\n    f\"  Joined: {r[5]} | Status: {r[6]}\\n\\n\"\n)",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        },
+        {
+          "name": "count_by_department",
+          "type": "@hr_tool",
+          "lines": "63-80",
+          "purpose": "Returns employee count per department for active employees",
+          "parameters": "None",
+          "returns": "String with department-wise counts and total",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "get_team",
+          "type": "@hr_tool",
+          "lines": "83-103",
+          "purpose": "Find all direct reports of a given manager by name-based LIKE matching",
+          "parameters": "manager_name: str",
+          "returns": "String listing team members",
+          "status": "WORKING — with architectural fragility",
+          "issues": [
+            {
+              "id": "EMP-003",
+              "severity": "MEDIUM",
+              "title": "Manager lookup uses text-name LIKE matching instead of ID-based foreign key",
+              "line_range": "89-93",
+              "description": "The employees table stores manager as a TEXT name (e.g., 'Priya Patel'), not as a foreign key to employees.id. get_team uses LOWER(manager) LIKE '%name%' to find reports. Problems: (1) If two managers share a name substring (e.g., 'Raj' matches 'Rajesh Iyer' and 'Raj Kumar'), the wrong team could be returned. (2) If a manager's name is updated, all references become stale. (3) LIKE matching is slower than ID-based joins.",
+              "root_cause": "Database schema design: manager column is TEXT, not INTEGER FK referencing employees(id).",
+              "impact": "Currently works with 20 seed employees because names are unique enough. Will break with scale or name collisions.",
+              "fix_code": "This is a schema-level fix. Full fix requires:\n\n1. Add column: ALTER TABLE employees ADD COLUMN manager_id INTEGER REFERENCES employees(id);\n2. Populate: UPDATE employees SET manager_id = (SELECT id FROM employees e2 WHERE e2.name = employees.manager);\n3. Update get_team query:\n   rows = conn.cursor().execute(\n       \"SELECT e.name, e.designation, e.department, e.email FROM employees e \"\n       \"JOIN employees m ON e.manager_id = m.id \"\n       \"WHERE LOWER(m.name) LIKE ? AND e.status='active'\",\n       (f\"%{manager_name.lower()}%\",),\n   ).fetchall()\n\nNOTE: This also requires updating seed_db.py to set manager_id during seeding, and updating leave_tool.py lines 90-92 where it reads the manager column.",
+              "fix_difficulty": "MEDIUM — requires schema migration + updating multiple files"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "file": "tools/leave_tool.py",
+      "path": "tools/leave_tool.py",
+      "lines": 293,
+      "status": "WORKING — 5 issues (2 medium, 3 low)",
+      "description": "Five tools for the complete leave lifecycle: check balance, apply, list pending, approve, reject. This is the most complex tool file with email integration and business logic.",
+      "imports": ["sqlite3", "datetime", "sys", "os", "tools.base.hr_tool", "tools.email_tool._send_smtp_email", "tools.email_tool._lookup_employee_email", "config.DB_PATH"],
+      "critical_dependency": "Imports _send_smtp_email and _lookup_employee_email from email_tool.py. If email_tool.py has import errors (e.g., config.py fails because AI_KEY is missing), then leave_tool.py will also fail to import, and ALL leave tools become unavailable to the agent.",
+      "functions": [
+        {
+          "name": "_get_conn",
+          "type": "helper",
+          "lines": "13-14",
+          "purpose": "Creates and returns a new sqlite3 connection",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "_count_business_days",
+          "type": "helper",
+          "lines": "17-27",
+          "purpose": "Counts weekday (Mon-Fri) days between two dates inclusive",
+          "parameters": "start: datetime, end: datetime",
+          "returns": "int — number of business days",
+          "status": "WORKING — 1 performance issue",
+          "issues": [
+            {
+              "id": "LEAVE-001",
+              "severity": "LOW",
+              "title": "timedelta import inside the while loop body",
+              "line_range": "25-26",
+              "description": "Line 25: 'from datetime import timedelta' is inside the while loop. Python re-executes the import statement on every iteration. While Python caches modules so the actual I/O only happens once, the import lookup still runs on every loop cycle. For a 365-day leave (maternity), that is 365 unnecessary import lookups.",
+              "root_cause": "The import was placed inside the loop body instead of at the top of the function or file.",
+              "impact": "Negligible performance hit per call, but it's sloppy code that could confuse maintainers.",
+              "fix_code": "Move the import to the top of the function (line 18 area):\n\ndef _count_business_days(start: datetime, end: datetime) -> int:\n    \"\"\"Count business days (Mon-Fri) between two dates, inclusive.\"\"\"\n    from datetime import timedelta\n    total = 0\n    current = start\n    while current <= end:\n        if current.weekday() < 5:\n            total += 1\n        current += timedelta(days=1)\n    return total",
+              "fix_difficulty": "TRIVIAL"
+            }
+          ]
+        },
+        {
+          "name": "check_leave_balance",
+          "type": "@hr_tool",
+          "lines": "30-58",
+          "purpose": "Returns remaining leave days for an employee by name, broken down by leave type",
+          "parameters": "employee_name: str",
+          "returns": "String showing balance per leave type",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "apply_leave",
+          "type": "@hr_tool",
+          "lines": "61-142",
+          "purpose": "Creates a new leave request in the database with Pending status. Sends email notifications to employee and manager.",
+          "parameters": "employee_name: str, leave_type: str, start_date: str, end_date: str, reason: str",
+          "returns": "String confirming submission with leave ID",
+          "status": "WORKING — 2 issues",
+          "issues": [
+            {
+              "id": "LEAVE-002",
+              "severity": "MEDIUM",
+              "title": "No overlap detection — employee can apply for two leaves covering the same dates",
+              "line_range": "86-104",
+              "description": "apply_leave inserts a new leave record without checking if the employee already has an Approved or Pending leave overlapping the requested date range. Example: Employee applies casual leave Jan 5-10 (Approved), then applies sick leave Jan 7-12 (also Approved). Both deduct from balance, and the employee effectively books double leave.",
+              "root_cause": "No SQL query checking for overlapping date ranges before INSERT.",
+              "impact": "Double-booking of leave periods. Leave balances are deducted twice for overlapping days. Analytics show inflated leave usage.",
+              "fix_code": "Add overlap check after fetching the employee (after line 96). Insert this block:\n\n# Check for overlapping leaves\noverlap = c.execute(\n    \"SELECT id, leave_type, start_date, end_date, status FROM leaves \"\n    \"WHERE employee_id=? AND status IN ('Pending','Approved') \"\n    \"AND start_date <= ? AND end_date >= ?\",\n    (emp_id, end_date, start_date)\n).fetchone()\nif overlap:\n    return (\n        f\"Cannot apply: {full_name} already has a {overlap[1]} leave \"\n        f\"({overlap[2]} to {overlap[3]}, status: {overlap[4]}) \"\n        f\"that overlaps with the requested dates.\"\n    )",
+              "fix_difficulty": "EASY"
+            },
+            {
+              "id": "LEAVE-003",
+              "severity": "MEDIUM",
+              "title": "apply_leave doesn't check balance before creating the request",
+              "line_range": "86-104",
+              "description": "apply_leave inserts the leave request without checking if the employee has enough balance. The balance check only happens later in approve_leave. This means an employee with 0 casual leave remaining can still submit a 10-day casual leave request, it goes to Pending, the manager sees it, and only upon approval does the system say 'insufficient balance'. This is a poor UX — the employee should be told immediately.",
+              "root_cause": "Balance validation was only added to approve_leave (GAP-005 fix), not to apply_leave.",
+              "impact": "Employees waste time applying for leaves they can't get. Managers waste time reviewing requests that will fail on approval. Creates frustration and confusion.",
+              "fix_code": "Add balance pre-check after line 96 (after fetching employee):\n\n# Pre-check balance\nfrom datetime import datetime as dt_class\nd1_check = datetime.strptime(start_date, \"%Y-%m-%d\")\nd2_check = datetime.strptime(end_date, \"%Y-%m-%d\")\nrequired_days = _count_business_days(d1_check, d2_check)\nbal = c.execute(\n    \"SELECT days_remaining FROM leave_balances WHERE employee_id=? AND leave_type=?\",\n    (emp_id, leave_type.lower())\n).fetchone()\nif not bal:\n    return f\"No {leave_type} leave balance record found for {full_name}.\"\nif bal[0] < required_days:\n    return (\n        f\"Insufficient {leave_type} leave balance for {full_name}: \"\n        f\"{bal[0]} day(s) remaining, but {required_days} business day(s) requested.\"\n    )",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        },
+        {
+          "name": "get_pending_leaves",
+          "type": "@hr_tool",
+          "lines": "145-165",
+          "purpose": "Lists all leave requests with status='Pending' across the organization",
+          "parameters": "None",
+          "returns": "String listing pending requests",
+          "status": "WORKING",
+          "issues": [
+            {
+              "id": "LEAVE-004",
+              "severity": "LOW",
+              "title": "No pagination or limit on pending leaves query",
+              "line_range": "151-155",
+              "description": "If 500 leave requests are Pending, this returns all 500 in a single string. The LLM will receive this entire string as tool output which wastes context tokens and may produce a poor response.",
+              "root_cause": "No LIMIT clause on the SQL query.",
+              "impact": "With scale, produces very long tool output. Agent response quality degrades because the LLM is overwhelmed.",
+              "fix_code": "Add LIMIT and count:\n\ncount_row = conn.cursor().execute(\n    \"SELECT COUNT(*) FROM leaves WHERE status='Pending'\"\n).fetchone()\ntotal_pending = count_row[0]\n\nrows = conn.cursor().execute(\"\"\"\n    SELECT l.id, e.name, l.leave_type, l.start_date, l.end_date, l.reason\n    FROM leaves l JOIN employees e ON l.employee_id = e.id\n    WHERE l.status='Pending'\n    ORDER BY l.start_date\n    LIMIT 25\n\"\"\").fetchall()\n\nresult = f\"Pending Leave Requests ({total_pending} total, showing up to 25):\\n\"",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        },
+        {
+          "name": "approve_leave",
+          "type": "@hr_tool",
+          "lines": "168-242",
+          "purpose": "Approves a Pending leave: updates status, deducts balance, sends email notification",
+          "parameters": "leave_id: int",
+          "returns": "String confirming approval with days deducted",
+          "status": "WORKING",
+          "issues": [
+            {
+              "id": "LEAVE-005",
+              "severity": "LOW",
+              "title": "Employee name/email query runs AFTER conn.commit() and OUTSIDE the context manager",
+              "line_range": "225-237",
+              "description": "Lines 225-227 execute a SELECT query on line 226 to fetch employee name and email, but this happens after conn.commit() on line 223 and technically AFTER the 'with _get_conn() as conn:' block has exited (the indentation shows line 229 is OUTSIDE the with block). However, SQLite's context manager in Python doesn't actually close the connection on __exit__ — it only commits or rolls back. So the cursor from line 225-227 still works because 'conn' is still in scope, but this is fragile and confusing.",
+              "root_cause": "The employee lookup query was placed after the with-block exit, relying on the connection object still being alive.",
+              "impact": "Currently works because SQLite context manager doesn't close the connection. But it's misleading code — any future refactoring to use a proper connection pool will break this.",
+              "fix_code": "Move the employee lookup query INSIDE the with block, before conn.commit(). Move lines 225-227 to just after line 222 (before conn.commit()):\n\n            # ... existing code ...\n            c.execute(\n                \"UPDATE leave_balances SET days_remaining = days_remaining - ? \"\n                \"WHERE employee_id=? AND leave_type=?\",\n                (days, emp_id, l_type)\n            )\n            \n            emp_row = c.execute(\n                \"SELECT name, email FROM employees WHERE id=?\", (emp_id,)\n            ).fetchone()\n            \n            conn.commit()\n\n        # Now emp_row is available outside the with block\n        if emp_row:\n            ...",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        },
+        {
+          "name": "reject_leave",
+          "type": "@hr_tool",
+          "lines": "245-293",
+          "purpose": "Rejects a Pending leave with a reason, sends email notification",
+          "parameters": "leave_id: int, reason: str",
+          "returns": "String confirming rejection",
+          "status": "WORKING",
+          "issues": [
+            {
+              "id": "LEAVE-006",
+              "severity": "LOW",
+              "title": "Same out-of-context-manager query issue as approve_leave",
+              "line_range": "277-288",
+              "description": "Same pattern as LEAVE-005. Lines 277-279 execute a SELECT after the with block has exited.",
+              "root_cause": "Same as LEAVE-005.",
+              "fix_code": "Same fix pattern as LEAVE-005: move the employee lookup before conn.commit() and inside the with block.",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "file": "tools/retrieval.py",
+      "path": "tools/retrieval.py",
+      "lines": 489,
+      "status": "WORKING — user confirmed RAG is working. 3 remaining issues (1 critical integration issue, 2 low)",
+      "description": "The RAG (Retrieval Augmented Generation) tool. Contains SourceTrackedRetriever class with embedding, reranking, and policy-type detection. Exposes search_policies as a LangChain tool. This is the most complex tool file.",
+      "imports": ["os", "sys", "re", "math", "logging", "chromadb", "sentence_transformers.SentenceTransformer", "sentence_transformers.CrossEncoder", "langchain_core.tools.tool", "typing", "collections.defaultdict", "config.CHROMA_DIR", "config.LOCAL_EMBEDDING_MODEL", "config.LOCAL_RERANK_MODEL", "config.DOCS_DIR", "utils.document_viewer.get_pdf_page_text", "utils.document_viewer.resolve_doc_path"],
+      "critical_dependency": "Imports get_pdf_page_text from utils/document_viewer.py. That function is decorated with @st.cache_data (Streamlit). When retrieval.py is used from the FastAPI backend (not Streamlit), calling get_pdf_page_text will crash if it hits the fallback path on lines 337-339.",
+      "functions": [
+        {
+          "name": "SourceTrackedRetriever.__init__",
+          "type": "class constructor",
+          "lines": "25-44",
+          "purpose": "Initializes ChromaDB client and SentenceTransformer embedding model",
+          "status": "WORKING — wrapped in try/except with clear error message",
+          "issues": []
+        },
+        {
+          "name": "SourceTrackedRetriever.collection (property)",
+          "type": "property",
+          "lines": "49-51",
+          "purpose": "Lazily fetches the ChromaDB collection on every access to avoid stale references after ingest",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "SourceTrackedRetriever.reranker (property)",
+          "type": "property",
+          "lines": "64-77",
+          "purpose": "Lazy-loads the CrossEncoder reranker model on first use",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "SourceTrackedRetriever.extract_policy_type",
+          "type": "method",
+          "lines": "79-124",
+          "purpose": "Keyword-based detection of which policy the user is asking about. Returns a policy type string or None.",
+          "status": "WORKING",
+          "issues": [
+            {
+              "id": "RAG-001",
+              "severity": "LOW",
+              "title": "Policy keywords don't cover all company documents",
+              "line_range": "83-118",
+              "description": "The policy_keywords dict covers 8 policy areas but the documents directory currently only has 3 files: 'Holiday List for the Year 2025.pdf', 'NDA letter head copy.pdf', 'expense_policy.xlsx'. None of these map cleanly to the defined policy keywords. The NDA might match 'confidentiality' keywords, but 'Holiday List' and 'expense_policy' have no keyword mapping. This means the policy boosting feature will never activate for these documents.",
+              "root_cause": "Policy keywords were defined for markdown policy documents, not for the actual PDF/Excel files in the documents directory.",
+              "impact": "Policy-type boosting (lines 163-191) will never fire for actual documents, reducing retrieval quality for holiday and expense queries.",
+              "fix_code": "Add keyword entries for the actual document types present:\n\nAdd to policy_keywords dict on line 83:\n\"holiday\": [\n    \"holiday\", \"public holiday\", \"national holiday\", \"festival\",\n    \"day off\", \"bank holiday\", \"government holiday\",\n],\n\"expense\": [\n    \"expense\", \"reimbursement\", \"travel expense\", \"claim\",\n    \"bill\", \"receipt\", \"allowance\",\n],\n\"nda\": [\n    \"nda\", \"non-disclosure\", \"confidential\", \"agreement\",\n    \"proprietary\", \"trade secret\",\n],",
+              "fix_difficulty": "EASY"
+            }
+          ]
+        },
+        {
+          "name": "SourceTrackedRetriever._normalize_scores",
+          "type": "method",
+          "lines": "126-140",
+          "purpose": "Applies sigmoid normalization to CrossEncoder scores to map them to [0,1]",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "SourceTrackedRetriever.rerank_chunks",
+          "type": "method",
+          "lines": "142-161",
+          "purpose": "Reranks retrieved chunks using CrossEncoder and returns top_k with normalized scores",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "SourceTrackedRetriever.filter_by_policy_type",
+          "type": "method",
+          "lines": "163-191",
+          "purpose": "Boosts chunks matching the detected policy type to the top of results",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "SourceTrackedRetriever.verify_source_match",
+          "type": "method",
+          "lines": "193-202",
+          "purpose": "Jaccard-based word overlap check between query and chunk content",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "SourceTrackedRetriever.retrieve_with_sources",
+          "type": "method",
+          "lines": "204-282",
+          "purpose": "Main retrieval pipeline: embed query → ChromaDB search → policy filter → rerank → verify → return top results",
+          "status": "WORKING",
+          "issues": []
+        },
+        {
+          "name": "search_policies",
+          "type": "@tool (LangChain tool, not @hr_tool)",
+          "lines": "290-489",
+          "purpose": "The main tool function called by the agent. Orchestrates retrieval then builds source objects for the frontend.",
+          "parameters": "query: str",
+          "returns": "Dict with 'answer' (str) and 'sources' (list of source dicts)",
+          "status": "WORKING — 2 issues",
+          "issues": [
+            {
+              "id": "RAG-002",
+              "severity": "HIGH",
+              "title": "Streamlit @st.cache_data decorator on get_pdf_page_text will crash the FastAPI backend",
+              "line_range": "337-339",
+              "description": "Lines 337-339 are a fallback path that calls get_pdf_page_text() when the normal pdfplumber.open() fails. get_pdf_page_text is defined in utils/document_viewer.py line 94 and is decorated with @st.cache_data. When running under the FastAPI backend (not Streamlit), Streamlit is not initialized, so calling any @st.cache_data function raises: 'streamlit.errors.StreamlitAPIException: st.cache_data requires a running Streamlit server'. This fallback path only triggers when the primary pdfplumber extraction on lines 329-334 throws an exception.",
+              "root_cause": "utils/document_viewer.py mixes Streamlit-specific decorators (@st.cache_data) with utility functions that are imported by non-Streamlit code (retrieval.py, which runs inside FastAPI).",
+              "impact": "If a PDF fails to open on the primary path (corrupt file, permission error), the fallback crashes the entire request with a Streamlit error. In the FastAPI context, this means a 500 Internal Server Error.",
+              "fix_code": "Option A (RECOMMENDED): Create a separate utility function without the Streamlit decorator for use by retrieval.py:\n\nIn utils/document_viewer.py, add a non-decorated version:\n\ndef get_pdf_page_text_raw(filepath: str, page_num: int) -> str:\n    \"\"\"Extract a single page's text — no Streamlit caching.\"\"\"\n    try:\n        import pdfplumber\n        with pdfplumber.open(filepath) as pdf:\n            if 1 <= page_num <= len(pdf.pages):\n                return pdf.pages[page_num - 1].extract_text() or \"\"\n    except Exception as e:\n        import logging\n        logging.getLogger(__name__).error(\"Error extracting PDF page %d from %s: %s\", page_num, filepath, e)\n    return \"\"\n\nThen in tools/retrieval.py, change the import on line 21:\nfrom utils.document_viewer import get_pdf_page_text_raw as get_pdf_page_text, resolve_doc_path\n\nOption B (QUICK FIX): In retrieval.py lines 337-339, replace the get_pdf_page_text call with inline pdfplumber:\n\nexcept Exception as exc:\n    logger.error(\"Error loading PDF pages for %s: %s\", filename, exc)\n    import pdfplumber as _plumber\n    for p in pages:\n        try:\n            with _plumber.open(str(filepath)) as _pdf:\n                if 1 <= p <= len(_pdf.pages):\n                    text = _pdf.pages[p - 1].extract_text() or \"\"\n                else:\n                    text = \"\"\n        except Exception:\n            text = \"\"\n        full_content_pages.append({\"page\": p, \"text\": text})",
+              "fix_difficulty": "EASY"
+            },
+            {
+              "id": "RAG-003",
+              "severity": "LOW",
+              "title": "search_policies uses @tool decorator instead of @hr_tool",
+              "line_range": "290",
+              "description": "All other tool functions use the project's @hr_tool decorator from tools/base.py. But search_policies directly imports and uses @tool from langchain_core.tools (line 9). This doesn't cause a functional problem (both produce LangChain BaseTool objects), but it's inconsistent. If the project later adds middleware or logging to @hr_tool, search_policies won't benefit.",
+              "root_cause": "search_policies was likely written before the @hr_tool decorator was created, or by a different developer.",
+              "impact": "Purely cosmetic/consistency issue. No functional impact.",
+              "fix_code": "Change line 290 from:\n@tool\ndef search_policies(query: str) -> Dict[str, Any]:\n\nTo:\nfrom .base import hr_tool\n\n@hr_tool\ndef search_policies(query: str) -> Dict[str, Any]:\n\nAnd remove 'from langchain_core.tools import tool' from line 9 (if no other code uses it).",
+              "fix_difficulty": "TRIVIAL"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+
+  "integration_layer_issues": [
+    {
+      "id": "INTEGRATION-001",
+      "severity": "HIGH",
+      "title": "SourceInfo Pydantic model in api.py requires start_line/end_line as int but sources can have None values",
+      "file": "backend/api.py",
+      "line_range": "56-65",
+      "description": "The SourceInfo model defines start_line: int and end_line: int (lines 59-60) as required integer fields. But retrieval.py can produce sources where start_line or end_line is None (line 234-235 in retrieval.py: 'start_line = int(raw_start) if raw_start is not None else None'). When the FastAPI response serialization tries to validate a source with start_line=None against SourceInfo, Pydantic will raise a ValidationError, and the entire /api/chat response will fail with a 500 error.",
+      "root_cause": "SourceInfo.start_line and SourceInfo.end_line are typed as int (non-optional), but the actual data from the retrieval pipeline can be None.",
+      "impact": "Any query that retrieves a chunk without line position metadata will crash the /api/chat endpoint. This means text files processed without accurate line tracking will cause complete API failures.",
+      "fix_code": "Change lines 59-60 in backend/api.py from:\n\nclass SourceInfo(BaseModel):\n    source_file: str\n    section: str\n    start_line: int\n    end_line: int\n\nTo:\n\nclass SourceInfo(BaseModel):\n    source_file: str\n    section: str\n    start_line: Optional[int] = None\n    end_line: Optional[int] = None",
+      "fix_difficulty": "TRIVIAL"
+    },
+    {
+      "id": "INTEGRATION-002",
+      "severity": "MEDIUM",
+      "title": "tools_registry.py has a hard import chain — one broken tool file kills ALL tools",
+      "file": "agent/tools_registry.py",
+      "line_range": "9-21",
+      "description": "get_all_tools() imports every tool module at function call time (lines 11-21). If ANY single import fails (e.g., email_tool.py can't connect to SMTP config, or retrieval.py can't download the embedding model), the ENTIRE get_all_tools() function raises an ImportError, and NO tools are available to the agent. The agent starts but has zero tools and can only give generic responses.",
+      "root_cause": "All tool imports are in a single function with no per-module error handling.",
+      "impact": "One broken tool module takes down all 16 tools. The agent becomes useless.",
+      "fix_code": "Wrap each import in try/except in agent/tools_registry.py:\n\ndef get_all_tools() -> list[BaseTool]:\n    import logging\n    logger = logging.getLogger(__name__)\n    tools = []\n\n    try:\n        from tools.retrieval import search_policies\n        tools.append(search_policies)\n    except Exception as e:\n        logger.error(\"Failed to load retrieval tools: %s\", e)\n\n    try:\n        from tools.employee_tool import lookup_employee, count_by_department, get_team\n        tools.extend([lookup_employee, count_by_department, get_team])\n    except Exception as e:\n        logger.error(\"Failed to load employee tools: %s\", e)\n\n    try:\n        from tools.email_tool import send_email, notify_employee, notify_hr\n        tools.extend([send_email, notify_employee, notify_hr])\n    except Exception as e:\n        logger.error(\"Failed to load email tools: %s\", e)\n\n    try:\n        from tools.leave_tool import (\n            check_leave_balance, apply_leave, get_pending_leaves,\n            approve_leave, reject_leave,\n        )\n        tools.extend([check_leave_balance, apply_leave, get_pending_leaves, approve_leave, reject_leave])\n    except Exception as e:\n        logger.error(\"Failed to load leave tools: %s\", e)\n\n    try:\n        from tools.onboarding_tool import (\n            get_onboarding_checklist, mark_task_complete, get_onboarding_progress,\n        )\n        tools.extend([get_onboarding_checklist, mark_task_complete, get_onboarding_progress])\n    except Exception as e:\n        logger.error(\"Failed to load onboarding tools: %s\", e)\n\n    try:\n        from tools.analytics_tool import get_leave_summary, get_department_summary\n        tools.extend([get_leave_summary, get_department_summary])\n    except Exception as e:\n        logger.error(\"Failed to load analytics tools: %s\", e)\n\n    logger.info(\"Loaded %d tools successfully\", len(tools))\n    return tools",
+      "fix_difficulty": "EASY"
+    },
+    {
+      "id": "INTEGRATION-003",
+      "severity": "MEDIUM",
+      "title": "FastAPI /api/chat endpoint has no request timeout — long-running agent queries block the worker",
+      "file": "backend/api.py",
+      "line_range": "133-173",
+      "description": "The /api/chat endpoint calls graph.stream(inputs) synchronously with no timeout. If the LLM takes 60+ seconds (OpenAI rate limit backoff, or a tool hangs), the FastAPI worker thread is blocked. Uvicorn defaults to 1 worker, so a single stuck request makes the entire API unavailable.",
+      "root_cause": "No timeout wrapper around the agent execution. No multi-worker configuration.",
+      "impact": "One slow query blocks all other users. The frontend shows 'Loading...' forever with no error.",
+      "fix_code": "Option A (timeout): Wrap with asyncio.wait_for:\n\nimport asyncio\nfrom concurrent.futures import ThreadPoolExecutor\n\nexecutor = ThreadPoolExecutor(max_workers=2)\n\n@app.post(\"/api/chat\", response_model=ChatResponse)\nasync def chat(req: ChatRequest):\n    try:\n        loop = asyncio.get_event_loop()\n        result = await asyncio.wait_for(\n            loop.run_in_executor(executor, _run_agent, req.message),\n            timeout=120.0  # 2 minute max\n        )\n        return result\n    except asyncio.TimeoutError:\n        raise HTTPException(504, \"Request timed out. Please try a simpler query.\")\n\nOption B (simpler): Run uvicorn with multiple workers:\nuvicorn backend.api:app --workers 4 --timeout-keep-alive 120",
+      "fix_difficulty": "MEDIUM"
+    },
+    {
+      "id": "INTEGRATION-004",
+      "severity": "MEDIUM",
+      "title": "React frontend API base URL is relative '/api' — won't work if frontend and backend are on different ports/hosts",
+      "file": "frontend/src/App.jsx",
+      "line_range": "4",
+      "description": "Line 4: const API = '/api'. This assumes the React dev server proxies /api requests to the FastAPI backend. If the React app is served from a different domain/port than the backend (e.g., React on localhost:3000, FastAPI on localhost:8000), all API calls will 404 because /api goes to the React dev server, not FastAPI.",
+      "root_cause": "Hardcoded relative API path with no proxy configuration visible in the frontend setup.",
+      "impact": "Frontend cannot communicate with backend out of the box. Developer must either configure a proxy in package.json/vite.config or change the API constant.",
+      "fix_code": "Option A: Add proxy to frontend/package.json (if using CRA):\n\"proxy\": \"http://localhost:8000\"\n\nOption B: Add proxy to frontend/vite.config.js (if using Vite):\nexport default defineConfig({\n  server: {\n    proxy: {\n      '/api': 'http://localhost:8000'\n    }\n  }\n})\n\nOption C: Use environment variable:\nconst API = import.meta.env.VITE_API_URL || '/api'\n\nThen create frontend/.env:\nVITE_API_URL=http://localhost:8000/api",
+      "fix_difficulty": "EASY"
+    },
+    {
+      "id": "INTEGRATION-005",
+      "severity": "LOW",
+      "title": "No recursion limit on LangGraph compilation — agent could loop up to 25 times",
+      "file": "agent/graph.py",
+      "line_range": "235",
+      "description": "workflow.compile() on line 235 uses LangGraph's default recursion_limit (typically 25). A pathological query could cause the agent to loop 25 times between agent→tools→agent, consuming ~25 OpenAI API calls ($0.50+) and taking 2+ minutes.",
+      "root_cause": "No explicit recursion_limit parameter passed to compile().",
+      "impact": "Excessive API costs and response time for edge-case queries.",
+      "fix_code": "Change line 235 from:\ngraph = workflow.compile()\n\nTo:\ngraph = workflow.compile()\n# Note: As of langgraph 0.1.14, recursion_limit is set via the config when invoking:\n# graph.stream(inputs, config={\"recursion_limit\": 5})\n\nThen in backend/api.py line 149, change:\nfor event in graph.stream(inputs):\nTo:\nfor event in graph.stream(inputs, config={\"recursion_limit\": 5}):\n\nAnd in app.py line 263, change:\nfor event in graph.stream(inputs):\nTo:\nfor event in graph.stream(inputs, config={\"recursion_limit\": 5}):",
+      "fix_difficulty": "EASY"
+    },
+    {
+      "id": "INTEGRATION-006",
+      "severity": "LOW",
+      "title": "No retry logic for OpenAI API calls",
+      "file": "agent/graph.py",
+      "line_range": "29",
+      "description": "ChatOpenAI on line 29 is initialized without max_retries. OpenAI API frequently returns 429 (rate limit) and 503 (server overload) errors which are retryable. A single transient failure crashes the user's query.",
+      "root_cause": "No retry configuration on the LLM client.",
+      "impact": "Queries fail intermittently during high API usage periods instead of retrying.",
+      "fix_code": "Change line 29 from:\nllm = ChatOpenAI(model=AGENT_MODEL, api_key=OPENAI_API_KEY, temperature=0, streaming=True)\n\nTo:\nllm = ChatOpenAI(\n    model=AGENT_MODEL,\n    api_key=OPENAI_API_KEY,\n    temperature=0,\n    streaming=True,\n    max_retries=3,\n    request_timeout=60,\n)",
+      "fix_difficulty": "TRIVIAL"
+    }
+  ],
+
+  "frontend_issues": [
+    {
+      "id": "FRONTEND-001",
+      "severity": "MEDIUM",
+      "title": "React frontend double-submit race condition on rapid Enter key or click",
+      "file": "frontend/src/App.jsx",
+      "line_range": "210-241",
+      "description": "sendMessage() checks 'if (!text.trim() || loading) return' on line 211, but React's setLoading(true) on line 215 is asynchronous. If the user presses Enter twice quickly, the second call can execute before loading becomes true, sending the same message twice.",
+      "root_cause": "React setState is asynchronous. The loading guard check races with the state update.",
+      "impact": "Duplicate messages sent to the agent, causing duplicate API calls and double responses.",
+      "fix_code": "Add a ref for immediate synchronous check:\n\nconst isSubmitting = useRef(false)\n\nasync function sendMessage(text) {\n    if (!text.trim() || loading || isSubmitting.current) return\n    isSubmitting.current = true\n    // ... existing code ...\n    try {\n        // ... existing fetch code ...\n    } catch (err) {\n        // ... existing error handling ...\n    } finally {\n        isSubmitting.current = false\n    }\n    setLoading(false)\n}",
+      "fix_difficulty": "EASY"
+    },
+    {
+      "id": "FRONTEND-002",
+      "severity": "LOW",
+      "title": "Chat history lost on page refresh — no persistence",
+      "file": "frontend/src/App.jsx",
+      "line_range": "160",
+      "description": "Messages are stored in useState (line 160) which is cleared on refresh. Users lose their entire conversation on any page reload.",
+      "root_cause": "No localStorage or sessionStorage persistence for chat state.",
+      "fix_code": "Add useEffect hooks for persistence:\n\n// Load on mount\nuseEffect(() => {\n    const saved = sessionStorage.getItem('hrms_chat_history')\n    if (saved) {\n        try { setMessages(JSON.parse(saved)) } catch {}\n    }\n}, [])\n\n// Save on change\nuseEffect(() => {\n    sessionStorage.setItem('hrms_chat_history', JSON.stringify(messages))\n}, [messages])",
+      "fix_difficulty": "EASY"
+    },
+    {
+      "id": "FRONTEND-003",
+      "severity": "LOW",
+      "title": "Document count fetch on mount doesn't handle backend being down",
+      "file": "frontend/src/App.jsx",
+      "line_range": "169-171",
+      "description": "The useEffect on line 169 fetches /api/documents and catches errors silently (.catch(() => {})). If the backend is down, docCount stays at 0, and the sidebar shows '0 documents' with no error indication. User has no way to know the backend is unreachable.",
+      "root_cause": "Error catch swallows the error without any UI feedback.",
+      "fix_code": "Add connection status state:\n\nconst [backendStatus, setBackendStatus] = useState('connecting')\n\nuseEffect(() => {\n    fetch(`${API}/health`)\n        .then(r => r.json())\n        .then(d => {\n            setBackendStatus('connected')\n            return fetch(`${API}/documents`)\n        })\n        .then(r => r.json())\n        .then(d => setDocCount(d.documents?.length || d.total || 0))\n        .catch(() => setBackendStatus('disconnected'))\n}, [])\n\nThen in the sidebar, show status:\n{backendStatus === 'disconnected' && (\n    <div style={{color: '#ff6b6b', fontSize: '12px', padding: '8px'}}>⚠ Backend unreachable</div>\n)}",
+      "fix_difficulty": "EASY"
+    }
+  ],
+
+  "data_flow_diagram": {
+    "description": "How a user query flows through the system end-to-end",
+    "steps": [
+      "1. User types query in React (App.jsx) or Streamlit (app.py)",
+      "2. Frontend sends POST /api/chat {message: 'query'} to FastAPI (backend/api.py line 134)",
+      "3. api.py creates HumanMessage, passes to graph.stream() (agent/graph.py)",
+      "4. graph.py's agent_node sends messages to OpenAI LLM with tool descriptions",
+      "5. LLM returns tool_calls (e.g., {name: 'search_policies', args: {query: '...'}})",
+      "6. graph.py's tools_node looks up the tool in tool_by_name dict and calls tool.invoke(args)",
+      "7. For search_policies: retrieval.py embeds query → searches ChromaDB → reranks → returns {answer, sources}",
+      "8. For DB tools: employee/leave/analytics tool queries SQLite → returns string result",
+      "9. tools_node wraps result in ToolMessage, extracts sources if present",
+      "10. Graph routes back to agent_node. LLM reads tool results and generates final human-readable answer",
+      "11. api.py collects full_response + sources, deduplicates sources, returns ChatResponse",
+      "12. Frontend displays answer in chat bubble, sources in preview panel"
+    ]
+  },
+
+  "testing_commands": {
+    "description": "Commands to verify each tool works. Run from project root.",
+    "prerequisites": [
+      "cd /home/gunesh/Development/sspl_REVIEW/akanksha/agentichrms-main",
+      "source venv/bin/activate  (if using venv)",
+      "Ensure .env has valid AI_KEY"
+    ],
+    "test_database_tools": "python -c \"\nimport sqlite3\nfrom config import DB_PATH\nconn = sqlite3.connect(DB_PATH)\nprint('Employees:', conn.execute('SELECT COUNT(*) FROM employees').fetchone()[0])\nprint('Leave balances:', conn.execute('SELECT COUNT(*) FROM leave_balances').fetchone()[0])\nprint('Leaves:', conn.execute('SELECT COUNT(*) FROM leaves').fetchone()[0])\nprint('Onboarding tasks:', conn.execute('SELECT COUNT(*) FROM onboarding_tasks').fetchone()[0])\nprint('Onboarding assignments:', conn.execute('SELECT COUNT(*) FROM employee_onboarding').fetchone()[0])\nconn.close()\nprint('Database OK')\n\"",
+    "test_employee_tools": "python -c \"\nfrom tools.employee_tool import lookup_employee, count_by_department, get_team\nprint('=== lookup_employee ===')\nprint(lookup_employee.invoke({'name': 'Rahul'}))\nprint('=== count_by_department ===')\nprint(count_by_department.invoke({}))\nprint('=== get_team ===')\nprint(get_team.invoke({'manager_name': 'Priya Patel'}))\n\"",
+    "test_leave_tools": "python -c \"\nfrom tools.leave_tool import check_leave_balance, get_pending_leaves\nprint('=== check_leave_balance ===')\nprint(check_leave_balance.invoke({'employee_name': 'Rahul Sharma'}))\nprint('=== get_pending_leaves ===')\nprint(get_pending_leaves.invoke({}))\n\"",
+    "test_analytics_tools": "python -c \"\nfrom tools.analytics_tool import get_leave_summary, get_department_summary\nprint('=== get_leave_summary ===')\nprint(get_leave_summary.invoke({}))\nprint('=== get_department_summary ===')\nprint(get_department_summary.invoke({}))\n\"",
+    "test_retrieval_tool": "python -c \"\nfrom tools.retrieval import search_policies\nresult = search_policies.invoke({'query': 'What is the leave policy?'})\nprint('Answer length:', len(result.get('answer', '')))\nprint('Sources count:', len(result.get('sources', [])))\nfor s in result.get('sources', []):\n    print(f'  - {s[\"source_file\"]}: {s[\"section\"]}')\n\"",
+    "test_full_api": "python -c \"\nimport requests\n# Start the backend first: uvicorn backend.api:app --port 8000\ntry:\n    r = requests.get('http://localhost:8000/api/health')\n    print('Health:', r.json())\n    r = requests.post('http://localhost:8000/api/chat', json={'message': 'Who is Rahul Sharma?'})\n    data = r.json()\n    print('Answer:', data.get('answer', '')[:200])\n    print('Sources:', len(data.get('sources', [])))\nexcept Exception as e:\n    print(f'Error: {e}. Is the backend running?')\n\""
+  },
+
+  "priority_fix_order": {
+    "description": "Recommended order of fixes. Do HIGH severity first, then MEDIUM, then LOW.",
+    "critical_path": [
+      {
+        "order": 1,
+        "id": "INTEGRATION-001",
+        "title": "Fix SourceInfo model to accept Optional[int] for start_line/end_line",
+        "estimated_time": "2 minutes",
+        "why_first": "This can cause the entire /api/chat to crash with a 500 error on certain queries. One-line fix."
+      },
+      {
+        "order": 2,
+        "id": "RAG-002",
+        "title": "Fix Streamlit decorator leaking into FastAPI backend via get_pdf_page_text",
+        "estimated_time": "5 minutes",
+        "why_second": "Hidden crash that only triggers on PDF fallback path. Create a non-decorated version of the function."
+      },
+      {
+        "order": 3,
+        "id": "INTEGRATION-002",
+        "title": "Add per-module try/except in tools_registry.py",
+        "estimated_time": "10 minutes",
+        "why_third": "Prevents one broken tool from killing all tools. Critical for robustness."
+      },
+      {
+        "order": 4,
+        "id": "LEAVE-002",
+        "title": "Add leave overlap detection in apply_leave",
+        "estimated_time": "5 minutes",
+        "why_next": "Prevents double-booked leaves corrupting data."
+      },
+      {
+        "order": 5,
+        "id": "LEAVE-003",
+        "title": "Add balance pre-check in apply_leave",
+        "estimated_time": "5 minutes",
+        "why_next": "Better UX — reject insufficient-balance leaves immediately."
+      },
+      {
+        "order": 6,
+        "id": "INTEGRATION-004",
+        "title": "Fix React API URL for cross-port communication",
+        "estimated_time": "3 minutes",
+        "why_next": "Required for the frontend to work at all if ports differ."
+      },
+      {
+        "order": 7,
+        "id": "EMP-002",
+        "title": "Add phone number to lookup_employee results",
+        "estimated_time": "2 minutes",
+        "why_next": "Missing data that users will ask about."
+      },
+      {
+        "order": 8,
+        "id": "INTEGRATION-006",
+        "title": "Add max_retries to ChatOpenAI",
+        "estimated_time": "1 minute",
+        "why_next": "One-line change that prevents intermittent failures."
+      },
+      {
+        "order": 9,
+        "id": "FRONTEND-001",
+        "title": "Fix double-submit race condition",
+        "estimated_time": "5 minutes",
+        "why_next": "Prevents duplicate API calls."
+      },
+      {
+        "order": 10,
+        "id": "LEAVE-001",
+        "title": "Move timedelta import out of loop",
+        "estimated_time": "1 minute",
+        "why_last": "Trivial code quality fix."
+      }
+    ]
+  }
+}

@@ -137,78 +137,136 @@ def render_document_preview_html(source: Dict[str, Any]) -> None:
         st.info(f"Preview not available for {ext} files.")
 
 
-def _render_pdf_preview(source: Dict[str, Any]) -> None:
-    """Render PDF page with exact chunk highlighting, fuzzy fallback."""
-    source_file = source.get("source_file", "Unknown")
-    page_num = source.get("page", 1)
-    chunks = source.get("chunks", [])
+def _clean_answer_text(answer: str) -> str:
+    """
+    Strip markdown, citation markers, and formatting from the LLM answer
+    so we can match its phrases against raw PDF text.
+    """
+    # Remove [Source: ...] citation markers
+    text = re.sub(r'\[Source:[^\]]*\]', '', answer)
+    # Remove markdown bold/italic
+    text = re.sub(r'\*{1,2}(.+?)\*{1,2}', r'', text)
+    # Remove markdown headers
+    text = re.sub(r'^#{1,4}\s+', '', text, flags=re.MULTILINE)
+    # Remove bullet point markers
+    text = re.sub(r'^\s*[-*•]\s+', '', text, flags=re.MULTILINE)
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
-    filepath = resolve_doc_path(source_file)
-    if not filepath:
-        st.warning(f"PDF not found: {source_file}")
-        return
 
-    full_text = get_pdf_page_text(str(filepath), page_num)
-    if not full_text:
-        st.warning(f"Could not extract text from page {page_num} of {source_file}.")
-        return
-
-    # Build highlight spans — exact match first
-    highlight_spans = []
-    for chunk in chunks:
-        chunk_clean = chunk.strip()
-        if not chunk_clean:
-            continue
-        start = 0
-        while True:
-            pos = full_text.find(chunk_clean, start)
-            if pos == -1:
-                break
-            highlight_spans.append((pos, pos + len(chunk_clean)))
-            start = pos + 1
-
-    # Fuzzy fallback when no exact matches found
-    if not highlight_spans:
-        import difflib
-        for chunk in chunks:
-            chunk_clean = chunk.strip()
-            best_ratio = 0
-            best_start = -1
-            chunk_len = len(chunk_clean)
-            text_len = len(full_text)
-            for i in range(0, text_len - chunk_len + 1, max(1, chunk_len // 4)):
-                substring = full_text[i : i + chunk_len]
-                ratio = difflib.SequenceMatcher(None, chunk_clean, substring).ratio()
-                if ratio > best_ratio and ratio > 0.7:
-                    best_ratio = ratio
-                    best_start = i
-            if best_start >= 0:
-                highlight_spans.append((best_start, best_start + chunk_len))
-
-    # Merge overlapping spans
-    highlight_spans = sorted(highlight_spans, key=lambda x: x[0])
-    merged_spans: list = []
-    for span in highlight_spans:
-        if not merged_spans or span[0] > merged_spans[-1][1]:
-            merged_spans.append(list(span))
+def _extract_answer_phrases(answer: str, min_len: int = 30) -> List[str]:
+    """
+    Split the cleaned answer into sentences and meaningful phrases.
+    Returns only phrases long enough to be specific (>= min_len chars).
+    These are the candidates we will look for in the PDF page text.
+    """
+    cleaned = _clean_answer_text(answer)
+    # Split on sentence boundaries
+    sentences = re.split(r'(?<=[.!?])\s+', cleaned)
+    phrases = []
+    for sent in sentences:
+        sent = sent.strip()
+        if len(sent) >= min_len:
+            phrases.append(sent)
         else:
-            merged_spans[-1][1] = max(merged_spans[-1][1], span[1])
+            # Short sentence — try sub-phrases split on comma/semicolon
+            for sub in re.split(r'[,;]\s+', sent):
+                sub = sub.strip()
+                if len(sub) >= min_len:
+                    phrases.append(sub)
+    return phrases
 
-    # Build highlighted HTML — use html_module alias to avoid name collision
+
+def _find_spans_in_text(
+    candidates: List[str],
+    full_text: str,
+    fuzzy_threshold: float = 0.82,
+) -> list:
+    """
+    For each candidate phrase try:
+      1. Exact substring match
+      2. Fuzzy sliding-window match (difflib, threshold >= fuzzy_threshold)
+
+    Returns a list of (start, end) character positions in full_text.
+    Higher fuzzy_threshold means stricter — only use if the answer is
+    very close to verbatim. Lower threshold catches more paraphrasing
+    but risks false positives.
+    """
+    import difflib
+    spans = []
+
+    for phrase in candidates:
+        phrase = phrase.strip()
+        if not phrase:
+            continue
+
+        # Pass 1: exact match
+        pos = full_text.find(phrase)
+        if pos != -1:
+            spans.append((pos, pos + len(phrase)))
+            continue
+
+        # Pass 2: case-insensitive exact match
+        pos = full_text.lower().find(phrase.lower())
+        if pos != -1:
+            spans.append((pos, pos + len(phrase)))
+            continue
+
+        # Pass 3: fuzzy sliding window
+        if len(phrase) < 20:
+            continue  # too short to fuzzy-match reliably
+        p_len = len(phrase)
+        t_len = len(full_text)
+        best_ratio = 0.0
+        best_pos = -1
+        step = max(1, p_len // 6)
+        for i in range(0, t_len - p_len + 1, step):
+            window = full_text[i: i + p_len]
+            ratio = difflib.SequenceMatcher(None, phrase.lower(), window.lower()).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_pos = i
+        if best_ratio >= fuzzy_threshold and best_pos >= 0:
+            spans.append((best_pos, best_pos + p_len))
+
+    return spans
+
+
+def _merge_spans(spans: list) -> list:
+    """Merge overlapping or adjacent spans into the minimal covering set."""
+    if not spans:
+        return []
+    spans = sorted(spans, key=lambda x: x[0])
+    merged = [list(spans[0])]
+    for start, end in spans[1:]:
+        if start <= merged[-1][1] + 5:   # +5 allows adjacent spans to merge
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return merged
+
+
+def _build_highlighted_html(full_text: str, merged_spans: list,
+                             source_file: str, page_num: int) -> str:
+    """
+    Render the PDF page text as HTML with <mark> highlight spans.
+    Structure (background, font, header bar) is identical to the original.
+    """
     escaped = ""
     last_end = 0
     for start, end in merged_spans:
         escaped += html_module.escape(full_text[last_end:start])
         escaped += (
             '<mark style="background-color:#fbbf24;color:#000;'
-            'padding:2px 0;border-radius:3px;">'
+            'padding:2px 0;border-radius:3px;font-weight:600;">'
         )
         escaped += html_module.escape(full_text[start:end])
         escaped += "</mark>"
         last_end = end
     escaped += html_module.escape(full_text[last_end:])
 
-    html_content = f"""
+    return f"""
     <div style="background:#0a0c10;border:1px solid #252a35;border-radius:10px;
                 padding:16px;font-family:'DM Mono',monospace;font-size:12px;
                 color:#c9d1d9;max-height:350px;overflow-y:auto;
@@ -222,6 +280,91 @@ def _render_pdf_preview(source: Dict[str, Any]) -> None:
         {escaped}
     </div>
     """
+
+
+def _render_pdf_preview(source: Dict[str, Any]) -> None:
+    """
+    Render a PDF page with highlighted spans showing exactly what the
+    assistant used in its answer.
+
+    Highlight priority (stops at first tier that produces results):
+
+    Tier 1 — Answer-phrase matching (NEW)
+        Extract sentences from the assistant's answer, find each one in the
+        PDF page text (exact then fuzzy @ 0.82). This highlights only the
+        specific sentences the LLM actually cited — not the whole chunk.
+
+    Tier 2 — Sentence-level chunk matching
+        Split each retrieved chunk into individual sentences and match each
+        one. Succeeds when the full chunk fails due to whitespace differences.
+
+    Tier 3 — Full-chunk fuzzy matching (original fallback)
+        Match the full chunk string with difflib threshold 0.70.
+        Broadest coverage, may highlight more text than strictly relevant.
+    """
+    source_file = source.get("source_file", "Unknown")
+    page_num    = source.get("page", 1)
+    chunks      = source.get("chunks", [])
+    answer      = source.get("answer", "")          # injected by app.py
+
+    filepath = resolve_doc_path(source_file)
+    if not filepath:
+        st.warning(f"PDF not found: {source_file}")
+        return
+
+    full_text = get_pdf_page_text(str(filepath), page_num)
+    if not full_text:
+        st.warning(f"Could not extract text from page {page_num} of {source_file}.")
+        return
+
+    merged_spans: list = []
+
+    # ── Tier 1: answer-phrase matching ───────────────────────────────────────
+    if answer:
+        phrases = _extract_answer_phrases(answer, min_len=30)
+        spans = _find_spans_in_text(phrases, full_text, fuzzy_threshold=0.82)
+        merged_spans = _merge_spans(spans)
+
+    # ── Tier 2: sentence-level chunk matching ─────────────────────────────────
+    if not merged_spans and chunks:
+        sentence_candidates: List[str] = []
+        for chunk in chunks:
+            sentences = re.split(r'(?<=[.!?])\s+', chunk.strip())
+            sentence_candidates.extend(
+                s.strip() for s in sentences if len(s.strip()) >= 25
+            )
+        spans = _find_spans_in_text(sentence_candidates, full_text, fuzzy_threshold=0.78)
+        merged_spans = _merge_spans(spans)
+
+    # ── Tier 3: full-chunk fuzzy fallback (original behaviour) ───────────────
+    if not merged_spans and chunks:
+        import difflib
+        spans = []
+        for chunk in chunks:
+            chunk_clean = chunk.strip()
+            if not chunk_clean:
+                continue
+            # Exact match first
+            pos = full_text.find(chunk_clean)
+            if pos != -1:
+                spans.append((pos, pos + len(chunk_clean)))
+                continue
+            # Fuzzy match
+            chunk_len = len(chunk_clean)
+            text_len  = len(full_text)
+            best_ratio, best_start = 0.0, -1
+            step = max(1, chunk_len // 4)
+            for i in range(0, text_len - chunk_len + 1, step):
+                ratio = difflib.SequenceMatcher(
+                    None, chunk_clean, full_text[i: i + chunk_len]
+                ).ratio()
+                if ratio > best_ratio and ratio > 0.70:
+                    best_ratio, best_start = ratio, i
+            if best_start >= 0:
+                spans.append((best_start, best_start + chunk_len))
+        merged_spans = _merge_spans(spans)
+
+    html_content = _build_highlighted_html(full_text, merged_spans, source_file, page_num)
     components.html(html_content, height=370, scrolling=True)
 
 

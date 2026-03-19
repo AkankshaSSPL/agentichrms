@@ -208,7 +208,12 @@ with col_preview:
             st.rerun()
 
         if is_expanded:
-            render_document_preview_html(src)
+            # Pass the last assistant answer into the source dict so
+            # _render_pdf_preview can highlight only the answer-relevant spans,
+            # not the entire retrieved chunk.
+            src_with_answer = dict(src)
+            src_with_answer["answer"] = latest_msg.get("content", "") if latest_msg else ""
+            render_document_preview_html(src_with_answer)
 
     if latest_msg and latest_msg.get("steps"):
         with st.expander("⚙ Agent Steps"):

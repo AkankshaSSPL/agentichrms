@@ -83,7 +83,7 @@ def main():
         FOREIGN KEY (task_id) REFERENCES onboarding_tasks(id))""")
 
     employees = [
-        (1, "Rahul Sharma",      "rahul@company.com",   "Engineering", "Senior Engineer",    "Priya Patel",   "2022-03-15", "9876543210", "active"),
+        (1, "Rahul Sharma", "sipamara69@gmail.com",   "Engineering", "Senior Engineer",    "Priya Patel",   "2022-03-15", "9876543210", "active"),
         (2, "Priya Patel",       "priya@company.com",   "Engineering", "Engineering Manager", "Vikram Singh",  "2020-01-10", "9876543211", "active"),
         (3, "Amit Kumar",        "amit@company.com",    "Engineering", "Junior Engineer",     "Priya Patel",   "2024-01-20", "9876543212", "active"),
         (4, "Neha Gupta",        "neha@company.com",    "Product",     "Product Manager",     "Vikram Singh",  "2021-06-01", "9876543213", "active"),
