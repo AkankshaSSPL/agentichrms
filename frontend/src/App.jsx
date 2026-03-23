@@ -3,6 +3,317 @@ import DOMPurify from 'dompurify'
 
 const API = '/api'
 
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+const USERS_KEY = 'hrms_users'
+function getStoredUsers() { try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}') } catch { return {} } }
+function registerUser(name, email, password) {
+    const users = getStoredUsers()
+    if (users[email.toLowerCase()]) return { ok: false, error: 'Account already exists. Please sign in.' }
+    users[email.toLowerCase()] = { name, password }
+    localStorage.setItem(USERS_KEY, JSON.stringify(users))
+    return { ok: true }
+}
+function loginUser(email, password) {
+    const users = getStoredUsers()
+    const user = users[email.toLowerCase()]
+    if (!user) return { ok: false, error: 'No account found. Please register first.' }
+    if (user.password !== password) return { ok: false, error: 'Incorrect password.' }
+    return { ok: true, name: user.name }
+}
+
+// ── AuthPage ──────────────────────────────────────────────────────────────────
+function AuthPage({ onLogin }) {
+    const [mode, setMode] = useState('login')
+    const [name, setName] = useState('')
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [error, setError] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    function switchMode(m) { setMode(m); setError(''); setName(''); setEmail(''); setPassword('') }
+    function handleSubmit(e) {
+        e.preventDefault(); setError(''); setSubmitting(true)
+        if (mode === 'register') {
+            if (!name.trim()) { setError('Please enter your full name.'); setSubmitting(false); return }
+            if (!email.includes('@')) { setError('Please enter a valid email.'); setSubmitting(false); return }
+            if (password.length < 6) { setError('Password must be at least 6 characters.'); setSubmitting(false); return }
+            const res = registerUser(name.trim(), email.trim(), password)
+            if (!res.ok) { setError(res.error); setSubmitting(false); return }
+            onLogin(name.trim(), email.trim())
+        } else {
+            if (!email.trim()) { setError('Please enter your email.'); setSubmitting(false); return }
+            if (!password) { setError('Please enter your password.'); setSubmitting(false); return }
+            const res = loginUser(email.trim(), password)
+            if (!res.ok) { setError(res.error); setSubmitting(false); return }
+            onLogin(res.name, email.trim())
+        }
+        setSubmitting(false)
+    }
+    return (
+        <div className="auth-page">
+            <div className="auth-card">
+                <div className="auth-logo">
+                    <div className="auth-logo-icon">H</div>
+                    <div>
+                        <div className="auth-logo-title">HR Assistant</div>
+                        <div className="auth-logo-sub">AI-POWERED HRMS</div>
+                    </div>
+                </div>
+                <div className="auth-tabs">
+                    <button className={`auth-tab${mode === 'login' ? ' active' : ''}`} onClick={() => switchMode('login')}>Sign In</button>
+                    <button className={`auth-tab${mode === 'register' ? ' active' : ''}`} onClick={() => switchMode('register')}>Register</button>
+                </div>
+                <form className="auth-form" onSubmit={handleSubmit}>
+                    {mode === 'register' && (
+                        <div className="auth-field">
+                            <label className="auth-label">Full Name</label>
+                            <input className="auth-input" type="text" placeholder="Rahul Sharma" value={name} onChange={e => setName(e.target.value)} autoFocus />
+                        </div>
+                    )}
+                    <div className="auth-field">
+                        <label className="auth-label">Email Address</label>
+                        <input className="auth-input" type="email" placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} autoFocus={mode === 'login'} />
+                    </div>
+                    <div className="auth-field">
+                        <label className="auth-label">Password</label>
+                        <input className="auth-input" type="password" placeholder={mode === 'register' ? 'Min. 6 characters' : 'Your password'} value={password} onChange={e => setPassword(e.target.value)} />
+                    </div>
+                    {error && <div className="auth-error">⚠ {error}</div>}
+                    <button className="auth-submit" type="submit" disabled={submitting}>
+                        {submitting ? '...' : mode === 'login' ? 'Sign In →' : 'Create Account →'}
+                    </button>
+                </form>
+                <p className="auth-footer">
+                    {mode === 'login'
+                        ? <>{`Don't have an account? `}<span className="auth-link" onClick={() => switchMode('register')}>Register here</span></>
+                        : <>{'Already have an account? '}<span className="auth-link" onClick={() => switchMode('login')}>Sign in</span></>}
+                </p>
+            </div>
+        </div>
+    )
+}
+
+// ── UploadModal ───────────────────────────────────────────────────────────────
+function UploadModal({ onClose, onUploaded }) {
+    const [dragOver, setDragOver] = useState(false)
+    const [files, setFiles] = useState([])            // staged files
+    const [uploading, setUploading] = useState(false)
+    const [progress, setProgress] = useState({})      // filename → 'uploading'|'done'|'error'
+    const [ingesting, setIngesting] = useState(false)
+    const [ingestDone, setIngestDone] = useState(false)
+    const [documents, setDocuments] = useState([])    // existing docs from server
+    const [docsLoading, setDocsLoading] = useState(true)
+    const fileInputRef = useRef(null)
+
+    const ALLOWED_EXT = ['pdf', 'md', 'txt', 'docx', 'xlsx', 'xls', 'csv']
+
+    useEffect(() => {
+        loadDocuments()
+    }, [])
+
+    async function loadDocuments() {
+        setDocsLoading(true)
+        try {
+            const res = await fetch(`${API}/documents`)
+            const data = await res.json()
+            setDocuments(data.documents || [])
+        } catch { setDocuments([]) }
+        setDocsLoading(false)
+    }
+
+    function validateFiles(rawFiles) {
+        return Array.from(rawFiles).filter(f => {
+            const ext = f.name.split('.').pop().toLowerCase()
+            return ALLOWED_EXT.includes(ext)
+        })
+    }
+
+    function stageFiles(rawFiles) {
+        const valid = validateFiles(rawFiles)
+        setFiles(prev => {
+            const existing = new Set(prev.map(f => f.name))
+            return [...prev, ...valid.filter(f => !existing.has(f.name))]
+        })
+    }
+
+    function handleDrop(e) {
+        e.preventDefault(); setDragOver(false)
+        stageFiles(e.dataTransfer.files)
+    }
+
+    function handleFileInput(e) { stageFiles(e.target.files) }
+
+    function removeFile(name) { setFiles(prev => prev.filter(f => f.name !== name)) }
+
+    async function deleteDocument(name) {
+        try {
+            await fetch(`${API}/documents/${encodeURIComponent(name)}`, { method: 'DELETE' })
+            setDocuments(prev => prev.filter(d => d.name !== name))
+        } catch { alert('Failed to delete ' + name) }
+    }
+
+    async function handleUpload() {
+        if (!files.length) return
+        setUploading(true)
+        const p = {}
+        files.forEach(f => p[f.name] = 'uploading')
+        setProgress({ ...p })
+
+        const form = new FormData()
+        files.forEach(f => form.append('files', f))
+
+        try {
+            const res = await fetch(`${API}/upload`, { method: 'POST', body: form })
+            if (res.ok) {
+                const data = await res.json()
+                const done = {}
+                files.forEach(f => done[f.name] = data.uploaded.includes(f.name) ? 'done' : 'error')
+                setProgress(done)
+                setFiles([])
+                loadDocuments()
+            } else {
+                files.forEach(f => p[f.name] = 'error')
+                setProgress({ ...p })
+            }
+        } catch {
+            files.forEach(f => p[f.name] = 'error')
+            setProgress({ ...p })
+        }
+        setUploading(false)
+    }
+
+    async function handleIngest() {
+        setIngesting(true)
+        try {
+            await fetch(`${API}/ingest`, { method: 'POST' })
+            setIngestDone(true)
+            onUploaded()
+        } catch { alert('Ingestion failed.') }
+        setIngesting(false)
+    }
+
+    const uploadedCount = Object.values(progress).filter(v => v === 'done').length
+    const anyUploaded = uploadedCount > 0
+
+    function fileIcon(ext) {
+        if (ext === '.pdf') return '📕'
+        if (['.md', '.txt'].includes(ext)) return '📘'
+        if (ext === '.docx') return '📝'
+        if (['.xlsx', '.xls', '.csv'].includes(ext)) return '📊'
+        return '📄'
+    }
+
+    function formatSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    }
+
+    return (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+            <div className="modal-box">
+
+                {/* Header */}
+                <div className="modal-header">
+                    <div className="modal-title">📁 Document Manager</div>
+                    <button className="modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                {/* Drop zone */}
+                <div
+                    className={`drop-zone${dragOver ? ' drag-over' : ''}`}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept=".pdf,.md,.txt,.docx,.xlsx,.xls,.csv"
+                        style={{ display: 'none' }}
+                        onChange={handleFileInput}
+                    />
+                    <div className="drop-icon">📂</div>
+                    <div className="drop-text">Drop files here or <span className="drop-link">browse</span></div>
+                    <div className="drop-hint">PDF, MD, TXT, DOCX, XLSX, CSV — max 50 MB each</div>
+                </div>
+
+                {/* Staged files */}
+                {files.length > 0 && (
+                    <div className="staged-files">
+                        <div className="staged-label">Ready to upload ({files.length})</div>
+                        {files.map(f => (
+                            <div key={f.name} className="staged-row">
+                                <span className="staged-icon">{fileIcon('.' + f.name.split('.').pop())}</span>
+                                <span className="staged-name">{f.name}</span>
+                                <span className="staged-size">{formatSize(f.size)}</span>
+                                <button className="staged-remove" onClick={() => removeFile(f.name)}>✕</button>
+                            </div>
+                        ))}
+                        <button
+                            className="upload-btn"
+                            onClick={handleUpload}
+                            disabled={uploading}
+                        >
+                            {uploading ? 'Uploading...' : `Upload ${files.length} file${files.length > 1 ? 's' : ''}`}
+                        </button>
+                    </div>
+                )}
+
+                {/* Upload progress */}
+                {Object.keys(progress).length > 0 && (
+                    <div className="upload-progress">
+                        {Object.entries(progress).map(([name, status]) => (
+                            <div key={name} className={`progress-row ${status}`}>
+                                <span className="progress-icon">
+                                    {status === 'uploading' ? '⏳' : status === 'done' ? '✅' : '❌'}
+                                </span>
+                                <span className="progress-name">{name}</span>
+                                <span className="progress-status">{status}</span>
+                            </div>
+                        ))}
+                        {anyUploaded && !ingestDone && (
+                            <button className="ingest-btn" onClick={handleIngest} disabled={ingesting}>
+                                {ingesting ? '⏳ Ingesting into knowledge base...' : '⚡ Ingest uploaded files'}
+                            </button>
+                        )}
+                        {ingestDone && <div className="ingest-done">✅ Knowledge base updated!</div>}
+                    </div>
+                )}
+
+                {/* Existing documents */}
+                <div className="docs-section">
+                    <div className="docs-label">
+                        Knowledge Base ({docsLoading ? '...' : documents.length} documents)
+                    </div>
+                    {docsLoading ? (
+                        <div className="docs-loading">Loading...</div>
+                    ) : documents.length === 0 ? (
+                        <div className="docs-empty">No documents yet. Upload some above.</div>
+                    ) : (
+                        <div className="docs-list">
+                            {documents.map(doc => (
+                                <div key={doc.name} className="doc-row">
+                                    <span className="doc-icon">{fileIcon(doc.ext)}</span>
+                                    <span className="doc-name">{doc.name}</span>
+                                    <span className="doc-size">{formatSize(doc.size)}</span>
+                                    <button
+                                        className="doc-delete"
+                                        onClick={() => deleteDocument(doc.name)}
+                                        title="Delete"
+                                    >🗑</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        </div>
+    )
+}
+
 const QUICK_QUESTIONS = [
     'Maternity policy',
     'What is moonlighting disclosure?',
@@ -10,8 +321,7 @@ const QUICK_QUESTIONS = [
     'What are the leave types?',
     'Onboarding guidelines',
     'Look up Rahul Sharma',
-    'Department headcount',
-    'Check leave balance for Rahul',
+
 ]
 
 // Helper to escape HTML special characters
@@ -157,14 +467,42 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
 }
 
 export default function App() {
+    // Auth state — first hook, never conditional
+    const [currentUser, setCurrentUser] = useState(() => {
+        try { return JSON.parse(sessionStorage.getItem('hrms_session') || 'null') }
+        catch { return null }
+    })
+
     const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [docCount, setDocCount] = useState(0)
     const [expandedIdx, setExpandedIdx] = useState(null)
-    const [previewData, setPreviewData] = useState(null)
-    const [previewLoading, setPreviewLoading] = useState(false)
+    const [previewData, setPreviewData] = useState(null) // stores { type, content/lines/html }
+    const [showUpload, setShowUpload] = useState(false)
     const chatEnd = useRef(null)
+
+    // Auth handlers
+    function handleLogin(name, email) {
+        const user = { name, email }
+        sessionStorage.setItem('hrms_session', JSON.stringify(user))
+        setCurrentUser(user)
+    }
+    function handleLogout() {
+        sessionStorage.removeItem('hrms_session')
+        setCurrentUser(null)
+        setMessages([])
+        setExpandedIdx(null)
+        setPreviewData(null)
+    }
+
+    // Refresh doc count after upload
+    function handleUploaded() {
+        fetch(`${API}/documents`).then(r => r.json()).then(d => setDocCount(d.documents.length)).catch(() => { })
+    }
+
+    // Auth gate — after all hooks
+    if (!currentUser) return <AuthPage onLogin={handleLogin} />
 
     useEffect(() => {
         fetch(`${API}/documents`).then(r => r.json()).then(d => setDocCount(d.documents.length)).catch(() => { })
@@ -220,7 +558,10 @@ export default function App() {
             const res = await fetch(`${API}/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text }),
+                body: JSON.stringify({
+                    message: text,
+                    history: messages.map(m => ({ role: m.role, content: m.content }))
+                }),
             })
             const data = await res.json()
             setMessages(prev => [...prev, {
@@ -247,43 +588,38 @@ export default function App() {
             return
         }
         setExpandedIdx(idx)
-        setPreviewLoading(true)
-        setPreviewData(null)
 
         const ext = source.source_file.split('.').pop().toLowerCase()
         const lastMsg = [...messages].reverse().find(m => m.role === 'assistant');
         const answerContext = lastMsg ? lastMsg.content : '';
 
-        // PDFs: native browser iframe opened at the exact cited page
-        if (ext === 'pdf') {
-            const page = source.page || source.start_line || 1
-            setPreviewData({
-                type: 'pdf-native',
-                fileUrl: `${API}/file/${encodeURIComponent(source.source_file)}#page=${page}`,
-                page,
-                filename: source.source_file,
-            })
-            setPreviewLoading(false)
-            return
-        }
+        if (ext === 'pdf' && Array.isArray(source.full_content)) {
+            const mIdx = source.full_content.findIndex(p => p.page === source.page);
+            const startIdx = mIdx >= 0 ? mIdx : 0;
+            const res = generateHighlightedHtml(source.full_content[startIdx].text, source.chunks || [], answerContext, true, lastUserQuery);
 
-        // Text/markdown/docx: highlighted snippet view
-        setTimeout(() => {
-            if (['md', 'txt', 'docx'].includes(ext)) {
-                const res = generateHighlightedHtml(source.content || '', source.chunks || [], answerContext, true, lastUserQuery);
-                setPreviewData({
-                    type: 'text-snippet',
-                    lines: res.lines,
-                    segments: source.segments || [{ content: source.content }],
-                    currentIndex: 0,
-                    chunks: source.chunks || [],
-                    answerContext: answerContext
-                });
-            } else {
-                setPreviewData({ type: 'content', content: source.content || 'No content available.' })
-            }
-            setPreviewLoading(false)
-        }, 0)
+            setPreviewData({
+                type: 'pdf-snippet',
+                lines: res.lines,
+                pages: source.full_content,
+                currentIndex: startIdx,
+                chunks: source.chunks || [],
+                answerContext: answerContext,
+                sourceFile: source.source_file,
+            });
+        } else if (['md', 'txt', 'docx'].includes(ext)) {
+            const res = generateHighlightedHtml(source.content || '', source.chunks || [], answerContext, true, lastUserQuery);
+            setPreviewData({
+                type: 'text-snippet',
+                lines: res.lines,
+                segments: source.segments || [{ content: source.content }],
+                currentIndex: 0,
+                chunks: source.chunks || [],
+                answerContext: answerContext
+            });
+        } else {
+            setPreviewData({ type: 'content', content: source.content || 'No content available.' })
+        }
     }
 
     function handleKeyDown(e) {
@@ -294,188 +630,209 @@ export default function App() {
     }
 
     return (
-        <div className="app-layout">
-            {/* ── Sidebar ─── */}
-            <aside className="sidebar">
-                <div className="sidebar-brand">
-                    <div className="sidebar-logo">H</div>
-                    <div>
-                        <div className="sidebar-title">HR Assistant</div>
-                        <div className="sidebar-subtitle">AI-POWERED HRMS</div>
-                    </div>
-                </div>
-
-                <div className="sidebar-status">
-                    <span className="dot" />
-                    Knowledge base connected · {docCount} documents
-                </div>
-
-                <div className="sidebar-section">Quick Questions</div>
-                {QUICK_QUESTIONS.map(q => (
-                    <button key={q} className="sidebar-btn" onClick={() => sendMessage(q)}>
-                        {q}
-                    </button>
-                ))}
-
-                <button className="sidebar-clear" onClick={() => {
-                    setMessages([])
-                    setExpandedIdx(null)
-                    setPreviewData(null)
-                }}>
-                    🗑 Clear conversation
-                </button>
-            </aside>
-
-            {/* ── Chat Panel ─── */}
-            <main className="chat-panel">
-                <div className="chat-header">
-                    <span>💬</span> Chat
-                </div>
-
-                <div className="chat-messages">
-                    {messages.length === 0 && !loading && (
-                        <div className="empty-state">
-                            <div className="icon">💼</div>
-                            <h3>HR Policy Assistant</h3>
-                            <p>Ask me about company policies, employee info, leave management, onboarding, or send emails.</p>
+        <>
+            <div className="app-layout">
+                {/* ── Sidebar ─── */}
+                <aside className="sidebar">
+                    <div className="sidebar-brand">
+                        <div className="sidebar-logo">H</div>
+                        <div>
+                            <div className="sidebar-title">HR Assistant</div>
+                            <div className="sidebar-subtitle">AI-POWERED HRMS</div>
                         </div>
-                    )}
+                    </div>
 
-                    {messages.map((msg, i) => (
-                        msg.role === 'user' ? (
-                            <div key={i} className="msg-user">
-                                <div className="msg-user-bubble">{msg.content}</div>
+                    {/* User info + logout */}
+                    <div className="sidebar-user">
+                        <div className="sidebar-user-info">
+                            <div className="sidebar-user-avatar">{currentUser.name.charAt(0).toUpperCase()}</div>
+                            <div className="sidebar-user-details">
+                                <div className="sidebar-user-name">{currentUser.name}</div>
+                                <div className="sidebar-user-email">{currentUser.email}</div>
                             </div>
-                        ) : (
-                            <div key={i} className="msg-assistant">
-                                <div className="answer-card">
-                                    {msg.content.split('\n').map((line, j) => (
-                                        <p key={j}>{line || '\u00A0'}</p>
-                                    ))}
-                                    {msg.sources?.length > 0 && (
-                                        <div className="sources-list">
-                                            {msg.sources.map((s, j) => (
-                                                <span key={j} className="source-tag">
-                                                    📄 {s.source_file} — {s.section}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )
+                        </div>
+                        <button className="sidebar-logout" onClick={handleLogout} title="Sign out">↩</button>
+                    </div>
+
+                    {/* Upload documents button */}
+                    <button className="upload-docs-btn" onClick={() => setShowUpload(true)}>
+                        📁 Upload Documents
+                    </button>
+
+                    <div className="sidebar-status">
+                        <span className="dot" />
+                        Knowledge base connected · {docCount} documents
+                    </div>
+
+                    <div className="sidebar-section">Quick Questions</div>
+                    {QUICK_QUESTIONS.map(q => (
+                        <button key={q} className="sidebar-btn" onClick={() => sendMessage(q)}>
+                            {q}
+                        </button>
                     ))}
 
-                    {loading && (
-                        <div className="thinking">
-                            <div className="dots"><span /><span /><span /></div>
-                            Searching knowledge base...
-                        </div>
-                    )}
-                    <div ref={chatEnd} />
-                </div>
+                    <button className="sidebar-clear" onClick={() => {
+                        setMessages([])
+                        setExpandedIdx(null)
+                        setPreviewData(null)
+                    }}>
+                        🗑 Clear conversation
+                    </button>
+                </aside>
 
-                <div className="chat-input-area">
-                    <div className="chat-input-wrap">
-                        <input
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Ask about HR policies, employees, leave..."
-                            disabled={loading}
-                        />
-                        <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()}>
-                            ↑
-                        </button>
+                {/* ── Chat Panel ─── */}
+                <main className="chat-panel">
+                    <div className="chat-header">
+                        <span>💬</span> Chat
                     </div>
-                </div>
-            </main>
 
-            {/* ── Preview Panel ─── */}
-            <aside className="preview-panel">
-                <div className="preview-header">📎 Source Preview</div>
+                    <div className="chat-messages">
+                        {messages.length === 0 && !loading && (
+                            <div className="empty-state">
+                                <div className="icon">💼</div>
+                                <h3>HR Policy Assistant</h3>
+                                <p>Ask me about company policies, employee info, leave management, onboarding, or send emails.</p>
+                            </div>
+                        )}
 
-                {latestSources.length === 0 ? (
-                    <div className="preview-empty">
-                        <div className="icon">📋</div>
-                        <p>Source documents will appear here when the assistant cites them.</p>
-                    </div>
-                ) : (
-                    <div className="preview-list">
-                        {latestSources
-                            .map((src, idx) => {
-                                const ext = src.source_file.split('.').pop().toLowerCase()
-                                const isMissing = !src.content && !src.full_content && ['pdf', 'docx'].includes(ext)
-                                const isExpanded = expandedIdx === idx
-
-                                return (
-                                    <div key={idx} className={`source-card${isMissing ? ' source-card-missing' : ''}`}>
-                                        <div className="source-card-header">
-                                            <div className="source-card-info">
-                                                <div className="source-card-name">
-                                                    {ext === 'pdf' ? '📕' : ext === 'md' ? '📘' : ext === 'docx' ? '📝' : '📄'}{' '}
-                                                    {src.source_file}
-                                                </div>
-                                                <div className="source-card-loc">
-                                                    📍 {src.section || 'General'}
-                                                </div>
+                        {messages.map((msg, i) => (
+                            msg.role === 'user' ? (
+                                <div key={i} className="msg-user">
+                                    <div className="msg-user-bubble">{msg.content}</div>
+                                </div>
+                            ) : (
+                                <div key={i} className="msg-assistant">
+                                    <div className="answer-card">
+                                        {msg.content.split('\n').map((line, j) => (
+                                            <p key={j}>{line || '\u00A0'}</p>
+                                        ))}
+                                        {msg.sources?.length > 0 && (
+                                            <div className="sources-list">
+                                                {msg.sources.map((s, j) => (
+                                                    <span key={j} className="source-tag">
+                                                        📄 {s.source_file} — {s.section}
+                                                    </span>
+                                                ))}
                                             </div>
-                                            <button
-                                                className={`source-card-toggle${isExpanded ? ' active' : ''}`}
-                                                onClick={() => togglePreview(idx, src)}
-                                            >
-                                                {isExpanded ? 'Close' : 'Open'}
-                                            </button>
-                                        </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        ))}
 
-                                        {isExpanded && (
-                                            <>
-                                                {previewLoading && (
-                                                    <div style={{ padding: '14px 12px', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                                                        Loading preview...
+                        {loading && (
+                            <div className="thinking">
+                                <div className="dots"><span /><span /><span /></div>
+                                Searching knowledge base...
+                            </div>
+                        )}
+                        <div ref={chatEnd} />
+                    </div>
+
+                    <div className="chat-input-area">
+                        <div className="chat-input-wrap">
+                            <input
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Ask about HR policies, employees, leave..."
+                                disabled={loading}
+                            />
+                            <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()}>
+                                ↑
+                            </button>
+                        </div>
+                    </div>
+                </main>
+
+                {/* ── Preview Panel ─── */}
+                <aside className="preview-panel">
+                    <div className="preview-header">📎 Source Preview</div>
+
+                    {latestSources.length === 0 ? (
+                        <div className="preview-empty">
+                            <div className="icon">📋</div>
+                            <p>Source documents will appear here when the assistant cites them.</p>
+                        </div>
+                    ) : (
+                        <div className="preview-list">
+                            {latestSources
+                                .map((src, idx) => {
+                                    const ext = src.source_file.split('.').pop().toLowerCase()
+                                    const isMissing = !src.content && !src.full_content && ['pdf', 'docx'].includes(ext)
+                                    const isExpanded = expandedIdx === idx
+
+                                    return (
+                                        <div key={idx} className={`source-card${isMissing ? ' source-card-missing' : ''}`}>
+                                            <div className="source-card-header">
+                                                <div className="source-card-info">
+                                                    <div className="source-card-name">
+                                                        {ext === 'pdf' ? '📕' : ext === 'md' ? '📘' : ext === 'docx' ? '📝' : '📄'}{' '}
+                                                        {src.source_file}
                                                     </div>
-                                                )}
-                                                {!previewLoading && previewData && (
-                                                    <>
-                                                        {previewData.type === 'pdf-native' && (
-                                                            <div style={{ paddingTop: '8px' }}>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '12px', color: 'var(--color-text-secondary)', padding: '0 2px' }}>
-                                                                    <span>Page {previewData.page}</span>
-                                                                    <a href={previewData.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-info)', textDecoration: 'none' }}>Open full PDF ↗</a>
-                                                                </div>
-                                                                <iframe
-                                                                    src={previewData.fileUrl}
-                                                                    title={previewData.filename}
-                                                                    style={{ width: '100%', height: '500px', border: '1px solid var(--color-border-tertiary)', borderRadius: '6px', display: 'block' }}
-                                                                />
-                                                            </div>
-                                                        )}
-                                                        {['pdf-snippet', 'text-snippet'].includes(previewData.type) && (
-                                                            <div className="pdf-preview-container">
-                                                                {(previewData.pages?.length > 1 || previewData.segments?.length > 1) && (
-                                                                    <div className="pdf-pagination">
-                                                                        <button
-                                                                            onClick={() => handlePageChange(-1)}
-                                                                            disabled={previewData.currentIndex === 0}
-                                                                            className="pdf-nav-btn"
-                                                                        >
-                                                                            ← Prev
-                                                                        </button>
-                                                                        <span className="pdf-page-indicator">
-                                                                            {previewData.pages ? `Page ${previewData.pages[previewData.currentIndex].page}` : `Segment ${previewData.currentIndex + 1}`}
-                                                                            <span className="pdf-page-count">
-                                                                                ({previewData.currentIndex + 1} of {(previewData.pages || previewData.segments).length})
-                                                                            </span>
+                                                    <div className="source-card-loc">
+                                                        📍 {src.section || 'General'}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    className={`source-card-toggle${isExpanded ? ' active' : ''}`}
+                                                    onClick={() => togglePreview(idx, src)}
+                                                >
+                                                    {isExpanded ? 'Close' : 'Open'}
+                                                </button>
+                                            </div>
+
+                                            {isExpanded && previewData && (
+                                                <>
+                                                    {['pdf-snippet', 'text-snippet'].includes(previewData.type) && (
+                                                        <div className="pdf-preview-container">
+                                                            {/* Pagination bar */}
+                                                            {(previewData.pages?.length > 1 || previewData.segments?.length > 1) && (
+                                                                <div className="pdf-pagination">
+                                                                    <button
+                                                                        onClick={() => handlePageChange(-1)}
+                                                                        disabled={previewData.currentIndex === 0}
+                                                                        className="pdf-nav-btn"
+                                                                    >
+                                                                        ← Prev
+                                                                    </button>
+                                                                    <span className="pdf-page-indicator">
+                                                                        {previewData.pages ? `Page ${previewData.pages[previewData.currentIndex].page}` : `Segment ${previewData.currentIndex + 1}`}
+                                                                        <span className="pdf-page-count">
+                                                                            ({previewData.currentIndex + 1} of {(previewData.pages || previewData.segments).length})
                                                                         </span>
-                                                                        <button
-                                                                            onClick={() => handlePageChange(1)}
-                                                                            disabled={previewData.currentIndex === (previewData.pages || previewData.segments).length - 1}
-                                                                            className="pdf-nav-btn"
-                                                                        >
-                                                                            Next →
-                                                                        </button>
-                                                                    </div>
-                                                                )}
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => handlePageChange(1)}
+                                                                        disabled={previewData.currentIndex === (previewData.pages || previewData.segments).length - 1}
+                                                                        className="pdf-nav-btn"
+                                                                    >
+                                                                        Next →
+                                                                    </button>
+                                                                </div>
+                                                            )}
+
+                                                            {/* PDF: render actual PDF page via iframe so it looks like Image 1 */}
+                                                            {previewData.type === 'pdf-snippet' && previewData.pages && (() => {
+                                                                const currentPage = previewData.pages[previewData.currentIndex]
+                                                                const pageNum = currentPage?.page || 1
+                                                                const pdfUrl = `${API}/pdf-file/${encodeURIComponent(previewData.sourceFile)}#page=${pageNum}`
+                                                                return (
+                                                                    <iframe
+                                                                        src={pdfUrl}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            height: '500px',
+                                                                            border: 'none',
+                                                                            borderRadius: '0 0 8px 8px'
+                                                                        }}
+                                                                        title="PDF Preview"
+                                                                    />
+                                                                )
+                                                            })()}
+
+                                                            {/* Text/MD/DOCX: keep existing highlighted code-viewer */}
+                                                            {previewData.type === 'text-snippet' && (
                                                                 <div className="code-viewer">
                                                                     {(previewData.lines || []).map((line, li) => (
                                                                         <div key={li} className={`code-line${line.highlighted ? ' highlighted' : ''}`}>
@@ -483,39 +840,53 @@ export default function App() {
                                                                             <span
                                                                                 className="line-text"
                                                                                 dangerouslySetInnerHTML={{
-                                                                                    __html: DOMPurify.sanitize(line.html)
+                                                                                    __html: DOMPurify.sanitize(
+                                                                                        line.html || '&nbsp;',
+                                                                                        { ADD_TAGS: ['mark'] }
+                                                                                    )
                                                                                 }}
                                                                             />
                                                                         </div>
                                                                     ))}
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                        {previewData.type === 'content' && (
-                                                            <div className="pdf-content-preview">
-                                                                <pre>{previewData.content}</pre>
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                )
-                            })}
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {previewData.type === 'content' && (
+                                                        <div className="pdf-content-preview">
+                                                            <pre>{previewData.content}</pre>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )
+                                })}
 
-                        {/* Agent steps */}
-                        {messages.length > 0 && messages[messages.length - 1].steps?.length > 0 && (
-                            <details className="agent-steps">
-                                <summary>⚙ Agent Steps ({messages[messages.length - 1].steps.length})</summary>
-                                {messages[messages.length - 1].steps.map((step, i) => (
-                                    <div key={i} className="step">→ {step.name || step.type}</div>
-                                ))}
-                            </details>
-                        )}
-                    </div>
-                )}
-            </aside>
-        </div>
+                            {/* Agent steps */}
+                            {messages.length > 0 && messages[messages.length - 1].steps?.length > 0 && (
+                                <details className="agent-steps">
+                                    <summary>⚙ Agent Steps ({messages[messages.length - 1].steps.length})</summary>
+                                    {messages[messages.length - 1].steps.map((step, i) => (
+                                        <div key={i} className="step">→ {step.name || step.type}</div>
+                                    ))}
+                                </details>
+                            )}
+                        </div>
+                    )}
+                </aside>
+            </div>
+
+            {/* Upload Modal */}
+            {showUpload && (
+                <UploadModal
+                    onClose={() => setShowUpload(false)}
+                    onUploaded={() => {
+                        setShowUpload(false)
+                        handleUploaded()
+                    }}
+                />
+            )}
+        </>
     )
 }

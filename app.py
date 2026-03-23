@@ -259,7 +259,19 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
 
     try:
         graph = load_graph()
-        inputs = {"messages": [HumanMessage(content=user_msg)], "sources": []}
+
+        # Build full conversation history so the agent remembers previous turns.
+        # Without this, multi-turn actions like email (where the agent asks for
+        # subject/body then receives them) lose context on every call and loop.
+        history = []
+        for m in st.session_state.messages:
+            if m["role"] == "user":
+                history.append(HumanMessage(content=m["content"]))
+            elif m["role"] == "assistant" and m.get("content"):
+                from langchain_core.messages import AIMessage
+                history.append(AIMessage(content=m["content"]))
+
+        inputs = {"messages": history, "sources": []}
 
         full_response = ""
         steps = []

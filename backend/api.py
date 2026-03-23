@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -52,6 +53,7 @@ def get_graph():
 
 class ChatRequest(BaseModel):
     message: str
+    history: list[dict] = []
 
 class SourceInfo(BaseModel):
     source_file: str
@@ -136,11 +138,20 @@ def chat(req: ChatRequest):
     GAP-011 FIX: Wrap the entire agent pipeline in try/except so that
     exceptions return a clean 500 instead of leaking stack traces.
     """
-    from langchain_core.messages import HumanMessage
-
     try:
+        from langchain_core.messages import HumanMessage, AIMessage
         graph = get_graph()
-        inputs = {"messages": [HumanMessage(content=req.message)], "sources": []}
+
+        # Build full conversation history for multi-turn actions (e.g. email)
+        history = []
+        for m in req.history:
+            if m.get("role") == "user":
+                history.append(HumanMessage(content=m["content"]))
+            elif m.get("role") == "assistant" and m.get("content"):
+                history.append(AIMessage(content=m["content"]))
+        history.append(HumanMessage(content=req.message))
+
+        inputs = {"messages": history, "sources": []}
 
         full_response = ""
         steps = []
@@ -296,17 +307,33 @@ def document_preview(req: DocumentPreviewRequest):
         }
 
 
-from fastapi.responses import FileResponse
+@app.delete("/api/documents/{filename}")
+def delete_document(filename: str):
+    """Delete a document from the documents folder."""
+    safe_name = _safe_filename(filename)
+    docs_root = Path(DOCS_DIR).resolve()
+    target = (docs_root / safe_name).resolve()
+    try:
+        target.relative_to(docs_root)
+    except ValueError:
+        raise HTTPException(400, "Access to that path is not permitted.")
+    if not target.exists():
+        raise HTTPException(404, f"File not found: {safe_name}")
+    target.unlink()
+    return {"deleted": safe_name}
 
-@app.get("/api/file/{filename}")
-def serve_file(filename: str):
-    """
-    Serve a raw document file so the React frontend can embed it in an iframe.
-    Uses the same _safe_resolved_path() guard as document-preview to prevent
-    path traversal — only files inside DOCS_DIR can be served.
-    """
+
+@app.get("/api/pdf-file/{filename:path}")
+def serve_pdf(filename: str):
+    """Serve a PDF file inline so the React frontend can embed it in an iframe."""
     resolved = _safe_resolved_path(filename)
-    return FileResponse(str(resolved))
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files can be served via this endpoint.")
+    return FileResponse(
+        path=str(resolved),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={os.path.basename(filename)}"},
+    )
 
 
 if __name__ == "__main__":
