@@ -81,3 +81,64 @@ def notify_hr(subject: str, body: str) -> str:
     if not EMAIL_USER:
         return "HR email not configured."
     return _send_smtp_email(EMAIL_USER, f"[HR] {subject}", body)
+
+
+def _check_meetings_in_range(start_date: str, end_date: str) -> list[dict]:
+    """
+    Query meetings table for any meetings between start_date and end_date.
+    Returns list of dicts: {title, date, start_time, end_time, organizer, attendees}
+
+    Called automatically from apply_leave — not by the user directly.
+    Returns an empty list (never raises) so a missing meetings table or
+    any DB error never breaks the leave application flow.
+    """
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            rows = conn.cursor().execute(
+                """
+                SELECT title, meeting_date, start_time, end_time, organizer, attendees
+                FROM meetings
+                WHERE meeting_date >= ? AND meeting_date <= ?
+                ORDER BY meeting_date, start_time
+                """,
+                (start_date, end_date),
+            ).fetchall()
+
+        return [
+            {
+                "title":     row[0],
+                "date":      row[1],
+                "start_time": row[2] or "",
+                "end_time":  row[3] or "",
+                "organizer": row[4] or "",
+                "attendees": row[5] or "",
+            }
+            for row in rows
+        ]
+    except Exception:
+        # meetings table may not exist on older DBs — fail silently
+        return []
+
+
+def _format_meeting_reminder(meetings: list[dict]) -> str:
+    """
+    Format a list of meeting dicts into a plain-text reminder block
+    to append to leave notification emails.
+    """
+    if not meetings:
+        return ""
+
+    lines = [
+        "",
+        "⚠️  MEETING CONFLICT ALERT",
+        "The following meetings are scheduled during your leave period.",
+        "Please inform your team or reschedule as needed:",
+        "",
+    ]
+    for m in meetings:
+        time_str = f" at {m['start_time']}" if m["start_time"] else ""
+        org_str  = f" (organised by {m['organizer']})" if m["organizer"] else ""
+        lines.append(f"  • {m['title']} — {m['date']}{time_str}{org_str}")
+
+    lines += ["", "Please coordinate with your manager and team before your leave begins."]
+    return "\n".join(lines)

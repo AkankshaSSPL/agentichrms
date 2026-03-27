@@ -4,7 +4,7 @@ from datetime import datetime
 import sys
 import os
 from .base import hr_tool
-from .email_tool import _send_smtp_email, _lookup_employee_email
+from .email_tool import _send_smtp_email, _lookup_employee_email, _check_meetings_in_range, _format_meeting_reminder
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DB_PATH
@@ -103,15 +103,33 @@ def apply_leave(employee_name: str, leave_type: str, start_date: str, end_date: 
             leave_id = c.lastrowid
             conn.commit()
 
+        # ── Meeting conflict check ────────────────────────────────────────────
+        # Check for any scheduled meetings during the leave period and
+        # include a reminder in the notification emails automatically.
+        conflicting_meetings = _check_meetings_in_range(start_date, end_date)
+        meeting_reminder = _format_meeting_reminder(conflicting_meetings)
+        meeting_summary = ""
+        if conflicting_meetings:
+            titles = ", ".join(m["title"] for m in conflicting_meetings[:3])
+            extra = f" (+{len(conflicting_meetings)-3} more)" if len(conflicting_meetings) > 3 else ""
+            meeting_summary = f" ⚠️ {len(conflicting_meetings)} meeting conflict(s) detected: {titles}{extra}."
+
         # GAP-023 FIX: Capture email results and report failures
         notify_lines = []
 
         if emp_email:
+            emp_body = (
+                f"Dear {full_name},\n\n"
+                f"Your {leave_type} leave from {start_date} to {end_date} has been submitted.\n"
+                f"Reason: {reason}\n"
+                f"Status: Pending Approval\n"
+                f"Leave ID: {leave_id}"
+                + meeting_reminder
+            )
             result = _send_smtp_email(
                 emp_email,
-                f"Leave Application Submitted (ID: {leave_id})",
-                f"Your {leave_type} leave from {start_date} to {end_date} has been submitted.\n"
-                f"Reason: {reason}\nStatus: Pending Approval"
+                f"Leave Application Submitted — {full_name} (ID: {leave_id})",
+                emp_body,
             )
             if "successfully" in str(result).lower():
                 notify_lines.append("Employee notified.")
@@ -121,11 +139,19 @@ def apply_leave(employee_name: str, leave_type: str, start_date: str, end_date: 
         if manager_name:
             mgr_email = _lookup_employee_email(manager_name)
             if mgr_email:
+                mgr_body = (
+                    f"Dear {manager_name},\n\n"
+                    f"{full_name} has applied for {leave_type} leave.\n"
+                    f"Dates: {start_date} to {end_date}\n"
+                    f"Reason: {reason}\n"
+                    f"Leave ID: {leave_id}\n"
+                    f"Status: Pending — please approve or reject."
+                    + meeting_reminder
+                )
                 result = _send_smtp_email(
                     mgr_email,
-                    f"Leave Request from {full_name}",
-                    f"{full_name} has applied for {leave_type} leave.\n"
-                    f"Dates: {start_date} to {end_date}\nReason: {reason}\nLeave ID: {leave_id}"
+                    f"Leave Request — {full_name} ({leave_type}, {start_date} to {end_date})",
+                    mgr_body,
                 )
                 if "successfully" in str(result).lower():
                     notify_lines.append("Manager notified.")
@@ -135,7 +161,7 @@ def apply_leave(employee_name: str, leave_type: str, start_date: str, end_date: 
         notify_status = " ".join(notify_lines) if notify_lines else "No email notifications configured."
         return (
             f"Leave applied for {full_name} (ID: {leave_id}). "
-            f"Status: Pending. {notify_status}"
+            f"Status: Pending.{meeting_summary} {notify_status}"
         )
 
     except Exception as e:

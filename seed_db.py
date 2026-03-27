@@ -50,6 +50,7 @@ def main():
     c.execute("DROP TABLE IF EXISTS leaves")
     c.execute("DROP TABLE IF EXISTS leave_balances")
     c.execute("DROP TABLE IF EXISTS employees")
+    c.execute("DROP TABLE IF EXISTS meetings")
 
     c.execute("""CREATE TABLE employees (
         id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT,
@@ -81,6 +82,16 @@ def main():
         task_id INTEGER, status TEXT DEFAULT 'Pending', completed_at TEXT,
         FOREIGN KEY (employee_id) REFERENCES employees(id),
         FOREIGN KEY (task_id) REFERENCES onboarding_tasks(id))""")
+
+    c.execute("""CREATE TABLE IF NOT EXISTS meetings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    meeting_date TEXT NOT NULL,     -- format: YYYY-MM-DD
+    start_time TEXT,                -- format: HH:MM
+    end_time TEXT,
+    organizer TEXT,
+    attendees TEXT                  -- comma-separated employee names
+        )""")
 
     employees = [
         (1, "Rahul Sharma", "sipamara69@gmail.com",   "Engineering", "Senior Engineer",    "Priya Patel",   "2022-03-15", "9876543210", "active"),
@@ -131,6 +142,34 @@ def main():
             "VALUES (?,?,?,?,?,?)",
             (emp_id, l_type, start, end, status, reason),
         )
+
+    # ── Meetings ─────────────────────────────────────────────────────────────────
+    # Spread across April–May 2026 so they realistically overlap with leave requests.
+    # attendees column is comma-separated employee names for conflict checking.
+    meetings = [
+        ("Sprint Planning",          "2026-04-01", "10:00", "11:00", "Priya Patel",    "Rahul Sharma,Amit Kumar,Arjun Verma,Manish Tiwari,Deepak Choudhary"),
+        ("Product Roadmap Review",   "2026-04-03", "14:00", "15:30", "Neha Gupta",     "Rahul Sharma,Priya Patel,Vikram Singh,Divya Menon,Riya Saxena"),
+        ("All Hands Meeting",        "2026-04-07", "11:00", "12:00", "Vikram Singh",   "Rahul Sharma,Priya Patel,Amit Kumar,Neha Gupta,Ananya Reddy,Karthik Nair,Sneha Desai,Rajesh Iyer,Divya Menon"),
+        ("Client Demo Preparation",  "2026-04-10", "15:00", "16:00", "Sneha Desai",    "Rahul Sharma,Priya Patel,Neha Gupta,Sanjay Mishra"),
+        ("Sprint Review",            "2026-04-14", "10:00", "11:00", "Priya Patel",    "Rahul Sharma,Amit Kumar,Arjun Verma,Karthik Nair,Manish Tiwari"),
+        ("HR Policy Discussion",     "2026-04-15", "14:00", "15:00", "Ananya Reddy",   "Rahul Sharma,Vikram Singh,Meera Joshi,Kavita Rao"),
+        ("Engineering Sync",         "2026-04-17", "09:30", "10:30", "Priya Patel",    "Rahul Sharma,Amit Kumar,Karthik Nair,Arjun Verma,Manish Tiwari,Deepak Choudhary,Lakshmi Venkat"),
+        ("Quarterly Business Review","2026-04-21", "13:00", "15:00", "Vikram Singh",   "Rahul Sharma,Priya Patel,Neha Gupta,Sneha Desai,Rajesh Iyer,Ananya Reddy"),
+        ("1:1 Performance Review",   "2026-04-24", "11:00", "11:30", "Priya Patel",    "Rahul Sharma"),
+        ("Security Training",        "2026-04-28", "10:00", "12:00", "Ananya Reddy",   "Rahul Sharma,Amit Kumar,Arjun Verma,Deepak Choudhary,Lakshmi Venkat,Manish Tiwari"),
+        ("Sprint Planning",          "2026-05-04", "10:00", "11:00", "Priya Patel",    "Rahul Sharma,Amit Kumar,Arjun Verma,Karthik Nair,Manish Tiwari,Deepak Choudhary"),
+        ("Client Call — SSPL",       "2026-05-07", "15:00", "16:00", "Sneha Desai",    "Rahul Sharma,Priya Patel,Vikram Singh,Sanjay Mishra"),
+        ("Team Retrospective",       "2026-05-11", "14:00", "15:00", "Priya Patel",    "Rahul Sharma,Amit Kumar,Arjun Verma,Karthik Nair,Manish Tiwari,Deepak Choudhary,Lakshmi Venkat"),
+        ("Architecture Review",      "2026-05-14", "11:00", "12:30", "Vikram Singh",   "Rahul Sharma,Priya Patel,Karthik Nair,Arjun Verma,Lakshmi Venkat"),
+        ("All Hands Meeting",        "2026-05-18", "11:00", "12:00", "Vikram Singh",   "Rahul Sharma,Priya Patel,Amit Kumar,Neha Gupta,Ananya Reddy,Karthik Nair,Sneha Desai,Rajesh Iyer"),
+    ]
+    for title, date, start_t, end_t, organizer, attendees in meetings:
+        c.execute(
+            "INSERT INTO meetings (title, meeting_date, start_time, end_time, organizer, attendees) "
+            "VALUES (?,?,?,?,?,?)",
+            (title, date, start_t, end_t, organizer, attendees),
+        )
+    print(f"   {len(meetings)} meetings seeded")
 
     tasks = [
         (1,  "Submit ID Proof",           "HR",         "Submit Aadhaar/Passport copy to HR",         1),
@@ -202,7 +241,7 @@ def main():
     print(
         f"   20 employees | {20 * len(leave_types)} leave balances | "
         f"{len(leaves)} leave records | {len(tasks)} onboarding tasks | "
-        f"{20 * len(tasks)} onboarding assignments"
+        f"{20 * len(tasks)} onboarding assignments | {len(meetings)} meetings"
     )
 
 
