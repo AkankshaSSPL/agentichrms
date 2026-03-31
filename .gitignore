@@ -1,0 +1,18 @@
+# Virtual environment
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Model / data files
+*.npy
+*.pkl
+*.whl
+
+# Datasets
+dataset_raw/
+dataset_cropped/
+
+# Output files
+*.txt
