@@ -3,22 +3,31 @@ import DOMPurify from 'dompurify'
 
 const API = '/api'
 
-// ── Auth helpers ──────────────────────────────────────────────────────────────
-const USERS_KEY = 'hrms_users'
-function getStoredUsers() { try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}') } catch { return {} } }
-function registerUser(name, email, password) {
-    const users = getStoredUsers()
-    if (users[email.toLowerCase()]) return { ok: false, error: 'Account already exists. Please sign in.' }
-    users[email.toLowerCase()] = { name, password }
-    localStorage.setItem(USERS_KEY, JSON.stringify(users))
-    return { ok: true }
+// ── Auth helpers (API-based) ──────────────────────────────────────────────────
+// Removed fake localStorage auth. Registration and login now go through the
+// backend, which hashes passwords with bcrypt and returns a signed JWT.
+function getAuthToken() {
+    try {
+        const session = JSON.parse(sessionStorage.getItem('hrms_session') || 'null')
+        return session?.token || null
+    } catch { return null }
 }
-function loginUser(email, password) {
-    const users = getStoredUsers()
-    const user = users[email.toLowerCase()]
-    if (!user) return { ok: false, error: 'No account found. Please register first.' }
-    if (user.password !== password) return { ok: false, error: 'Incorrect password.' }
-    return { ok: true, name: user.name }
+
+// Client-side password strength validation (mirrors backend rules).
+// The backend enforces these same rules independently, so even if the
+// frontend is bypassed the server will reject weak passwords.
+function validatePassword(password) {
+    if (password.length < 8)
+        return 'Password must be at least 8 characters long.'
+    if (!/[A-Z]/.test(password))
+        return 'Password must contain at least one uppercase letter.'
+    if (!/[a-z]/.test(password))
+        return 'Password must contain at least one lowercase letter.'
+    if (!/[0-9]/.test(password))
+        return 'Password must contain at least one number.'
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?~`]/.test(password))
+        return 'Password must contain at least one special character (e.g., !@#$%^&*).'
+    return null // All checks passed
 }
 
 // ── AuthPage ──────────────────────────────────────────────────────────────────
@@ -32,21 +41,37 @@ function AuthPage({ onLogin }) {
     function switchMode(m) { setMode(m); setError(''); setName(''); setEmail(''); setPassword('') }
     function handleSubmit(e) {
         e.preventDefault(); setError(''); setSubmitting(true)
+        // Both register and login now call the backend API
+        const endpoint = mode === 'register' ? `${API}/register` : `${API}/login`
+        const body = mode === 'register'
+            ? { name: name.trim(), email: email.trim(), password }
+            : { email: email.trim(), password }
+
+        // Client-side validation
         if (mode === 'register') {
             if (!name.trim()) { setError('Please enter your full name.'); setSubmitting(false); return }
             if (!email.includes('@')) { setError('Please enter a valid email.'); setSubmitting(false); return }
-            if (password.length < 6) { setError('Password must be at least 6 characters.'); setSubmitting(false); return }
-            const res = registerUser(name.trim(), email.trim(), password)
-            if (!res.ok) { setError(res.error); setSubmitting(false); return }
-            onLogin(name.trim(), email.trim())
+            // Client-side password strength check (backend enforces independently)
+            const pwError = validatePassword(password)
+            if (pwError) { setError(pwError); setSubmitting(false); return }
         } else {
             if (!email.trim()) { setError('Please enter your email.'); setSubmitting(false); return }
             if (!password) { setError('Please enter your password.'); setSubmitting(false); return }
-            const res = loginUser(email.trim(), password)
-            if (!res.ok) { setError(res.error); setSubmitting(false); return }
-            onLogin(res.name, email.trim())
         }
-        setSubmitting(false)
+
+        fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })
+            .then(async res => {
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.detail || 'Authentication failed.')
+                // data = { token, name, email }
+                onLogin(data.name, data.email, data.token)
+            })
+            .catch(err => setError(err.message))
+            .finally(() => setSubmitting(false))
     }
     return (
         <div className="auth-page">
@@ -75,7 +100,7 @@ function AuthPage({ onLogin }) {
                     </div>
                     <div className="auth-field">
                         <label className="auth-label">Password</label>
-                        <input className="auth-input" type="password" placeholder={mode === 'register' ? 'Min. 6 characters' : 'Your password'} value={password} onChange={e => setPassword(e.target.value)} />
+                        <input className="auth-input" type="password" placeholder={mode === 'register' ? 'Min. 8 chars, A-z, 0-9, !@#' : 'Your password'} value={password} onChange={e => setPassword(e.target.value)} />
                     </div>
                     {error && <div className="auth-error">⚠ {error}</div>}
                     <button className="auth-submit" type="submit" disabled={submitting}>
@@ -482,9 +507,9 @@ export default function App() {
     const [showUpload, setShowUpload] = useState(false)
     const chatEnd = useRef(null)
 
-    // Auth handlers
-    function handleLogin(name, email) {
-        const user = { name, email }
+    // Auth handlers — now store JWT token alongside user info
+    function handleLogin(name, email, token) {
+        const user = { name, email, token }
         sessionStorage.setItem('hrms_session', JSON.stringify(user))
         setCurrentUser(user)
     }
@@ -555,9 +580,13 @@ export default function App() {
         setPreviewData(null)
 
         try {
+            const token = getAuthToken()
             const res = await fetch(`${API}/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({
                     message: text,
                     history: messages.map(m => ({ role: m.role, content: m.content }))

@@ -32,6 +32,16 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 
+# JWT Authentication
+JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_EXPIRY_HOURS = int(os.getenv("JWT_EXPIRY_HOURS", "24"))
+
+if not JWT_SECRET:
+    raise ValueError(
+        "Missing JWT_SECRET. Set JWT_SECRET in your .env file.\n"
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+
 # Local RAG Models (configurable via env, with sensible defaults)
 LOCAL_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 LOCAL_RERANK_MODEL = os.getenv("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")

@@ -1,11 +1,12 @@
 """FastAPI backend for the HR Assistant React frontend."""
 import os
 import sys
+import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,6 +18,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from config import DOCS_DIR, CHROMA_DIR, DB_PATH
 from utils.document_viewer import (
     resolve_doc_path, document_exists, strip_citation_markers, deduplicate_sources,
+)
+
+# ── Auth imports ──────────────────────────────────────────────────────────────
+from backend.auth import (
+    hash_password, verify_password, create_access_token,
+    get_current_user, validate_password,
 )
 
 app = FastAPI(title="HR Assistant API")
@@ -31,8 +38,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-API-Key"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
 )
 
 # ── GAP-033 FIX: Maximum upload file size (50 MB) ────────────────────────────
@@ -50,6 +57,15 @@ def get_graph():
 
 
 # ── Request / Response Models ─────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 class ChatRequest(BaseModel):
     message: str
@@ -132,8 +148,67 @@ def health():
     }
 
 
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+@app.post("/api/register")
+def register(req: RegisterRequest):
+    """Create a new user account. Returns a JWT token on success."""
+    # Validate inputs
+    if not req.name.strip():
+        raise HTTPException(400, "Name is required.")
+    if "@" not in req.email:
+        raise HTTPException(400, "Please enter a valid email.")
+
+    # Server-side password strength validation (cannot be bypassed)
+    pw_error = validate_password(req.password)
+    if pw_error:
+        raise HTTPException(400, pw_error)
+
+    email_lower = req.email.strip().lower()
+    pw_hash = hash_password(req.password)
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+            (req.name.strip(), email_lower, pw_hash),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(409, "Account already exists. Please sign in.")
+    conn.close()
+
+    token = create_access_token({"sub": email_lower, "name": req.name.strip()})
+    return {"token": token, "name": req.name.strip(), "email": email_lower}
+
+
+@app.post("/api/login")
+def login(req: LoginRequest):
+    """Authenticate user and return a JWT token."""
+    email_lower = req.email.strip().lower()
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT id, name, email, password_hash FROM users WHERE email = ?",
+        (email_lower,),
+    ).fetchone()
+    conn.close()
+
+    if row is None:
+        raise HTTPException(401, "No account found. Please register first.")
+    if not verify_password(req.password, row["password_hash"]):
+        raise HTTPException(401, "Incorrect password.")
+
+    token = create_access_token({"sub": row["email"], "name": row["name"]})
+    return {"token": token, "name": row["name"], "email": row["email"]}
+
+
+# ── Chat (protected) ──────────────────────────────────────────────────────────
+
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
     """
     GAP-011 FIX: Wrap the entire agent pipeline in try/except so that
     exceptions return a clean 500 instead of leaking stack traces.

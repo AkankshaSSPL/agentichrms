@@ -51,6 +51,21 @@ def main():
     c.execute("DROP TABLE IF EXISTS leave_balances")
     c.execute("DROP TABLE IF EXISTS employees")
     c.execute("DROP TABLE IF EXISTS meetings")
+    c.execute("DROP TABLE IF EXISTS users")
+
+    # ── Users table (for authentication) ──────────────────────────────────────
+    c.execute("""CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT NOT NULL,
+        email         TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        phone         TEXT,
+        department    TEXT,
+        employee_id   INTEGER,
+        face_image    TEXT,
+        created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (employee_id) REFERENCES employees(id)
+    )""")
 
     c.execute("""CREATE TABLE employees (
         id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT,
