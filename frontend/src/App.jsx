@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import DOMPurify from 'dompurify'
+import Login from './components/Login'
+import VerifyPin from './components/VerifyPin'
 
 const API = '/api'
 
@@ -27,22 +29,18 @@ function escapeHtml(text) {
 function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true, query = '') {
     if (!fullText) return isSnippet ? { html: '', lines: [] } : '<p>No text available</p>';
 
-    // 1. Collect potential search terms: query + bold terms + chunks + phrases 
     let searchTerms = [];
 
-    // Prioritize user's query
     if (query && query.trim().length > 3) {
         searchTerms.push(query.trim());
         const words = query.trim().split(/\s+/).filter(w => w.length > 4);
         searchTerms = [...searchTerms, ...words];
     }
 
-    // Use retriever chunks
     (chunks || []).forEach(c => {
         if (c && c.trim().length > 15) searchTerms.push(c.trim());
     });
 
-    // Extract key sentences and BOLD TERMS from the AI answer
     if (answer) {
         const boldMatches = answer.match(/\*\*(.*?)\*\*/g);
         if (boldMatches) {
@@ -60,7 +58,6 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
     const lines = fullText.split('\n');
     let matchedLineIndices = new Set();
 
-    // Find matches
     sortedChunks.forEach(chunk => {
         const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regexStr = escapedChunk.split(/\s+/).filter(w => w.length > 0).join('\\s+');
@@ -68,18 +65,13 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
 
         try {
             const regex = new RegExp(regexStr, 'gi');
-
-            // For snippet building, identify matching lines
             lines.forEach((line, idx) => {
-                // Normalize spaces to handle different encodings/nbsp
                 const normLine = line.replace(/\s+/g, ' ');
                 if (regex.test(normLine)) matchedLineIndices.add(idx);
             });
         } catch (e) { }
     });
 
-    // ─── Paragraph Block Logic ───
-    // Group lines into contiguous non-empty blocks
     let blocks = [];
     let currentBlock = [];
     lines.forEach((line, idx) => {
@@ -92,7 +84,6 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
     });
     if (currentBlock.length > 0) blocks.push(currentBlock);
 
-    // If any line in a block is matched, highlight the entire block
     let finalHighlights = new Set();
     blocks.forEach(block => {
         const hasMatch = block.some(idx => matchedLineIndices.has(idx));
@@ -101,11 +92,9 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
         }
     });
 
-    // Identify windows of interest (any highlighted line +/- 5 context lines)
     if (isSnippet) {
         let contextIndices = new Set();
         if (finalHighlights.size === 0) {
-            // FALLBACK: If no matches, show first 50 lines so the doc isn't "empty"
             for (let i = 0; i < Math.min(lines.length, 50); i++) contextIndices.add(i);
         } else {
             finalHighlights.forEach(idx => {
@@ -125,8 +114,6 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
             }
             const lineText = lines[idx];
             const isHighlighted = finalHighlights.has(idx);
-
-            // Recursive call for inner highlighting (not snippet mode)
             const lineHtml = generateHighlightedHtml(lineText, chunks, answer, false, query);
 
             resultLines.push({
@@ -141,7 +128,6 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
         return { html: '', lines: resultLines };
     }
 
-    // Full text highlighting mode (fallback or single line)
     let finalHtml = escapeHtml(fullText);
     sortedChunks.forEach(chunk => {
         const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -156,22 +142,77 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
     return finalHtml.replace(/\n/g, '<br>');
 }
 
+// ── Auth state machine ──────────────────────────────────────────────────────
+// authStep: 'login' | 'verify-pin' | 'authenticated'
+
 export default function App() {
+    // ── Authentication state ──────────────────────────────────────────────
+    const [authStep, setAuthStep] = useState(() => {
+        // Restore session from localStorage on page load
+        const token = localStorage.getItem('hrms_token')
+        return token ? 'authenticated' : 'login'
+    })
+    const [pinData, setPinData] = useState(null)
+    const [employee, setEmployee] = useState(() => {
+        try {
+            const stored = localStorage.getItem('hrms_employee')
+            return stored ? JSON.parse(stored) : null
+        } catch { return null }
+    })
+
+    // ── Chat state ────────────────────────────────────────────────────────
     const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [docCount, setDocCount] = useState(0)
     const [expandedIdx, setExpandedIdx] = useState(null)
-    const [previewData, setPreviewData] = useState(null) // stores { type, content/lines/html }
+    const [previewData, setPreviewData] = useState(null)
     const chatEnd = useRef(null)
 
     useEffect(() => {
+        if (authStep !== 'authenticated') return
         fetch(`${API}/documents`).then(r => r.json()).then(d => setDocCount(d.documents.length)).catch(() => { })
-    }, [])
+    }, [authStep])
 
     useEffect(() => {
         chatEnd.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages, loading])
+
+    // ── Auth handlers ─────────────────────────────────────────────────────
+    function handlePinRequired(data) {
+        setPinData(data)
+        setAuthStep('verify-pin')
+    }
+
+    function handlePinSuccess(token, emp) {
+        setEmployee(emp)
+        setAuthStep('authenticated')
+    }
+
+    function handleLogout() {
+        localStorage.removeItem('hrms_token')
+        localStorage.removeItem('hrms_employee')
+        setEmployee(null)
+        setMessages([])
+        setAuthStep('login')
+    }
+
+    // ── Render auth screens ────────────────────────────────────────────────
+    if (authStep === 'login') {
+        return <Login onPinRequired={handlePinRequired} />
+    }
+
+    if (authStep === 'verify-pin') {
+        return (
+            <VerifyPin
+                pinData={pinData}
+                onSuccess={handlePinSuccess}
+                onBack={() => setAuthStep('login')}
+            />
+        )
+    }
+
+    // ── Authenticated: existing chat UI ────────────────────────────────────
 
     const latestSources = (() => {
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -180,14 +221,12 @@ export default function App() {
         return []
     })()
 
-    // Get the user's last query for highlighting context
     const lastUserQuery = (() => {
         const rev = [...messages].reverse();
         const found = rev.find(m => m.role === 'user');
         return found ? found.content : '';
     })()
 
-    // Handle pagination (PDF pages or Text segments)
     const handlePageChange = (direction) => {
         if (!previewData) return;
         const list = previewData.pages || previewData.segments;
@@ -208,6 +247,7 @@ export default function App() {
 
     async function sendMessage(text) {
         if (!text.trim() || loading) return
+        const token = localStorage.getItem('hrms_token')
         const userMsg = { role: 'user', content: text }
         setMessages(prev => [...prev, userMsg])
         setInput('')
@@ -218,9 +258,18 @@ export default function App() {
         try {
             const res = await fetch(`${API}/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({ message: text }),
             })
+
+            if (res.status === 401) {
+                handleLogout()
+                return
+            }
+
             const data = await res.json()
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -303,6 +352,26 @@ export default function App() {
                     Knowledge base connected · {docCount} documents
                 </div>
 
+                {/* Logged-in employee badge */}
+                {employee && (
+                    <div style={{
+                        background: 'rgba(52,211,153,0.08)',
+                        border: '1px solid rgba(52,211,153,0.2)',
+                        borderRadius: 8,
+                        padding: '8px 12px',
+                        fontSize: 12,
+                        color: '#34d399',
+                        marginBottom: 8,
+                    }}>
+                        👤 {employee.name}
+                        {employee.department && (
+                            <span style={{ color: '#8b95a9', marginLeft: 4 }}>
+                                · {employee.department}
+                            </span>
+                        )}
+                    </div>
+                )}
+
                 <div className="sidebar-section">Quick Questions</div>
                 {QUICK_QUESTIONS.map(q => (
                     <button key={q} className="sidebar-btn" onClick={() => sendMessage(q)}>
@@ -316,6 +385,14 @@ export default function App() {
                     setPreviewData(null)
                 }}>
                     🗑 Clear conversation
+                </button>
+
+                <button
+                    className="sidebar-clear"
+                    onClick={handleLogout}
+                    style={{ marginTop: 4, borderColor: 'rgba(248,113,113,0.3)', color: '#f87171' }}
+                >
+                    🔓 Logout
                 </button>
             </aside>
 
@@ -475,7 +552,6 @@ export default function App() {
                                 )
                             })}
 
-                        {/* Agent steps */}
                         {messages.length > 0 && messages[messages.length - 1].steps?.length > 0 && (
                             <details className="agent-steps">
                                 <summary>⚙ Agent Steps ({messages[messages.length - 1].steps.length})</summary>

@@ -7,3 +7,9 @@ data/hr_database.sqlite
 node_modules/
 frontend/dist/
 .gemini/
+
+# Data and Datasets
+data/dataset_raw/
+data/dataset_cropped/
+data/face_models/*.pkl
+data/face_models/*.npy
