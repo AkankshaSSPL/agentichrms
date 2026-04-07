@@ -89,7 +89,7 @@ def face_login(
         db.commit()
         raise HTTPException(
             status_code=401,
-            detail=result["failure_reason"] or "Face not recognized. Please try again.",
+            detail=result["failure_reason"] or "Face not recognized. New user? Please register first.",
         )
 
     username = result["username"]

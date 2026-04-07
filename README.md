@@ -147,7 +147,7 @@ Opens at `http://localhost:8501`
 **Option B — React + FastAPI (Recommended)**
 ```bash
 # Terminal 1: Backend
-python -m uvicorn backend.api:app --host 0.0.0.0 --port 8000
+python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Terminal 2: Frontend
 cd frontend

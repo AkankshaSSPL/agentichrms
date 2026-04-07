@@ -96,6 +96,15 @@ EMPLOYEES = [
         "designation": "HR Manager",
         "password":    "Priya@123",
     },
+    {
+        "name":        "Akansha Kulkarni",
+        "email":       "akulkarni@sveltoz.com",
+        "phone":       "+918554876505",
+        "username":    "Akansha",
+        "department":  "Engineering",
+        "designation": "Software Engineer",
+        "password":    "Priya@123",
+    },
     # ── Add more employees below ───────────────────────────────────────────────
     # {
     #     "name":        "Amit Joshi",

@@ -22,6 +22,7 @@ class Employee(BaseModel):
     """Employee master data - source of truth for HR data"""
     __tablename__ = "employees"
 
+    # ── Core fields ────────────────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
@@ -31,19 +32,29 @@ class Employee(BaseModel):
     manager_id = Column(Integer, ForeignKey('employees.id'), nullable=True)
     join_date = Column(DateTime)
     status = Column(String, default='active')
-    
-    # 🆕 Face Recognition Fields
-    username = Column(String(100), unique=True, nullable=True, index=True)  # Maps to face classifier
-    face_embedding = Column(LargeBinary, nullable=True)  # Serialized 128-D numpy array
-    face_registered = Column(Boolean, default=False)
-    face_enrollment_date = Column(DateTime, nullable=True)
-    
-    # 🆕 Phone Verification Fields (for PIN)
+
+    # ── Registration / profile fields ──────────────────────────────────────────
+    employee_code = Column(String, unique=True, nullable=True)
+    date_of_birth = Column(DateTime, nullable=True)
+    onboarding_completed = Column(Boolean, default=False)
+    profile_completed = Column(Boolean, default=False)
+
+    # ── Email verification ─────────────────────────────────────────────────────
+    email_verified = Column(Boolean, default=False)
+    email_verified_at = Column(DateTime, nullable=True)
+
+    # ── Phone verification ─────────────────────────────────────────────────────
     phone_verified = Column(Boolean, default=False)
     phone_verified_at = Column(DateTime, nullable=True)
-    phone_country_code = Column(String(5), default='+1')
-    
-    # Relationships
+    phone_country_code = Column(String(5), default='+91')   # ← single definition
+
+    # ── Face recognition ───────────────────────────────────────────────────────
+    username = Column(String(100), unique=True, nullable=True, index=True)
+    face_embedding = Column(LargeBinary, nullable=True)
+    face_registered = Column(Boolean, default=False)
+    face_enrollment_date = Column(DateTime, nullable=True)
+
+    # ── Relationships ──────────────────────────────────────────────────────────
     manager = relationship("Employee", remote_side=[id], backref="subordinates")
     user = relationship("User", back_populates="employee", uselist=False)
     leave_balances = relationship("LeaveBalance", back_populates="employee")
@@ -57,16 +68,48 @@ class User(BaseModel):
     """Authentication & App Access"""
     __tablename__ = "users"
 
+    # ── Core fields ────────────────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey('employees.id'), unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
-    face_registered = Column(Boolean, default=False)  # Triggers Twilio OTP onboarding flow
     is_active = Column(Boolean, default=True)
-    
-    # Relationships
+
+    # ── Verification & approval ────────────────────────────────────────────────
+    is_verified = Column(Boolean, default=False)
+    is_approved = Column(Boolean, default=True)
+
+    # ── Face login ─────────────────────────────────────────────────────────────
+    face_registered = Column(Boolean, default=False)
+    face_login_enabled = Column(Boolean, default=False)
+
+    # ── 2FA ───────────────────────────────────────────────────────────────────
+    two_factor_enabled = Column(Boolean, default=False)
+
+    # ── Login tracking ─────────────────────────────────────────────────────────
+    last_login = Column(DateTime, nullable=True)
+    last_login_ip = Column(String(45), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    account_locked = Column(Boolean, default=False)
+    locked_until = Column(DateTime, nullable=True)
+    preferred_login_method = Column(String(20), default='password')
+
+    # ── Relationships ──────────────────────────────────────────────────────────
     employee = relationship("Employee", back_populates="user")
     chat_sessions = relationship("ChatSession", back_populates="user")
+
+
+class RegistrationToken(BaseModel):
+    """Email verification / password-reset tokens"""
+    __tablename__ = "registration_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    token_type = Column(String(50), nullable=False)  # 'email_verification', 'password_reset'
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+    used_at = Column(DateTime, nullable=True)
 
 
 class LeaveBalance(BaseModel):
@@ -77,8 +120,7 @@ class LeaveBalance(BaseModel):
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
     leave_type = Column(String, nullable=False)
     days_remaining = Column(Integer, nullable=False)
-    
-    # Relationships
+
     employee = relationship("Employee", back_populates="leave_balances")
 
 
@@ -94,8 +136,7 @@ class Leave(BaseModel):
     status = Column(String, default='Pending')  # Pending, Approved, Rejected
     reason = Column(Text)
     rejection_reason = Column(Text, nullable=True)
-    
-    # Relationships
+
     employee = relationship("Employee", back_populates="leaves")
 
 
@@ -108,8 +149,7 @@ class OnboardingTask(BaseModel):
     category = Column(String)
     description = Column(Text)
     is_mandatory = Column(Boolean, default=True)
-    
-    # Relationships
+
     employee_tasks = relationship("EmployeeOnboarding", back_populates="task")
 
 
@@ -122,8 +162,7 @@ class EmployeeOnboarding(BaseModel):
     task_id = Column(Integer, ForeignKey('onboarding_tasks.id'), nullable=False)
     status = Column(String, default='Pending')  # Pending, Completed
     completed_at = Column(DateTime, nullable=True)
-    
-    # Relationships
+
     employee = relationship("Employee", back_populates="onboarding_tasks")
     task = relationship("OnboardingTask", back_populates="employee_tasks")
 
@@ -148,8 +187,7 @@ class ChatSession(BaseModel):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     title = Column(String)
-    
-    # Relationships
+
     user = relationship("User", back_populates="chat_sessions")
     messages = relationship("ChatMessage", back_populates="session")
 
@@ -163,8 +201,7 @@ class ChatMessage(BaseModel):
     role = Column(String, nullable=False)  # 'user', 'assistant', 'tool'
     content = Column(Text)
     tool_calls = Column(Text)  # JSONB in PostgreSQL
-    
-    # Relationships
+
     session = relationship("ChatSession", back_populates="messages")
 
 
@@ -176,13 +213,13 @@ class AuditLog(BaseModel):
     table_name = Column(String, nullable=False)
     record_id = Column(String, nullable=False)
     action = Column(String, nullable=False)  # INSERT, UPDATE, SOFT_DELETE, HARD_DELETE
-    old_data = Column(Text)  # JSONB
-    new_data = Column(Text)  # JSONB
+    old_data = Column(Text)
+    new_data = Column(Text)
     changed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    # No updated_at - immutable
+    # No updated_at — immutable
 
 
-# 🆕 FACE RECOGNITION TABLES
+# ── Face Recognition Tables ────────────────────────────────────────────────────
 
 class FaceLoginAttempt(BaseModel):
     """Track all face login attempts for security and analytics"""
@@ -193,11 +230,10 @@ class FaceLoginAttempt(BaseModel):
     attempt_time = Column(DateTime, default=datetime.utcnow)
     success = Column(Boolean, nullable=False)
     confidence_score = Column(Float, nullable=True)
-    ip_address = Column(String(45), nullable=True)  # IPv6 support
+    ip_address = Column(String(45), nullable=True)
     user_agent = Column(Text, nullable=True)
     failure_reason = Column(String(255), nullable=True)
-    
-    # Relationships
+
     employee = relationship("Employee", back_populates="face_login_attempts")
 
 
@@ -213,20 +249,18 @@ class PINVerification(BaseModel):
     verified = Column(Boolean, default=False)
     attempts = Column(Integer, default=0)
     max_attempts = Column(Integer, default=3)
-    
-    # Relationships
+    pin_type = Column(String(20), default='login')  # 'login', 'registration', 'phone_verification'
+
     employee = relationship("Employee", back_populates="pin_verifications")
-    
+
     @property
     def is_expired(self):
-        """Check if PIN has expired"""
         return datetime.utcnow() > self.expires_at
-    
+
     @property
     def is_valid(self):
-        """Check if PIN is still valid for verification"""
         return (
-            not self.verified and 
-            not self.is_expired and 
+            not self.verified and
+            not self.is_expired and
             self.attempts < self.max_attempts
         )

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import Login from './components/Login'
 import VerifyPin from './components/VerifyPin'
+import Register from './components/Register'
 
 const API = '/api'
 
@@ -22,133 +23,144 @@ function escapeHtml(text) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+        .replace(/'/g, '&#039;')
 }
 
 // Generate highlighted HTML from full page text and chunks fuzzily
 function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true, query = '') {
-    if (!fullText) return isSnippet ? { html: '', lines: [] } : '<p>No text available</p>';
+    if (!fullText) return isSnippet ? { html: '', lines: [] } : '<p>No text available</p>'
 
-    let searchTerms = [];
+    let searchTerms = []
 
     if (query && query.trim().length > 3) {
-        searchTerms.push(query.trim());
-        const words = query.trim().split(/\s+/).filter(w => w.length > 4);
-        searchTerms = [...searchTerms, ...words];
+        searchTerms.push(query.trim())
+        const words = query.trim().split(/\s+/).filter(w => w.length > 4)
+        searchTerms = [...searchTerms, ...words]
     }
 
-    (chunks || []).forEach(c => {
-        if (c && c.trim().length > 15) searchTerms.push(c.trim());
-    });
+    ; (chunks || []).forEach(c => {
+        if (c && c.trim().length > 15) searchTerms.push(c.trim())
+    })
 
     if (answer) {
-        const boldMatches = answer.match(/\*\*(.*?)\*\*/g);
+        const boldMatches = answer.match(/\*\*(.*?)\*\*/g)
         if (boldMatches) {
             boldMatches.forEach(m => {
-                const cleanBold = m.replace(/\*\*/g, '').trim();
-                if (cleanBold.length > 3) searchTerms.push(cleanBold);
-            });
+                const cleanBold = m.replace(/\*\*/g, '').trim()
+                if (cleanBold.length > 3) searchTerms.push(cleanBold)
+            })
         }
-        const cleanAnswer = answer.replace(/[\*\_#\>~`\[\]\(\)"']/g, ' ').replace(/\s+/g, ' ');
-        const sentences = cleanAnswer.split(/[.!?\n]/).filter(s => s.trim().length > 18);
-        searchTerms = [...searchTerms, ...sentences.map(s => s.trim())];
+        const cleanAnswer = answer.replace(/[\*\_#\>~`\[\]\(\)"']/g, ' ').replace(/\s+/g, ' ')
+        const sentences = cleanAnswer.split(/[.!?\n]/).filter(s => s.trim().length > 18)
+        searchTerms = [...searchTerms, ...sentences.map(s => s.trim())]
     }
 
-    const sortedChunks = Array.from(new Set(searchTerms)).filter(c => c).sort((a, b) => b.length - a.length);
-    const lines = fullText.split('\n');
-    let matchedLineIndices = new Set();
+    const sortedChunks = Array.from(new Set(searchTerms)).filter(c => c).sort((a, b) => b.length - a.length)
+    const lines = fullText.split('\n')
+    let matchedLineIndices = new Set()
 
     sortedChunks.forEach(chunk => {
-        const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regexStr = escapedChunk.split(/\s+/).filter(w => w.length > 0).join('\\s+');
-        if (!regexStr) return;
+        const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const regexStr = escapedChunk.split(/\s+/).filter(w => w.length > 0).join('\\s+')
+        if (!regexStr) return
 
         try {
-            const regex = new RegExp(regexStr, 'gi');
+            const regex = new RegExp(regexStr, 'gi')
             lines.forEach((line, idx) => {
-                const normLine = line.replace(/\s+/g, ' ');
-                if (regex.test(normLine)) matchedLineIndices.add(idx);
-            });
+                const normLine = line.replace(/\s+/g, ' ')
+                if (regex.test(normLine)) matchedLineIndices.add(idx)
+            })
         } catch (e) { }
-    });
+    })
 
-    let blocks = [];
-    let currentBlock = [];
+    let blocks = []
+    let currentBlock = []
     lines.forEach((line, idx) => {
         if (line.trim().length > 0) {
-            currentBlock.push(idx);
+            currentBlock.push(idx)
         } else {
-            if (currentBlock.length > 0) blocks.push(currentBlock);
-            currentBlock = [];
+            if (currentBlock.length > 0) blocks.push(currentBlock)
+            currentBlock = []
         }
-    });
-    if (currentBlock.length > 0) blocks.push(currentBlock);
+    })
+    if (currentBlock.length > 0) blocks.push(currentBlock)
 
-    let finalHighlights = new Set();
+    let finalHighlights = new Set()
     blocks.forEach(block => {
-        const hasMatch = block.some(idx => matchedLineIndices.has(idx));
+        const hasMatch = block.some(idx => matchedLineIndices.has(idx))
         if (hasMatch) {
-            block.forEach(idx => finalHighlights.add(idx));
+            block.forEach(idx => finalHighlights.add(idx))
         }
-    });
+    })
 
     if (isSnippet) {
-        let contextIndices = new Set();
+        let contextIndices = new Set()
         if (finalHighlights.size === 0) {
-            for (let i = 0; i < Math.min(lines.length, 50); i++) contextIndices.add(i);
+            for (let i = 0; i < Math.min(lines.length, 50); i++) contextIndices.add(i)
         } else {
             finalHighlights.forEach(idx => {
                 for (let i = Math.max(0, idx - 5); i <= Math.min(lines.length - 1, idx + 5); i++) {
-                    contextIndices.add(i);
+                    contextIndices.add(i)
                 }
-            });
+            })
         }
 
-        const sortedIndices = Array.from(contextIndices).sort((a, b) => a - b);
-        let resultLines = [];
-        let lastIdx = -1;
+        const sortedIndices = Array.from(contextIndices).sort((a, b) => a - b)
+        let resultLines = []
+        let lastIdx = -1
 
         sortedIndices.forEach(idx => {
             if (lastIdx !== -1 && idx > lastIdx + 1) {
-                resultLines.push({ num: '...', text: '...', html: '<div class="preview-ellipsis">...</div>', highlighted: false });
+                resultLines.push({ num: '...', text: '...', html: '<div class="preview-ellipsis">...</div>', highlighted: false })
             }
-            const lineText = lines[idx];
-            const isHighlighted = finalHighlights.has(idx);
-            const lineHtml = generateHighlightedHtml(lineText, chunks, answer, false, query);
+            const lineText = lines[idx]
+            const isHighlighted = finalHighlights.has(idx)
+            const lineHtml = generateHighlightedHtml(lineText, chunks, answer, false, query)
 
             resultLines.push({
                 num: idx + 1,
                 text: lineText,
                 html: lineHtml,
                 highlighted: isHighlighted
-            });
-            lastIdx = idx;
-        });
+            })
+            lastIdx = idx
+        })
 
-        return { html: '', lines: resultLines };
+        return { html: '', lines: resultLines }
     }
 
-    let finalHtml = escapeHtml(fullText);
+    let finalHtml = escapeHtml(fullText)
     sortedChunks.forEach(chunk => {
-        const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regexStr = escapedChunk.split(/\s+/).filter(w => w.length > 0).join('\\s+');
-        if (!regexStr) return;
+        const escapedChunk = chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const regexStr = escapedChunk.split(/\s+/).filter(w => w.length > 0).join('\\s+')
+        if (!regexStr) return
         try {
-            const regex = new RegExp(regexStr, 'gi');
-            finalHtml = finalHtml.replace(regex, (match) => `<mark>${match}</mark>`);
+            const regex = new RegExp(regexStr, 'gi')
+            finalHtml = finalHtml.replace(regex, (match) => `<mark>${match}</mark>`)
         } catch (e) { }
-    });
+    })
 
-    return finalHtml.replace(/\n/g, '<br>');
+    return finalHtml.replace(/\n/g, '<br>')
 }
 
-// ── Auth state machine ──────────────────────────────────────────────────────
-// authStep: 'login' | 'verify-pin' | 'authenticated'
-
 export default function App() {
+    // ── Registration view state ─────────────────────────────────────────────
+    const [currentView, setCurrentView] = useState('login')
+
+    const handleRegisterSuccess = () => {
+        setCurrentView('login')
+    }
+
+    const handleBackToLogin = () => {
+        setCurrentView('login')
+    }
+
+    const handleGoToRegister = () => {
+        setCurrentView('register')
+    }
+
     // ── Authentication state ──────────────────────────────────────────────
     const [authStep, setAuthStep] = useState(() => {
-        // Restore session from localStorage on page load
         const token = localStorage.getItem('hrms_token')
         return token ? 'authenticated' : 'login'
     })
@@ -185,6 +197,8 @@ export default function App() {
     }
 
     function handlePinSuccess(token, emp) {
+        localStorage.setItem('hrms_token', token)
+        localStorage.setItem('hrms_employee', JSON.stringify(emp))
         setEmployee(emp)
         setAuthStep('authenticated')
     }
@@ -195,11 +209,41 @@ export default function App() {
         setEmployee(null)
         setMessages([])
         setAuthStep('login')
+        setCurrentView('login')
     }
 
     // ── Render auth screens ────────────────────────────────────────────────
     if (authStep === 'login') {
-        return <Login onPinRequired={handlePinRequired} />
+        if (currentView === 'register') {
+            return (
+                <Register
+                    onSuccess={handleRegisterSuccess}
+                    onBackToLogin={handleBackToLogin}
+                />
+            )
+        }
+
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#0f172a' }}>
+                <Login onPinRequired={handlePinRequired} />
+                <div style={{ marginTop: 20 }}>
+                    <button
+                        onClick={handleGoToRegister}
+                        style={{
+                            background: 'transparent',
+                            border: '1px solid #6366f1',
+                            color: '#6366f1',
+                            padding: '10px 20px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            fontSize: 14
+                        }}
+                    >
+                        Create Account
+                    </button>
+                </div>
+            </div>
+        )
     }
 
     if (authStep === 'verify-pin') {
@@ -212,8 +256,7 @@ export default function App() {
         )
     }
 
-    // ── Authenticated: existing chat UI ────────────────────────────────────
-
+    // ── Authenticated: Chat UI ────────────────────────────────────────────
     const latestSources = (() => {
         for (let i = messages.length - 1; i >= 0; i--) {
             if (messages[i].role === 'assistant' && messages[i].sources?.length) return messages[i].sources
@@ -222,28 +265,28 @@ export default function App() {
     })()
 
     const lastUserQuery = (() => {
-        const rev = [...messages].reverse();
-        const found = rev.find(m => m.role === 'user');
-        return found ? found.content : '';
+        const rev = [...messages].reverse()
+        const found = rev.find(m => m.role === 'user')
+        return found ? found.content : ''
     })()
 
     const handlePageChange = (direction) => {
-        if (!previewData) return;
-        const list = previewData.pages || previewData.segments;
-        if (!list) return;
+        if (!previewData) return
+        const list = previewData.pages || previewData.segments
+        if (!list) return
 
-        const newIdx = previewData.currentIndex + direction;
+        const newIdx = previewData.currentIndex + direction
         if (newIdx >= 0 && newIdx < list.length) {
-            const item = list[newIdx];
-            const text = item.text || item.content || '';
-            const result = generateHighlightedHtml(text, previewData.chunks, previewData.answerContext, true, lastUserQuery);
+            const item = list[newIdx]
+            const text = item.text || item.content || ''
+            const result = generateHighlightedHtml(text, previewData.chunks, previewData.answerContext, true, lastUserQuery)
             setPreviewData({
                 ...previewData,
                 currentIndex: newIdx,
                 lines: result.lines || []
-            });
+            })
         }
-    };
+    }
 
     async function sendMessage(text) {
         if (!text.trim() || loading) return
@@ -297,13 +340,13 @@ export default function App() {
         setExpandedIdx(idx)
 
         const ext = source.source_file.split('.').pop().toLowerCase()
-        const lastMsg = [...messages].reverse().find(m => m.role === 'assistant');
-        const answerContext = lastMsg ? lastMsg.content : '';
+        const lastMsg = [...messages].reverse().find(m => m.role === 'assistant')
+        const answerContext = lastMsg ? lastMsg.content : ''
 
         if (ext === 'pdf' && Array.isArray(source.full_content)) {
-            const mIdx = source.full_content.findIndex(p => p.page === source.page);
-            const startIdx = mIdx >= 0 ? mIdx : 0;
-            const res = generateHighlightedHtml(source.full_content[startIdx].text, source.chunks || [], answerContext, true, lastUserQuery);
+            const mIdx = source.full_content.findIndex(p => p.page === source.page)
+            const startIdx = mIdx >= 0 ? mIdx : 0
+            const res = generateHighlightedHtml(source.full_content[startIdx].text, source.chunks || [], answerContext, true, lastUserQuery)
 
             setPreviewData({
                 type: 'pdf-snippet',
@@ -312,9 +355,9 @@ export default function App() {
                 currentIndex: startIdx,
                 chunks: source.chunks || [],
                 answerContext: answerContext
-            });
+            })
         } else if (['md', 'txt', 'docx'].includes(ext)) {
-            const res = generateHighlightedHtml(source.content || '', source.chunks || [], answerContext, true, lastUserQuery);
+            const res = generateHighlightedHtml(source.content || '', source.chunks || [], answerContext, true, lastUserQuery)
             setPreviewData({
                 type: 'text-snippet',
                 lines: res.lines,
@@ -322,7 +365,7 @@ export default function App() {
                 currentIndex: 0,
                 chunks: source.chunks || [],
                 answerContext: answerContext
-            });
+            })
         } else {
             setPreviewData({ type: 'content', content: source.content || 'No content available.' })
         }
@@ -352,7 +395,6 @@ export default function App() {
                     Knowledge base connected · {docCount} documents
                 </div>
 
-                {/* Logged-in employee badge */}
                 {employee && (
                     <div style={{
                         background: 'rgba(52,211,153,0.08)',

@@ -1,24 +1,16 @@
 """
 Agentic HRMS - Main FastAPI Application
-Now with Face Recognition + PIN Login Support
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from alembic.config import Config
-from alembic import command
+from fastapi.responses import JSONResponse
 import logging
 
 from backend.core.config import settings
 from backend.database.session import engine, Base
 
-# Import your existing routers
-# from backend.api.chat import router as chat_router
-# from backend.api.docs import router as docs_router
-# from backend.api.onboarding import router as onboarding_router
-
-# 🆕 Import face auth router
 from backend.api.face_auth import router as face_auth_router
 
 logger = logging.getLogger(__name__)
@@ -26,38 +18,41 @@ logging.basicConfig(level=logging.INFO)
 
 
 def run_migrations():
-    """Run Alembic migrations on startup"""
     try:
+        from alembic.config import Config
+        from alembic import command
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
-        logger.info("✅ Database migrations completed")
+        logger.info("✅ Migrations done")
     except Exception as e:
-        logger.error(f"❌ Migration error: {e}")
-        raise
+        logger.warning(f"⚠️ Migration skipped: {e}")
+        # Don't raise — let the app start anyway
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup and shutdown events"""
-    # Startup
-    logger.info("🚀 Starting Agentic HRMS...")
+    logger.info("🚀 Starting...")
     run_migrations()
-    logger.info("✅ Application ready")
-    
+    logger.info("✅ Application startup complete")
     yield
-    
-    # Shutdown
-    logger.info("👋 Shutting down Agentic HRMS...")
+    logger.info("👋 Shutting down...")
 
 
-# Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     lifespan=lifespan
 )
 
-# CORS
+# ── Global error handler — always returns JSON ─────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled error: %s", exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)}
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -66,46 +61,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-# app.include_router(chat_router, prefix=settings.API_V1_PREFIX)
-# app.include_router(docs_router, prefix=settings.API_V1_PREFIX)
-# app.include_router(onboarding_router, prefix=settings.API_V1_PREFIX)
-
-# 🆕 Include face auth router
 app.include_router(face_auth_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "message": "Agentic HRMS API",
-        "version": settings.VERSION,
-        "features": [
-            "RAG-powered HR chat",
-            "Face recognition login",
-            "PIN verification",
-            "Leave management",
-            "Onboarding workflow"
-        ]
-    }
+    return {"message": "Agentic HRMS API", "version": settings.VERSION}
 
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "database": "connected",
-        "face_recognition": "enabled"
-    }
+async def health():
+    return {"status": "healthy"}
+
+
+@app.get("/debug/face")
+async def debug_face():
+    try:
+        import joblib, numpy as np, sklearn
+        clf = joblib.load("data/face_models/face_classifier.pkl")
+        labels = np.load("data/face_models/labels.npy", allow_pickle=True)
+        return {
+            "sklearn_version": sklearn.__version__,
+            "classifier": str(type(clf).__name__),
+            "n_samples": int(len(clf._fit_X)),
+            "unique_labels": sorted(set(str(l) for l in labels))
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "backend.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.RELOAD
-    )
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=settings.RELOAD)
