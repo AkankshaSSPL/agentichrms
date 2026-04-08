@@ -63,6 +63,11 @@ class Employee(BaseModel):
     face_login_attempts = relationship("FaceLoginAttempt", back_populates="employee")
     pin_verifications = relationship("PINVerification", back_populates="employee")
 
+        # ── Permanent PIN (no expiry, hashed) ─────────────────────────────────────
+    permanent_pin_hash = Column(String(255), nullable=True)   # bcrypt hash
+    pin_type = Column(String(20), default='default')          # 'default' or 'custom'
+    pin_set_at = Column(DateTime, nullable=True)              # when first set/updated
+    face_samples_count = Column(Integer, default=0)           # number of face images stored
 
 class User(BaseModel):
     """Authentication & App Access"""

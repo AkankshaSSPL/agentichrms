@@ -12,6 +12,8 @@ from backend.core.config import settings
 from backend.database.session import engine, Base
 
 from backend.api.face_auth import router as face_auth_router
+from backend.api.pin_auth import router as pin_auth_router
+from backend.api.registration import router as registration_router   # ← ADDED
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +28,6 @@ def run_migrations():
         logger.info("✅ Migrations done")
     except Exception as e:
         logger.warning(f"⚠️ Migration skipped: {e}")
-        # Don't raise — let the app start anyway
 
 
 @asynccontextmanager
@@ -44,7 +45,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ── Global error handler — always returns JSON ─────────────────────────────────
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error("Unhandled error: %s", exc, exc_info=True)
@@ -52,6 +53,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": str(exc)}
     )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,7 +63,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(face_auth_router, prefix=settings.API_V1_PREFIX)
+# ── IMPORTANT: Use prefix="/api" to match frontend calls ──────────────────────
+# All auth routes will be: /api/auth/...
+API_PREFIX = "/api"
+
+app.include_router(face_auth_router, prefix=API_PREFIX)
+app.include_router(pin_auth_router,  prefix=API_PREFIX)
+app.include_router(registration_router, prefix=API_PREFIX)   # ← ADDED
 
 
 @app.get("/")

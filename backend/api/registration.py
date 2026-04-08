@@ -1,26 +1,33 @@
 """
-Registration API Routes
-Step-by-step implementation
+Registration API Routes – Revised Flow
+- Step 1: Name, Email, Phone + Face Images (3-5)
+- Generate random 6-digit PIN (permanent)
+- Store hashed PIN + face embeddings
+- Send PIN once via Email + SMS
+- No password, no temporary PINs
+- POST /auth/first-login-setup – change default PIN on first login
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Body
-from pydantic import BaseModel, EmailStr, validator
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-import secrets
 import logging
+import secrets
+import random
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, Depends, Body
+from pydantic import BaseModel, EmailStr, validator, Field
+from sqlalchemy.orm import Session
+from typing import List, Optional
 
 from backend.database.session import SessionLocal
-from backend.database.models import Employee, User, RegistrationToken, PINVerification
-from backend.core.security import get_password_hash, create_access_token
-from backend.services.twilio_service import generate_pin, send_pin_sms
+from backend.database.models import Employee, User
+from backend.core.security import get_password_hash
+from backend.services.face_service import face_service   # ✅ CORRECTED IMPORT
+from backend.services.twilio_service import send_pin_sms
+from backend.services.email_service import send_pin_email
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Registration"])
 
-
-# Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -28,289 +35,158 @@ def get_db():
     finally:
         db.close()
 
-
-# Pydantic Models
+# ── Request Models ────────────────────────────────────────────────────────────
 class RegisterRequest(BaseModel):
-    """Registration request"""
     name: str
     email: EmailStr
-    password: str
     phone: str
-    
+    face_images: List[str] = Field(..., min_items=3, max_items=5)
+
     @validator('name')
-    def validate_name(cls, v):
-        if len(v) < 2:
+    def name_valid(cls, v):
+        if len(v.strip()) < 2:
             raise ValueError('Name must be at least 2 characters')
         return v.strip()
-    
-    @validator('password')
-    def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        return v
-    
+
     @validator('phone')
-    def validate_phone(cls, v):
-        # Remove spaces, dashes
+    def phone_valid(cls, v):
         clean = ''.join(c for c in v if c.isdigit())
         if len(clean) < 10:
-            raise ValueError('Phone number must be at least 10 digits')
+            raise ValueError('Phone must be at least 10 digits')
         return clean
 
+class FirstLoginSetupRequest(BaseModel):
+    employee_id: int
+    keep_default_pin: bool
+    new_pin: Optional[str] = None
 
+    @validator('new_pin')
+    def validate_new_pin(cls, v, values):
+        if not values.get('keep_default_pin', True) and (not v or len(v) != 6 or not v.isdigit()):
+            raise ValueError('New PIN must be exactly 6 digits')
+        return v
+
+# ── Helper: generate random 6-digit PIN ───────────────────────────────────────
+def generate_permanent_pin() -> str:
+    return ''.join(random.choices('0123456789', k=6))
+
+# ── Registration Endpoint ─────────────────────────────────────────────────────
 @router.post("/register")
 async def register(
     data: RegisterRequest = Body(...),
     db: Session = Depends(get_db)
 ):
-    """
-    Step 1: Register new user
-    Creates Employee + User records
-    Sends email verification token (logged for now, not sent via email)
-    """
     try:
         logger.info(f"📝 Registration request for {data.email}")
-        
-        # Check if email already exists
+
+        # 1. Check existing (same as before)
         existing_user = db.query(User).filter(User.email == data.email).first()
         if existing_user:
-            raise HTTPException(status_code=400, detail="Email already registered")
-        
-        # Check if phone already exists
+            raise HTTPException(400, "Email already registered")
+        existing_employee_by_email = db.query(Employee).filter(Employee.email == data.email).first()
+        if existing_employee_by_email:
+            raise HTTPException(400, "Email already registered")
         existing_phone = db.query(Employee).filter(Employee.phone == data.phone).first()
         if existing_phone:
-            raise HTTPException(status_code=400, detail="Phone number already registered")
-        
-        # Create Employee record
+            raise HTTPException(400, "Phone number already registered")
+
+        # 2. Create Employee record and COMMIT immediately
         employee = Employee(
             name=data.name,
             email=data.email,
             phone=data.phone,
             phone_country_code='+91',
-            status='pending_verification',
-            email_verified=False,
-            phone_verified=False,
-            face_registered=False,
+            status='active',
+            email_verified=True,
+            phone_verified=True,
             onboarding_completed=False,
-            profile_completed=False
+            profile_completed=False,
+            face_registered=False
         )
         db.add(employee)
-        db.flush()
-        
-        # Create User record
-        password_hash = get_password_hash(data.password)
+        db.commit()          # ✅ Commit now so the employee exists in DB
+        db.refresh(employee) # Get the generated ID and timestamps
+
+        # 3. Enroll face images (now employee.id is visible to any session)
+        enroll_result = face_service.enroll_faces(employee.id, data.face_images)
+        if not enroll_result["success"]:
+            # If enrollment fails, delete the employee record (rollback)
+            db.delete(employee)
+            db.commit()
+            raise HTTPException(400, f"Face enrollment failed: {enroll_result['error']}")
+
+        # 4. Generate permanent PIN and update employee (now with face data)
+        default_pin = generate_permanent_pin()
+        pin_hash = get_password_hash(default_pin)
+
+        employee.permanent_pin_hash = pin_hash
+        employee.pin_type = 'default'
+        employee.pin_set_at = datetime.utcnow()
+        employee.face_registered = True
+        employee.face_samples_count = enroll_result["embeddings_stored"]
+
+        # 5. Create User record
+        dummy_hash = get_password_hash(secrets.token_urlsafe(16))
         user = User(
             employee_id=employee.id,
             email=data.email,
-            password_hash=password_hash,
-            is_active=False,  # Will be True after email verification
-            is_verified=False,
-            face_registered=False,
-            face_login_enabled=False
+            password_hash=dummy_hash,
+            is_active=True,
+            is_verified=True,
+            face_registered=True,
+            face_login_enabled=True
         )
         db.add(user)
-        db.flush()
-        
-        # Generate email verification token
-        verification_token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(hours=24)
-        
-        reg_token = RegistrationToken(
-            user_id=user.id,
-            token=verification_token,
-            token_type='email_verification',
-            expires_at=expires_at
-        )
-        db.add(reg_token)
         db.commit()
-        
-        # Log verification link (in production, send via email)
-        verification_link = f"http://localhost:5173/verify-email?token={verification_token}"
-        logger.info(f"📧 Verification link: {verification_link}")
-        
+        db.refresh(employee)
+
+        # 6. Send PIN via Email and SMS
+        email_sent = send_pin_email(data.email, employee.name, default_pin)
+        sms_sent = send_pin_sms(data.phone, employee.name, default_pin)
+
         return {
             "success": True,
-            "message": "Registration successful! Please check your email to verify your account.",
+            "employee_id": employee.id,
             "user_id": user.id,
-            "email": data.email,
-            "verification_token": verification_token,  # Remove in production
-            "next_step": "verify_email"
+            "default_pin": default_pin,
+            "message": "Registration successful!",
+            "email_sent": email_sent["success"],
+            "sms_sent": sms_sent["success"],
+            "next_step": "first_login_setup"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ Registration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Registration error")
+        raise HTTPException(500, str(e))
 
-
-@router.post("/verify-email")
-async def verify_email(
-    token: str = Body(..., embed=True),
+# ── First‑login PIN setup (used by Login.jsx after PIN verification) ─────────
+@router.post("/first-login-setup")
+async def first_login_setup(
+    data: FirstLoginSetupRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Step 2: Verify email
-    Activates account and sends phone verification PIN
+    Called after a user logs in with the default PIN.
+    Allows them to keep the default PIN or set a new custom one.
     """
-    try:
-        logger.info(f"📧 Email verification attempt")
-        
-        # Find token
-        token_record = db.query(RegistrationToken).filter(
-            RegistrationToken.token == token,
-            RegistrationToken.token_type == 'email_verification',
-            RegistrationToken.used == False
-        ).first()
-        
-        if not token_record:
-            raise HTTPException(status_code=400, detail="Invalid or expired verification token")
-        
-        # Check expiration
-        if datetime.utcnow() > token_record.expires_at:
-            raise HTTPException(status_code=400, detail="Verification token expired")
-        
-        # Get user and employee
-        user = db.query(User).filter(User.id == token_record.user_id).first()
-        employee = db.query(Employee).filter(Employee.id == user.employee_id).first()
-        
-        # Mark as verified
-        user.is_verified = True
-        user.is_active = True
-        employee.email_verified = True
-        employee.email_verified_at = datetime.utcnow()
-        employee.status = 'active'
-        
-        token_record.used = True
-        token_record.used_at = datetime.utcnow()
-        
-        db.commit()
-        
-        logger.info(f"✅ Email verified: {user.email}")
-        
-        # Send phone verification PIN
-        pin_code = generate_pin(length=6)
-        expires_at = datetime.utcnow() + timedelta(minutes=5)
-        
-        pin_record = PINVerification(
-            employee_id=employee.id,
-            pin_code=pin_code,
-            phone_number=employee.phone,
-            pin_type='phone_verification',
-            expires_at=expires_at
-        )
-        db.add(pin_record)
-        db.commit()
-        
-        # Send SMS
-        message = f"Hello {employee.name}! Your HRMS phone verification code is: {pin_code}. Valid for 5 minutes."
-        sms_result = send_pin_sms(employee.phone, employee.name, pin_code)
-        
-        logger.info(f"📱 PIN sent to {employee.phone}: {pin_code}")  # Log for testing
-        
-        return {
-            "success": True,
-            "message": f"Email verified! PIN sent to ****{employee.phone[-4:]}",
-            "user_id": user.id,
-            "phone_last_digits": employee.phone[-4:],
-            "pin_for_testing": pin_code,  # Remove in production
-            "next_step": "verify_phone"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Email verification error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    employee = db.query(Employee).filter(Employee.id == data.employee_id).first()
+    if not employee:
+        raise HTTPException(404, "Employee not found")
 
-
-@router.post("/verify-phone")
-async def verify_phone(
-    user_id: int = Body(...),
-    pin_code: str = Body(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Step 3: Verify phone with PIN
-    Completes registration and returns login token
-    """
-    try:
-        logger.info(f"📱 Phone verification for user {user_id}")
-        
-        # Get user and employee
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        employee = db.query(Employee).filter(Employee.id == user.employee_id).first()
-        
-        # Find PIN record
-        pin_record = db.query(PINVerification).filter(
-            PINVerification.employee_id == employee.id,
-            PINVerification.pin_type == 'phone_verification',
-            PINVerification.verified == False
-        ).order_by(PINVerification.created_at.desc()).first()
-        
-        if not pin_record:
-            raise HTTPException(status_code=400, detail="No pending phone verification")
-        
-        # Check expiration
-        if datetime.utcnow() > pin_record.expires_at:
-            raise HTTPException(status_code=400, detail="PIN expired")
-        
-        # Check max attempts
-        if pin_record.attempts >= pin_record.max_attempts:
-            raise HTTPException(status_code=400, detail="Too many failed attempts")
-        
-        # Increment attempts
-        pin_record.attempts += 1
+    if data.keep_default_pin:
+        employee.pin_type = 'custom'
+        employee.pin_set_at = datetime.utcnow()
         db.commit()
-        
-        # Verify PIN
-        if pin_record.pin_code != pin_code:
-            remaining = pin_record.max_attempts - pin_record.attempts
-            raise HTTPException(status_code=401, detail=f"Incorrect PIN. {remaining} attempts remaining")
-        
-        # Mark verified
-        pin_record.verified = True
-        employee.phone_verified = True
-        employee.phone_verified_at = datetime.utcnow()
-        employee.profile_completed = True
-        
+        return {"success": True, "message": "Default PIN kept"}
+    else:
+        if not data.new_pin or len(data.new_pin) != 6:
+            raise HTTPException(400, "New PIN must be 6 digits")
+        new_hash = get_password_hash(data.new_pin)
+        employee.permanent_pin_hash = new_hash
+        employee.pin_type = 'custom'
+        employee.pin_set_at = datetime.utcnow()
         db.commit()
-        
-        logger.info(f"✅ Phone verified: {employee.phone}")
-        
-        # Generate login token
-        access_token = create_access_token(
-            data={
-                "sub": user.email,
-                "user_id": user.id,
-                "employee_id": employee.id,
-                "name": employee.name
-            }
-        )
-        
-        return {
-            "success": True,
-            "message": "Registration complete! You're now logged in.",
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user.id,
-                "employee_id": employee.id,
-                "name": employee.name,
-                "email": employee.email,
-                "phone_verified": True,
-                "face_registered": False
-            }
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Phone verification error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"success": True, "message": "PIN updated successfully"}

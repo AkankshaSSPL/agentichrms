@@ -14,6 +14,7 @@ import numpy as np
 from io import BytesIO
 from PIL import Image
 from typing import Optional
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class FaceRecognitionService:
         self._classifier = None
         self._labels = None
         self._loaded = False
+        self._device = None
 
     # ──────────────────────────────────────────────────────────────────────────
     # Internal: lazy model loading
@@ -45,7 +47,6 @@ class FaceRecognitionService:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info("Loading face recognition models on device: %s", device)
 
-        # MTCNN — face detector (keep_all=False → single best face)
         self._mtcnn = MTCNN(
             image_size=160,
             margin=20,
@@ -55,15 +56,12 @@ class FaceRecognitionService:
             device=device,
         )
 
-        # InceptionResnetV1 — face embedder
         self._resnet = InceptionResnetV1(pretrained="vggface2").eval().to(device)
         self._device = device
 
-        # KNN classifier trained on your dataset
         classifier_path = str(settings.BASE_DIR / settings.FACE_CLASSIFIER_PATH)
         self._classifier = joblib.load(classifier_path)
 
-        # Labels array (maps KNN output index → employee username string)
         labels_path = str(settings.BASE_DIR / settings.FACE_LABELS_PATH)
         self._labels = np.load(labels_path, allow_pickle=True)
 
@@ -71,7 +69,7 @@ class FaceRecognitionService:
         logger.info("Face recognition models loaded successfully.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Public API
+    # Public API – Face recognition
     # ──────────────────────────────────────────────────────────────────────────
 
     def recognize_face(self, image_base64: str) -> dict:
@@ -81,8 +79,8 @@ class FaceRecognitionService:
         Returns:
             {
                 "recognized": bool,
-                "username": str | None,      # Employee.username value
-                "distance": float | None,    # Euclidean distance (lower = better)
+                "username": str | None,
+                "distance": float | None,
                 "failure_reason": str | None
             }
         """
@@ -99,9 +97,8 @@ class FaceRecognitionService:
                 "failure_reason": f"Model loading error: {exc}",
             }
 
-        # ── 1. Decode Base64 → PIL Image ──────────────────────────────────────
+        # Decode Base64
         try:
-            # Strip the data-URL prefix if present: "data:image/jpeg;base64,..."
             if "," in image_base64:
                 image_base64 = image_base64.split(",", 1)[1]
             img_bytes = base64.b64decode(image_base64)
@@ -115,9 +112,9 @@ class FaceRecognitionService:
                 "failure_reason": "Invalid image data",
             }
 
-        # ── 2. Detect & Crop Face (MTCNN) ─────────────────────────────────────
+        # Detect face
         try:
-            face_tensor = self._mtcnn(pil_img)   # returns (3,160,160) tensor or None
+            face_tensor = self._mtcnn(pil_img)
         except Exception as exc:
             logger.warning("MTCNN detection error: %s", exc)
             return {
@@ -135,21 +132,18 @@ class FaceRecognitionService:
                 "failure_reason": "No face detected in frame",
             }
 
-        # ── 3. Generate 512-D Embedding (InceptionResnetV1) ───────────────────
+        # Generate embedding
         import torch
         with torch.no_grad():
             embedding = (
                 self._resnet(face_tensor.unsqueeze(0).to(self._device))
                 .cpu()
                 .numpy()
-            )  # shape: (1, 512)
+            )  # shape (1,512)
 
-        # ── 4. KNN Prediction + Distance Check ────────────────────────────────
+        # KNN prediction
         try:
-            # predict returns the class label
             predicted_label = self._classifier.predict(embedding)[0]
-
-            # kneighbors gives actual Euclidean distances
             distances, _ = self._classifier.kneighbors(embedding, n_neighbors=1)
             distance = float(distances[0][0])
         except Exception as exc:
@@ -161,12 +155,9 @@ class FaceRecognitionService:
                 "failure_reason": "Classifier error",
             }
 
-        # ── 5. Apply Distance Threshold ───────────────────────────────────────
-        threshold = settings.FACE_DISTANCE_THRESHOLD  # default 1.2
+        threshold = settings.FACE_DISTANCE_THRESHOLD
         if distance > threshold:
-            logger.info(
-                "Face rejected — distance %.4f > threshold %.4f", distance, threshold
-            )
+            logger.info("Face rejected — distance %.4f > threshold %.4f", distance, threshold)
             return {
                 "recognized": False,
                 "username": None,
@@ -174,9 +165,7 @@ class FaceRecognitionService:
                 "failure_reason": f"Face similarity too low (distance: {distance:.2f})",
             }
 
-        logger.info(
-            "Face recognized as '%s' with distance %.4f", predicted_label, distance
-        )
+        logger.info("Face recognized as '%s' with distance %.4f", predicted_label, distance)
         return {
             "recognized": True,
             "username": str(predicted_label),
@@ -184,6 +173,74 @@ class FaceRecognitionService:
             "failure_reason": None,
         }
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # Public API – Face enrollment (store multiple embeddings)
+    # ──────────────────────────────────────────────────────────────────────────
 
-# Module-level singleton — shared across all requests
+    def enroll_faces(self, employee_id: int, images_base64: list[str]) -> dict:
+        """
+        Enroll multiple face images for an employee.
+        Returns: { "success": bool, "embeddings_stored": int, "error": str | None }
+        """
+        try:
+            self._load_models()
+        except Exception as exc:
+            logger.error("Model loading failed for enrollment: %s", exc)
+            return {"success": False, "embeddings_stored": 0, "error": str(exc)}
+
+        from backend.database.session import SessionLocal
+        from backend.database.models import Employee
+        import pickle
+
+        embeddings = []
+        for idx, b64 in enumerate(images_base64):
+            if "," in b64:
+                b64 = b64.split(",", 1)[1]
+            try:
+                img_bytes = base64.b64decode(b64)
+                pil_img = Image.open(BytesIO(img_bytes)).convert("RGB")
+            except Exception as e:
+                logger.warning(f"Image {idx+1} decode failed: {e}")
+                continue
+
+            face_tensor = self._mtcnn(pil_img)
+            if face_tensor is None:
+                logger.warning(f"Image {idx+1}: no face detected")
+                continue
+
+            import torch
+            with torch.no_grad():
+                emb = (
+                    self._resnet(face_tensor.unsqueeze(0).to(self._device))
+                    .cpu()
+                    .numpy()
+                )
+            embeddings.append(emb[0])
+
+        if not embeddings:
+            return {"success": False, "embeddings_stored": 0, "error": "No valid face detected in any image"}
+
+        embeddings_blob = pickle.dumps(embeddings)
+
+        db = SessionLocal()
+        try:
+            emp = db.query(Employee).filter(Employee.id == employee_id).first()
+            if not emp:
+                return {"success": False, "embeddings_stored": 0, "error": "Employee not found"}
+            emp.face_embedding = embeddings_blob
+            emp.face_registered = True
+            emp.face_enrollment_date = datetime.utcnow()
+            emp.face_samples_count = len(embeddings)
+            db.commit()
+            logger.info(f"Enrolled {len(embeddings)} face samples for employee {employee_id}")
+            return {"success": True, "embeddings_stored": len(embeddings), "error": None}
+        except Exception as e:
+            db.rollback()
+            logger.error(f"DB error during face enrollment: {e}")
+            return {"success": False, "embeddings_stored": 0, "error": str(e)}
+        finally:
+            db.close()
+
+
+# Module-level singleton
 face_service = FaceRecognitionService()
