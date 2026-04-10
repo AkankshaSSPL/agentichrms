@@ -814,3 +814,41 @@ mark {
 .markdown-content h3 {
   font-size: 1.1em;
 }
+
+
+/* Preview panel header with employee name */
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.preview-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--accent-dim);
+  padding: 4px 12px;
+  border-radius: 20px;
+  color: var(--text-accent);
+}
+
+.preview-user-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.preview-user-dept {
+  color: var(--text-muted);
+  font-size: 11px;
+}

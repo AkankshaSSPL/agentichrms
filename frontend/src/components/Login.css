@@ -1,0 +1,527 @@
+/* Login.css - Dark Theme (Horizontal Layout) */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.login-wrapper {
+    min-height: 100vh;
+    background: #060812;
+    /* Dark background like original */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.login-container {
+    display: flex;
+    width: 100%;
+    max-width: 780px;
+    background: #111520;
+    /* Dark card background */
+    border: 1px solid #1e2433;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+/* ============ LEFT PANEL - BRANDING (Dark Gradient) ============ */
+
+.login-left {
+    width: 220px;
+    flex-shrink: 0;
+    background: linear-gradient(160deg, #0d1220 0%, #060c1a 100%);
+    border-right: 1px solid #1e2433;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 36px 28px;
+}
+
+.branding {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.logo-icon {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, #4f8ef7, #7c3aed);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.branding h1 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin: 0;
+}
+
+.tagline {
+    font-size: 12px;
+    color: #4a5168;
+    margin: 4px 0 0;
+    line-height: 1.5;
+}
+
+.features {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin-top: auto;
+}
+
+.feature {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.feature-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.feature h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin: 0 0 4px 0;
+}
+
+.feature p {
+    font-size: 11px;
+    color: #4a5168;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* ============ RIGHT PANEL - AUTH ============ */
+
+.login-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 36px 40px;
+    gap: 24px;
+    background: transparent;
+    /* Inherit from container */
+}
+
+.auth-content {
+    width: 100%;
+}
+
+.auth-content h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin: 0 0 4px 0;
+}
+
+.subtitle {
+    font-size: 13px;
+    color: #4a5168;
+    margin: 0 0 24px 0;
+}
+
+/* ============ ALERTS ============ */
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.alert-success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+}
+
+.alert-error {
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    color: #f87171;
+}
+
+/* ============ LOGIN OPTIONS (Choice screen) ============ */
+
+.login-options {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.login-option {
+    padding: 20px;
+    border: 1px solid #1e2433;
+    border-radius: 12px;
+    background: #0a0e1a;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.login-option:hover {
+    border-color: #4f8ef7;
+    background: rgba(79, 142, 247, 0.05);
+    transform: translateY(-2px);
+}
+
+.option-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.login-option h3 {
+    font-size: 16px;
+    color: #e2e8f0;
+    margin: 0 0 4px 0;
+    font-weight: 600;
+}
+
+.login-option p {
+    font-size: 12px;
+    color: #4a5168;
+    margin: 0;
+}
+
+/* ============ WEBCAM ============ */
+
+.webcam-container {
+    position: relative;
+    width: 100%;
+    margin-bottom: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0a0e1a;
+    border: 1px solid #1e2433;
+    aspect-ratio: 16/9;
+}
+
+.webcam-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scaleX(-1);
+    /* Mirror effect for selfie */
+}
+
+.face-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.face-frame {
+    width: 38%;
+    height: 80%;
+    border: 2px solid #4f8ef7;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2000px rgba(6, 8, 18, 0.35);
+    transition: border-color 0.3s;
+}
+
+/* ============ FORMS & INPUTS ============ */
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #8b95a9;
+    letter-spacing: 0.3px;
+}
+
+.form-group input {
+    padding: 12px 14px;
+    background: #0a0e1a;
+    border: 1px solid #1e2433;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #e2e8f0;
+    transition: all 0.15s;
+    width: 100%;
+    outline: none;
+}
+
+.form-group input:focus {
+    border-color: #4f8ef7;
+}
+
+.form-group input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* PIN input field (password dots) */
+.pin-input-field {
+    font-family: 'DM Mono', 'Fira Code', monospace;
+    letter-spacing: 4px;
+    font-size: 16px;
+    text-align: center;
+}
+
+/* Change PIN Toggle */
+.change-pin-toggle {
+    text-align: center;
+    margin: -8px 0 12px 0;
+}
+
+.link-button {
+    background: none;
+    border: none;
+    color: #4f8ef7;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 5px;
+    transition: color 0.2s;
+}
+
+.link-button:hover {
+    color: #7c3aed;
+}
+
+.link-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* PIN Verification Screen (big box) */
+.pin-input-group {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.pin-input {
+    width: 100%;
+    padding: 16px;
+    font-size: 28px;
+    text-align: center;
+    letter-spacing: 8px;
+    border: 1px solid #1e2433;
+    border-radius: 12px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 700;
+    background: #0a0e1a;
+    color: #4f8ef7;
+    margin-bottom: 12px;
+}
+
+.pin-input:focus {
+    outline: none;
+    border-color: #4f8ef7;
+}
+
+.attempts-left {
+    font-size: 11px;
+    color: #4a5168;
+    text-align: center;
+}
+
+/* ============ BUTTONS ============ */
+
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.btn-primary,
+.btn-secondary {
+    flex: 1;
+    padding: 12px 0;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.btn-primary {
+    background: #4f8ef7;
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #3b6fd4;
+    transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid #1e2433;
+    color: #8b95a9;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: rgba(30, 36, 51, 0.5);
+}
+
+/* ============ FOOTER & LINKS ============ */
+
+.footer-text {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 13px;
+    color: #4a5168;
+}
+
+.footer-text a {
+    color: #4f8ef7;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.footer-text a:hover {
+    text-decoration: underline;
+}
+
+.switch-option {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #4a5168;
+}
+
+.switch-option a {
+    color: #4f8ef7;
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.switch-option a:hover {
+    text-decoration: underline;
+}
+
+/* ============ RESPONSIVE ============ */
+
+@media (max-width: 1024px) {
+    .login-container {
+        flex-direction: column;
+        max-width: 500px;
+    }
+
+    .login-left {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #1e2433;
+        padding: 24px 28px;
+    }
+
+    .features {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 20px;
+    }
+
+    .feature {
+        flex: 1;
+        min-width: 120px;
+    }
+
+    .login-right {
+        padding: 32px 28px;
+    }
+}
+
+@media (max-width: 600px) {
+    .login-wrapper {
+        padding: 0;
+    }
+
+    .login-container {
+        border-radius: 0;
+        min-height: 100vh;
+    }
+
+    .login-right {
+        padding: 24px 20px;
+    }
+
+    .auth-content h2 {
+        font-size: 1.5rem;
+    }
+
+    .login-options {
+        gap: 12px;
+    }
+
+    .login-option {
+        padding: 16px;
+    }
+
+    .option-icon {
+        font-size: 28px;
+    }
+
+    .login-option h3 {
+        font-size: 15px;
+    }
+
+    .pin-input {
+        font-size: 24px;
+        letter-spacing: 6px;
+        padding: 14px;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        width: 100%;
+    }
+}
+
+@media (max-width: 400px) {
+    .pin-input {
+        font-size: 20px;
+        letter-spacing: 4px;
+    }
+
+    .webcam-container {
+        max-height: 300px;
+    }
+}
