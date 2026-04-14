@@ -1,4 +1,4 @@
-/* Register.css - Clean Dark Theme (no icons) */
+/* Register.css – Idle ring, no continuous movement */
 
 .register-container {
     min-height: 100vh;
@@ -7,15 +7,15 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .register-card {
     width: 100%;
-    max-width: 520px;
+    max-width: 550px;
     background: #111520;
     border: 1px solid #1e2433;
-    border-radius: 20px;
+    border-radius: 24px;
     padding: 32px 36px;
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
 }
@@ -35,7 +35,6 @@
     margin-bottom: 24px;
 }
 
-/* Step indicator */
 .steps-indicator {
     display: flex;
     justify-content: space-between;
@@ -66,7 +65,6 @@
     color: #fff;
 }
 
-/* Messages */
 .message {
     padding: 10px;
     border-radius: 8px;
@@ -75,19 +73,12 @@
     text-align: center;
 }
 
-.message.success {
-    background: rgba(34, 197, 94, 0.1);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-    color: #4ade80;
-}
-
 .message.error {
     background: rgba(248, 113, 113, 0.08);
     border: 1px solid rgba(248, 113, 113, 0.25);
     color: #f87171;
 }
 
-/* Forms */
 .register-form {
     display: flex;
     flex-direction: column;
@@ -114,41 +105,29 @@
     font-size: 13px;
     color: #e2e8f0;
     outline: none;
+    transition: border-color 0.2s;
 }
 
 .form-group input:focus {
     border-color: #4f8ef7;
 }
 
-/* Face Capture */
+/* Face capture step */
 .face-capture-step {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 20px;
-}
-
-.capture-instructions {
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.capture-instructions p {
-    font-size: 14px;
-    color: #e2e8f0;
-    margin: 4px 0;
-}
-
-.instruction-detail {
-    font-size: 12px;
-    color: #4f8ef7;
 }
 
 .webcam-wrapper {
     position: relative;
-    border-radius: 12px;
+    width: 100%;
+    max-width: 480px;
+    border-radius: 16px;
     overflow: hidden;
-    background: #000;
     border: 1px solid #1e2433;
+    background: #000;
 }
 
 .webcam-feed {
@@ -175,7 +154,7 @@
     }
 
     50% {
-        opacity: 0.7;
+        opacity: 0.6;
     }
 
     100% {
@@ -183,153 +162,24 @@
     }
 }
 
-.progress-ring-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-}
-
-.progress-ring {
-    transform: rotate(-90deg);
+/* Idle circular ring – no transition, no rotation animation */
+.progress-ring-large {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 0 auto;
 }
 
 .progress-ring-bg {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.2);
-    stroke-width: 8;
+    transition: none;
 }
 
 .progress-ring-fill {
-    fill: none;
-    stroke: #10b981;
-    stroke-width: 8;
+    transition: none;
+    /* Removes slow movement */
+    stroke: #34d399;
+    stroke-width: 6;
     stroke-linecap: round;
-    stroke-dasharray: 691;
-    stroke-dashoffset: 691;
-    transition: stroke-dashoffset 0.3s ease;
-}
-
-.thumbnails-grid {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 16px;
-    justify-content: center;
-}
-
-.thumbnail-item {
-    position: relative;
-    width: 70px;
-    height: 70px;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid #1e2433;
-}
-
-.thumbnail-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.thumbnail-delete {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 20px;
-    height: 20px;
-    background: #f87171;
-    border: none;
-    border-radius: 50%;
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-/* PIN display */
-.pin-display-step {
-    text-align: center;
-}
-
-.success-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    color: #10b981;
-}
-
-.pin-display-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    margin: 20px 0;
-}
-
-.pin-box {
-    background: #0a0e1a;
-    border: 1px solid #4f8ef7;
-    border-radius: 12px;
-    padding: 12px 24px;
-    cursor: pointer;
-}
-
-.pin-value {
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: 4px;
-    color: #4f8ef7;
-    font-family: monospace;
-}
-
-.copy-button {
-    background: transparent;
-    border: 1px solid #1e2433;
-    border-radius: 10px;
-    padding: 8px 16px;
-    color: #8b95a9;
-    cursor: pointer;
-    font-size: 14px;
-    transition: 0.2s;
-}
-
-.copy-button:hover {
-    border-color: #4f8ef7;
-    color: #4f8ef7;
-}
-
-.action-buttons {
-    display: flex;
-    gap: 12px;
-    margin-top: 16px;
-}
-
-.btn-primary,
-.btn-secondary {
-    flex: 1;
-    padding: 12px 0;
-    border: none;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.btn-primary {
-    background: #4f8ef7;
-    color: #fff;
-}
-
-.btn-primary:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-
-.btn-secondary {
-    background: transparent;
-    border: 1px solid #1e2433;
-    color: #8b95a9;
 }
 
 .progress-text {
@@ -337,139 +187,38 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 700;
     color: #e2e8f0;
-    font-family: monospace;
+}
+
+/* Instruction box */
+.instruction-box {
+    text-align: center;
 }
 
 .instruction-title {
     font-size: 16px;
-    font-weight: 600;
-    color: #e2e8f0;
-    margin-bottom: 8px;
-}
-
-/* iPhone‑style face enrolment */
-.register-container {
-    position: relative;
-    min-height: 100vh;
-    background: #060812;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    font-family: 'Inter', sans-serif;
-}
-
-.camera-background {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
-    overflow: hidden;
-}
-
-.blurred-camera {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    filter: blur(20px);
-    transform: scale(1.1);
-}
-
-.register-card {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 520px;
-    background: rgba(17, 21, 32, 0.85);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(30, 36, 51, 0.8);
-    border-radius: 32px;
-    padding: 32px 36px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-}
-
-/* Large progress ring */
-.face-capture-step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 24px;
-}
-
-.progress-ring-large {
-    position: relative;
-    width: 280px;
-    height: 280px;
-    margin: 0 auto;
-}
-
-.progress-ring-svg {
-    transform: rotate(-90deg);
-}
-
-.progress-ring-bg-large {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.15);
-    stroke-width: 8;
-}
-
-.progress-ring-fill-large {
-    fill: none;
-    stroke: #34d399;
-    stroke-width: 8;
-    stroke-linecap: round;
-    stroke-dasharray: 816;
-    /* 2 * PI * 130 */
-    stroke-dashoffset: 816;
-    transition: stroke-dashoffset 0.3s ease;
-}
-
-.face-silhouette {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 64px;
-    opacity: 0.7;
-}
-
-.progress-text-large {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 18px;
-    font-weight: 600;
-    color: #e2e8f0;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 4px 12px;
-    border-radius: 20px;
-}
-
-.instruction-box {
-    text-align: center;
-    background: rgba(0, 0, 0, 0.5);
-    padding: 12px 20px;
-    border-radius: 40px;
-    backdrop-filter: blur(4px);
-}
-
-.instruction-title {
-    font-size: 18px;
-    font-weight: 600;
+    font-weight: 500;
     color: #e2e8f0;
     margin: 0;
 }
 
-.instruction-sub {
-    font-size: 13px;
-    color: #34d399;
-    margin: 4px 0 0;
+.start-button {
+    background: #4f8ef7;
+    color: white;
+    border: none;
+    border-radius: 40px;
+    padding: 12px 32px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.start-button:hover {
+    background: #3b6fd4;
+    transform: scale(1.02);
 }
 
 /* Thumbnails */
@@ -478,7 +227,7 @@
     gap: 12px;
     flex-wrap: wrap;
     justify-content: center;
-    margin: 16px 0;
+    margin: 8px 0;
 }
 
 .thumbnail-item {
@@ -510,36 +259,7 @@
     cursor: pointer;
 }
 
-/* Flash effect */
-body.flash::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: white;
-    opacity: 0.5;
-    pointer-events: none;
-    z-index: 9999;
-    animation: flashAnim 0.2s ease-out;
-}
-
-@keyframes flashAnim {
-    0% {
-        opacity: 0;
-    }
-
-    50% {
-        opacity: 0.6;
-    }
-
-    100% {
-        opacity: 0;
-    }
-}
-
-/* Buttons and other elements remain as before */
+/* Buttons */
 .action-buttons {
     display: flex;
     gap: 12px;
@@ -555,11 +275,17 @@ body.flash::after {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    transition: 0.2s;
 }
 
 .btn-primary {
     background: #4f8ef7;
     color: white;
+}
+
+.btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .btn-secondary {
@@ -568,7 +294,21 @@ body.flash::after {
     color: #8b95a9;
 }
 
+.btn-secondary:hover:not(:disabled) {
+    background: rgba(30, 36, 51, 0.5);
+}
+
 /* PIN display */
+.pin-display-step {
+    text-align: center;
+}
+
+.success-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: #10b981;
+}
+
 .pin-display-wrapper {
     display: flex;
     align-items: center;
@@ -599,4 +339,45 @@ body.flash::after {
     padding: 8px 16px;
     color: #8b95a9;
     cursor: pointer;
+}
+
+.pin-note {
+    font-size: 12px;
+    color: #4a5168;
+    margin: 16px 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .register-card {
+        padding: 24px 20px;
+    }
+
+    .progress-ring-large {
+        width: 160px;
+        height: 160px;
+    }
+
+    .progress-text {
+        font-size: 22px;
+    }
+
+    .instruction-title {
+        font-size: 14px;
+    }
+
+    .start-button {
+        padding: 8px 20px;
+        font-size: 16px;
+    }
+
+    .thumbnail-item {
+        width: 50px;
+        height: 50px;
+    }
+
+    .pin-value {
+        font-size: 22px;
+        letter-spacing: 2px;
+    }
 }
