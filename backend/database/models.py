@@ -3,7 +3,7 @@ Database Models for Agentic HRMS
 Extended with Face Recognition + PIN Verification Support
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, func, Boolean, ForeignKey, Text, Float, LargeBinary
+from sqlalchemy import Column, Integer, String, DateTime, func, Boolean, ForeignKey, Text, Date, Float, LargeBinary
 from sqlalchemy.orm import relationship
 from backend.database.session import Base
 from datetime import datetime
@@ -46,7 +46,7 @@ class Employee(BaseModel):
     # ── Phone verification ─────────────────────────────────────────────────────
     phone_verified = Column(Boolean, default=False)
     phone_verified_at = Column(DateTime, nullable=True)
-    phone_country_code = Column(String(5), default='+91')   # ← single definition
+    phone_country_code = Column(String(5), default='+91')
 
     # ── Face recognition ───────────────────────────────────────────────────────
     username = Column(String(100), unique=True, nullable=True, index=True)
@@ -54,44 +54,44 @@ class Employee(BaseModel):
     face_registered = Column(Boolean, default=False)
     face_enrollment_date = Column(DateTime, nullable=True)
 
-    # ── Relationships ──────────────────────────────────────────────────────────
-    manager = relationship("Employee", remote_side=[id], backref="subordinates")
-    user = relationship("User", back_populates="employee", uselist=False)
-    leave_balances = relationship("LeaveBalance", back_populates="employee")
-    leaves = relationship("Leave", back_populates="employee")
-    onboarding_tasks = relationship("EmployeeOnboarding", back_populates="employee")
-    face_login_attempts = relationship("FaceLoginAttempt", back_populates="employee")
-    pin_verifications = relationship("PINVerification", back_populates="employee")
-
-        # ── Permanent PIN (no expiry, hashed) ─────────────────────────────────────
+    # ── Permanent PIN (no expiry, hashed) ─────────────────────────────────────
     permanent_pin_hash = Column(String(255), nullable=True)   # bcrypt hash
     pin_type = Column(String(20), default='default')          # 'default' or 'custom'
     pin_set_at = Column(DateTime, nullable=True)              # when first set/updated
     face_samples_count = Column(Integer, default=0)           # number of face images stored
 
+    # ── Relationships ──────────────────────────────────────────────────────────
+    manager = relationship("Employee", remote_side=[id], backref="subordinates")
+    user = relationship("User", back_populates="employee", uselist=False)
+    leave_balances = relationship("LeaveBalance", back_populates="employee")
+    leaves = relationship("Leave", back_populates="employee")
+    face_login_attempts = relationship("FaceLoginAttempt", back_populates="employee")
+    pin_verifications = relationship("PINVerification", back_populates="employee")
+    onboarding_tasks = relationship("OnboardingTask", back_populates="employee")  # ✅ fixed
+
+
 class User(BaseModel):
     """Authentication & App Access"""
     __tablename__ = "users"
 
-    # ── Core fields ────────────────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey('employees.id'), unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 
-    # ── Verification & approval ────────────────────────────────────────────────
+    # Verification & approval
     is_verified = Column(Boolean, default=False)
     is_approved = Column(Boolean, default=True)
 
-    # ── Face login ─────────────────────────────────────────────────────────────
+    # Face login
     face_registered = Column(Boolean, default=False)
     face_login_enabled = Column(Boolean, default=False)
 
-    # ── 2FA ───────────────────────────────────────────────────────────────────
+    # 2FA
     two_factor_enabled = Column(Boolean, default=False)
 
-    # ── Login tracking ─────────────────────────────────────────────────────────
+    # Login tracking
     last_login = Column(DateTime, nullable=True)
     last_login_ip = Column(String(45), nullable=True)
     failed_login_attempts = Column(Integer, default=0)
@@ -99,7 +99,7 @@ class User(BaseModel):
     locked_until = Column(DateTime, nullable=True)
     preferred_login_method = Column(String(20), default='password')
 
-    # ── Relationships ──────────────────────────────────────────────────────────
+    # Relationships
     employee = relationship("Employee", back_populates="user")
     chat_sessions = relationship("ChatSession", back_populates="user")
 
@@ -146,30 +146,19 @@ class Leave(BaseModel):
 
 
 class OnboardingTask(BaseModel):
-    """Master checklist catalog for onboarding"""
+    """Onboarding tasks assigned to an employee"""
     __tablename__ = "onboarding_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    task_name = Column(String, nullable=False)
-    category = Column(String)
-    description = Column(Text)
-    is_mandatory = Column(Boolean, default=True)
-
-    employee_tasks = relationship("EmployeeOnboarding", back_populates="task")
-
-
-class EmployeeOnboarding(BaseModel):
-    """Individual employee onboarding progress"""
-    __tablename__ = "employee_onboarding"
-
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
-    task_id = Column(Integer, ForeignKey('onboarding_tasks.id'), nullable=False)
-    status = Column(String, default='Pending')  # Pending, Completed
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    task_name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    is_completed = Column(Boolean, default=False)
+    due_date = Column(Date, nullable=True)
     completed_at = Column(DateTime, nullable=True)
 
+    # Relationship
     employee = relationship("Employee", back_populates="onboarding_tasks")
-    task = relationship("OnboardingTask", back_populates="employee_tasks")
 
 
 class Meeting(BaseModel):

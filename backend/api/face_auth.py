@@ -4,14 +4,18 @@ Face Authentication API Routes
 POST /api/auth/face-login           — Face recognition → JWT
 POST /api/auth/login-with-pin       — Direct permanent PIN login
 POST /api/auth/verify-and-change-pin — Verify current PIN & optionally change it, then login
+POST /api/auth/detect-faces         — Return number of faces in an image (for registration validation)
 """
 
 import logging
+import base64
+from io import BytesIO
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
+from PIL import Image
 
 from backend.core.config import settings
 from backend.core.security import create_access_token, verify_password, get_password_hash
@@ -19,6 +23,7 @@ from backend.database.session import SessionLocal
 from backend.database.models import Employee, FaceLoginAttempt, PINVerification
 from backend.services.face_service import face_service
 from backend.services.twilio_service import generate_pin, send_pin_sms
+from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +59,10 @@ class VerifyAndChangePinRequest(BaseModel):
     identifier: str
     current_pin: str
     new_pin: Optional[str] = None
+
+
+class DetectFacesRequest(BaseModel):
+    image_base64: str
 
 
 # ── POST /api/auth/face-login ──────────────────────────────────────────────────
@@ -245,6 +254,45 @@ def verify_and_change_pin(
             "designation": employee.designation,
         },
     )
+
+
+# ── POST /api/auth/detect-faces (for registration validation) ─────────────────
+
+# Add to backend/api/face_auth.py (after other imports)
+
+@router.post("/detect-faces")
+def detect_faces(payload: DetectFacesRequest):
+    """
+    Detect faces and return count + bounding boxes of the largest face.
+    """
+    try:
+        if "," in payload.image_base64:
+            image_base64 = payload.image_base64.split(",", 1)[1]
+        else:
+            image_base64 = payload.image_base64
+        img_bytes = base64.b64decode(image_base64)
+        pil_img = Image.open(BytesIO(img_bytes)).convert("RGB")
+        
+        face_service._load_models()
+        boxes, probs = face_service._mtcnn.detect(pil_img)
+        if boxes is None:
+            return {"face_count": 0, "boxes": [], "primary_box": None}
+        
+        # Convert numpy arrays to lists
+        boxes_list = boxes.tolist()
+        # Find largest face by area
+        areas = [(box[2] - box[0]) * (box[3] - box[1]) for box in boxes_list]
+        primary_idx = areas.index(max(areas))
+        primary_box = boxes_list[primary_idx]
+        
+        return {
+            "face_count": len(boxes_list),
+            "boxes": boxes_list,
+            "primary_box": primary_box
+        }
+    except Exception as e:
+        logger.error(f"Face detection error: {e}")
+        return {"face_count": 0, "boxes": [], "primary_box": None, "error": str(e)}
 
 
 # ── GET /api/auth/me (unchanged) ───────────────────────────────────────────────

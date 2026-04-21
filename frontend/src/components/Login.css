@@ -361,3 +361,20 @@
 .switch-option a:hover {
     text-decoration: underline;
 }
+
+.face-frame.stable {
+    border-color: #34d399;
+    animation: pulse-green 1s infinite;
+}
+
+@keyframes pulse-green {
+
+    0%,
+    100% {
+        border-color: #34d399;
+    }
+
+    50% {
+        border-color: #4f8ef7;
+    }
+}

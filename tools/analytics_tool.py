@@ -1,29 +1,24 @@
-"""Analytics tools for HR dashboard."""
-import sqlite3
-import sys
-import os
+"""Analytics tools for HR dashboard – PostgreSQL version."""
+from backend.database.session import SessionLocal
+from backend.database.models import Employee, Leave
 from .base import hr_tool
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import DB_PATH
-
-
-def _get_conn():
-    return sqlite3.connect(DB_PATH)
 
 
 @hr_tool
 def get_leave_summary() -> str:
     """Get a summary of leave usage across the organization grouped by type and status."""
-    # GAP-024 FIX: Use context manager — connection always closed on exception.
+    db = SessionLocal()
     try:
-        with _get_conn() as conn:
-            rows = conn.cursor().execute(
-                "SELECT leave_type, status, COUNT(*) FROM leaves "
-                "GROUP BY leave_type, status ORDER BY leave_type"
-            ).fetchall()
+        from sqlalchemy import func
+        rows = db.query(
+            Leave.leave_type,
+            Leave.status,
+            func.count(Leave.id)
+        ).group_by(Leave.leave_type, Leave.status).order_by(Leave.leave_type).all()
     except Exception as e:
         return f"Error retrieving leave summary: {str(e)}"
+    finally:
+        db.close()
 
     if not rows:
         return "No leave records found."
@@ -37,28 +32,26 @@ def get_leave_summary() -> str:
 @hr_tool
 def get_department_summary() -> str:
     """Get department-wise employee stats including headcount and average tenure."""
-    # GAP-024 FIX: context manager
+    db = SessionLocal()
     try:
-        with _get_conn() as conn:
-            rows = conn.cursor().execute(
-                "SELECT department, COUNT(*), "
-                "AVG(JULIANDAY('now') - JULIANDAY(join_date)) "
-                "FROM employees WHERE status='active' "
-                "GROUP BY department ORDER BY COUNT(*) DESC"
-            ).fetchall()
+        from sqlalchemy import func
+        from datetime import date
+        today = date.today()
+        rows = db.query(
+            Employee.department,
+            func.count(Employee.id),
+            func.avg(func.julianday(today) - func.julianday(Employee.join_date))
+        ).filter(Employee.status == 'active').group_by(Employee.department).order_by(func.count(Employee.id).desc()).all()
     except Exception as e:
         return f"Error retrieving department summary: {str(e)}"
+    finally:
+        db.close()
 
     if not rows:
         return "No department data found."
 
     result = "Department Summary:\n"
     for dept, count, tenure_days in rows:
-        # GAP-050 FIX: Use `is not None` instead of truthiness check.
-        # The old `if tenure_days` treated 0 days and NULL identically (both
-        # falsy).  An employee who joined today has tenure_days ≈ 0 which is
-        # a valid value; NULL join_date means data is missing.  The explicit
-        # None check distinguishes these two cases correctly.
         if tenure_days is not None:
             avg_years = round(tenure_days / 365, 1)
         else:

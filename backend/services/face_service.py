@@ -11,10 +11,13 @@ Expected files (created by your training script):
 import base64
 import logging
 import numpy as np
+import pickle
+import joblib
 from io import BytesIO
 from PIL import Image
 from typing import Optional
 from datetime import datetime
+from sklearn.neighbors import KNeighborsClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +241,62 @@ class FaceRecognitionService:
             db.rollback()
             logger.error(f"DB error during face enrollment: {e}")
             return {"success": False, "embeddings_stored": 0, "error": str(e)}
+        finally:
+            db.close()
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Public API – Retrain global classifier from all stored embeddings
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def retrain_classifier(self):
+        """
+        Rebuild the KNN classifier from all face embeddings stored in the database.
+        Saves the updated classifier and embedding files to disk.
+        """
+        from backend.database.session import SessionLocal
+        from backend.database.models import Employee
+        from backend.core.config import settings
+        import pickle
+
+        db = SessionLocal()
+        try:
+            # Collect all embeddings and labels
+            all_embeddings = []
+            all_labels = []
+            employees = db.query(Employee).filter(Employee.face_embedding.isnot(None)).all()
+            for emp in employees:
+                # Unpickle the stored embeddings (list of numpy arrays)
+                embeddings = pickle.loads(emp.face_embedding)
+                label = emp.username or emp.email
+                for emb in embeddings:
+                    all_embeddings.append(emb)
+                    all_labels.append(label)
+
+            if len(all_embeddings) < 1:
+                logger.info("No face embeddings found in database. Skipping retrain.")
+                return
+
+            X = np.array(all_embeddings)
+            y = np.array(all_labels)
+
+            # Train KNN classifier
+            clf = KNeighborsClassifier(n_neighbors=1, metric='euclidean')
+            clf.fit(X, y)
+
+            # Save classifier and supporting files
+            classifier_path = str(settings.BASE_DIR / settings.FACE_CLASSIFIER_PATH)
+            embeddings_path = str(settings.BASE_DIR / settings.FACE_EMBEDDINGS_PATH)
+            labels_path = str(settings.BASE_DIR / settings.FACE_LABELS_PATH)
+
+            joblib.dump(clf, classifier_path)
+            np.save(embeddings_path, X)
+            np.save(labels_path, y)
+
+            logger.info(f"Face classifier retrained with {len(X)} embeddings, {len(set(y))} unique labels.")
+            print(f"✅ Retrained classifier: {len(X)} embeddings, {len(set(y))} labels")
+        except Exception as e:
+            logger.error(f"Error retraining classifier: {e}")
+            raise
         finally:
             db.close()
 

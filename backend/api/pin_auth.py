@@ -15,6 +15,7 @@ from backend.core.config import settings
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, PINVerification
 from backend.services.twilio_service import generate_pin, send_pin_sms
+from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest
 
 logger = logging.getLogger(__name__)
 

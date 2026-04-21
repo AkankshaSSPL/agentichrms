@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import Login from './components/Login'
 import Register from './components/Register'
+import Dashboard from './components/Dashboard'
 
 const API = '/api'
 
@@ -21,6 +22,7 @@ function escapeHtml(text) {
 }
 
 function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true, query = '') {
+    // ... (keep your existing function unchanged, same as before)
     if (!fullText) return isSnippet ? { html: '', lines: [] } : '<p>No text available</p>'
     let searchTerms = []
     if (query && query.trim().length > 3) {
@@ -72,12 +74,80 @@ function generateHighlightedHtml(fullText, chunks, answer = '', isSnippet = true
 }
 
 export default function App() {
-    // ── Auth ──────────────────────────────────────────────────────────────────
+    // Auth
     const [authed, setAuthed] = useState(() => !!localStorage.getItem('hrms_token'))
     const [employee, setEmployee] = useState(() => {
         try { return JSON.parse(localStorage.getItem('hrms_employee') || 'null') } catch { return null }
     })
     const [showRegister, setShowRegister] = useState(false)
+    const [view, setView] = useState('chat')
+
+    // Voice recognition state
+    const [isListening, setIsListening] = useState(false)
+
+    // Chat state
+    const [messages, setMessages] = useState([])
+    const [input, setInput] = useState('')
+    const [loading, setLoading] = useState(false)
+    const [docCount, setDocCount] = useState(0)
+    const [expandedIdx, setExpandedIdx] = useState(null)
+    const [previewData, setPreviewData] = useState(null)
+    const chatEnd = useRef(null)
+
+    // Helper: speak text
+    const speakText = (text) => {
+        if (!('speechSynthesis' in window)) return
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.lang = 'en-US'
+        window.speechSynthesis.cancel()
+        window.speechSynthesis.speak(utterance)
+    }
+
+    // Speech recognition – initialise when needed
+    const startVoiceRecognition = () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+        if (!SpeechRecognition) {
+            alert('Speech recognition not supported in this browser. Please use Chrome or Edge.')
+            return
+        }
+        const recognition = new SpeechRecognition()
+        recognition.continuous = false
+        recognition.interimResults = false
+        recognition.lang = 'en-US'
+
+        setIsListening(true)
+        console.log('🎤 Starting speech recognition...')
+
+        recognition.onstart = () => {
+            console.log('✅ Recognition started – speak now')
+        }
+
+        recognition.onresult = (event) => {
+            console.log('🔊 Result received', event)
+            const transcript = event.results[0][0].transcript
+            console.log('📝 Transcript:', transcript)
+            setInput(transcript)
+            recognition.stop()
+            setIsListening(false)
+        }
+
+        recognition.onerror = (event) => {
+            console.error('❌ Recognition error:', event.error)
+            if (event.error === 'not-allowed') {
+                alert('Microphone access denied. Please allow microphone in browser settings.')
+            } else if (event.error === 'no-speech') {
+                console.log('No speech detected – speak louder or check microphone')
+            }
+            setIsListening(false)
+        }
+
+        recognition.onend = () => {
+            console.log('🔚 Recognition ended')
+            setIsListening(false)
+        }
+
+        recognition.start()
+    }
 
     function handleLoginSuccess(token, emp) {
         localStorage.setItem('hrms_token', token)
@@ -94,15 +164,6 @@ export default function App() {
         setAuthed(false)
     }
 
-    // ── Chat ──────────────────────────────────────────────────────────────────
-    const [messages, setMessages] = useState([])
-    const [input, setInput] = useState('')
-    const [loading, setLoading] = useState(false)
-    const [docCount, setDocCount] = useState(0)
-    const [expandedIdx, setExpandedIdx] = useState(null)
-    const [previewData, setPreviewData] = useState(null)
-    const chatEnd = useRef(null)
-
     useEffect(() => {
         if (!authed) return
         fetch(`${API}/documents`).then(r => r.json()).then(d => setDocCount(d.documents?.length ?? 0)).catch(() => { })
@@ -110,7 +171,6 @@ export default function App() {
 
     useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
-    // ── Render login/register if not authed ───────────────────────────────────
     if (!authed) {
         if (showRegister) {
             return <Register onBackToLogin={() => setShowRegister(false)} />
@@ -118,7 +178,7 @@ export default function App() {
         return <Login onSuccess={handleLoginSuccess} onRegisterClick={() => setShowRegister(true)} />
     }
 
-    // ── Chat helpers ───────────────────────────────────────────────────────────
+    // Chat helpers
     const latestSources = (() => {
         for (let i = messages.length - 1; i >= 0; i--)
             if (messages[i].role === 'assistant' && messages[i].sources?.length) return messages[i].sources
@@ -155,6 +215,9 @@ export default function App() {
             if (res.status === 401) { handleLogout(); return }
             const data = await res.json()
             setMessages(prev => [...prev, { role: 'assistant', content: data.answer, sources: data.sources || [], steps: data.steps || [] }])
+            if (data.answer && 'speechSynthesis' in window) {
+                speakText(data.answer)
+            }
         } catch (err) {
             setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}`, sources: [], steps: [] }])
         }
@@ -190,83 +253,109 @@ export default function App() {
                         <div className="sidebar-subtitle">AI-POWERED HRMS</div>
                     </div>
                 </div>
+
+                {employee && (
+                    <div className="user-profile">
+                        <div className="user-name">{employee.name}</div>
+                        <div className="user-email">{employee.email}</div>
+                    </div>
+                )}
+
                 <div className="sidebar-status">
                     <span className="dot" />
                     Knowledge base · {docCount} docs
                 </div>
-                {employee && (
-                    <div style={{
-                        background: 'rgba(52,211,153,.08)', border: '1px solid rgba(52,211,153,.2)',
-                        borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#34d399', marginBottom: 8,
-                    }}>
-                        👤 {employee.name}
-                        {employee.department && <span style={{ color: '#4a5168', marginLeft: 4 }}>· {employee.department}</span>}
-                    </div>
-                )}
+
                 <div className="sidebar-section">Quick Questions</div>
                 {QUICK_QUESTIONS.map(q => (
                     <button key={q} className="sidebar-btn" onClick={() => sendMessage(q)}>{q}</button>
                 ))}
+
+                <button className="sidebar-btn" onClick={() => setView(view === 'chat' ? 'dashboard' : 'chat')}>
+                    {view === 'chat' ? 'Go to Onboarding' : 'Go to Chat'}
+                </button>
+
                 <button className="sidebar-clear" onClick={() => { setMessages([]); setExpandedIdx(null); setPreviewData(null) }}>
-                    🗑 Clear conversation
+                    Clear conversation
                 </button>
                 <button className="sidebar-clear" onClick={handleLogout} style={{ marginTop: 4, borderColor: 'rgba(248,113,113,.3)', color: '#f87171' }}>
-                    🔓 Logout
+                    Logout
                 </button>
             </aside>
 
-            <main className="chat-panel">
-                <div className="chat-header"><span>💬</span> Chat</div>
-                <div className="chat-messages">
-                    {messages.length === 0 && !loading && (
-                        <div className="empty-state">
-                            <div className="icon">💼</div>
-                            <h3>HR Policy Assistant</h3>
-                            <p>Ask about policies, employees, leave, or onboarding.</p>
-                        </div>
-                    )}
-                    {messages.map((msg, i) => (
-                        msg.role === 'user' ? (
-                            <div key={i} className="msg-user"><div className="msg-user-bubble">{msg.content}</div></div>
-                        ) : (
-                            <div key={i} className="msg-assistant">
-                                <div className="answer-card">
-                                    {msg.content.split('\n').map((line, j) => <p key={j}>{line || '\u00A0'}</p>)}
-                                    {msg.sources?.length > 0 && (
-                                        <div className="sources-list">
-                                            {msg.sources.map((s, j) => (
-                                                <span key={j} className="source-tag">📄 {s.source_file} — {s.section}</span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+            {view === 'chat' ? (
+                <main className="chat-panel">
+                    <div className="chat-header"><span></span> Chat</div>
+                    <div className="chat-messages">
+                        {messages.length === 0 && !loading && (
+                            <div className="empty-state">
+                                <div className="icon">💼</div>
+                                <h3>HR Policy Assistant</h3>
+                                <p>Ask about policies, employees, leave, or onboarding.</p>
                             </div>
-                        )
-                    ))}
-                    {loading && (
-                        <div className="thinking">
-                            <div className="dots"><span /><span /><span /></div>
-                            Searching knowledge base...
-                        </div>
-                    )}
-                    <div ref={chatEnd} />
-                </div>
-                <div className="chat-input-area">
-                    <div className="chat-input-wrap">
-                        <input
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }}
-                            placeholder="Ask about HR policies, employees, leave..."
-                            disabled={loading}
-                        />
-                        <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()}>↑</button>
+                        )}
+                        {messages.map((msg, i) => (
+                            msg.role === 'user' ? (
+                                <div key={i} className="msg-user"><div className="msg-user-bubble">{msg.content}</div></div>
+                            ) : (
+                                <div key={i} className="msg-assistant">
+                                    <div className="answer-card">
+                                        {msg.content.split('\n').map((line, j) => <p key={j}>{line || '\u00A0'}</p>)}
+                                        {msg.sources?.length > 0 && (
+                                            <div className="sources-list">
+                                                {msg.sources.map((s, j) => (
+                                                    <span key={j} className="source-tag">📄 {s.source_file} — {s.section}</span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        ))}
+                        {loading && (
+                            <div className="thinking">
+                                <div className="dots"><span /><span /><span /></div>
+                                Searching knowledge base...
+                            </div>
+                        )}
+                        <div ref={chatEnd} />
                     </div>
-                </div>
-            </main>
+                    <div className="chat-input-area">
+                        <div className="chat-input-wrap">
+                            <input
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }}
+                                placeholder="Ask about HR policies, employees, leave..."
+                                disabled={loading}
+                            />
+                            <button
+                                onClick={startVoiceRecognition}
+                                disabled={loading || isListening}
+                                className={`mic-button ${isListening ? 'listening' : ''}`}
+                                title="Voice input"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="9" y="4" width="6" height="10" rx="3" fill="white" />
+                                    <path d="M6 11C6 14.3137 8.68629 17 12 17C15.3137 17 18 14.3137 18 11" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                                    <path d="M12 17V20" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                                    <rect x="10" y="20" width="4" height="2" rx="1" fill="white" />
+                                </svg>
+                            </button>
+                            <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()}>↑</button>
+                        </div>
+                    </div>
+                </main>
+            ) : (
+                <main className="dashboard-panel">
+                    <Dashboard employee={employee} />
+                </main>
+            )}
 
             <aside className="preview-panel">
-                <div className="preview-header">📎 Source Preview</div>
+                <div className="preview-header">
+                    <span> Source Preview</span>
+                </div>
                 {latestSources.length === 0 ? (
                     <div className="preview-empty">
                         <div className="icon">📋</div>

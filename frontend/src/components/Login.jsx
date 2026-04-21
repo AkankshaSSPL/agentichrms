@@ -1,13 +1,10 @@
 /**
- * Login.jsx - Clean Dark Theme (no icons)
- * Auto-scan face login, horizontal toggles
+ * Login.jsx - Face login with stability & symmetry check (no half-face capture)
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Webcam from 'react-webcam'
 import './Login.css'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const Login = ({ onSuccess, onRegisterClick }) => {
     const [loginMethod, setLoginMethod] = useState('choice')
@@ -16,6 +13,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
     const [scanning, setScanning] = useState(false)
+    const [faceStatus, setFaceStatus] = useState('')
 
     // PIN login data
     const [identifier, setIdentifier] = useState('')
@@ -25,8 +23,9 @@ const Login = ({ onSuccess, onRegisterClick }) => {
     const [showChangePin, setShowChangePin] = useState(false)
 
     const webcamRef = useRef(null)
-    const autoScanTimerRef = useRef(null)
-    const hasScannedRef = useRef(false)
+    const canvasRef = useRef(document.createElement('canvas'))
+    const animationRef = useRef(null)
+    const stabilityTimerRef = useRef(null)
 
     const resetState = () => {
         setLoginMethod('choice')
@@ -39,42 +38,132 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         setNewPin('')
         setConfirmNewPin('')
         setShowChangePin(false)
-        hasScannedRef.current = false
-        if (autoScanTimerRef.current) clearTimeout(autoScanTimerRef.current)
+        if (animationRef.current) cancelAnimationFrame(animationRef.current)
+        if (stabilityTimerRef.current) clearTimeout(stabilityTimerRef.current)
     }
 
     const switchMethod = (method) => {
-        if (autoScanTimerRef.current) clearTimeout(autoScanTimerRef.current)
         setLoginMethod(method)
         setStep('initial')
         setError('')
         setMessage('')
         setScanning(false)
         setShowChangePin(false)
-        hasScannedRef.current = false
         if (method === 'choice') resetState()
     }
 
-    // ============ FACE LOGIN (auto-scan) ============
-    const handleFaceLogin = () => {
-        setLoginMethod('face')
-        setStep('capturing')
-        setError('')
-        hasScannedRef.current = false
+    // Face detection helpers
+    const isFullFaceCentred = () => {
+        if (!webcamRef.current) return false
+        const video = webcamRef.current.video
+        if (!video || video.videoWidth === 0) return false
+
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext('2d')
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        const centreX = canvas.width / 2
+        const centreY = canvas.height / 2
+        const radiusX = canvas.width * 0.19
+        const radiusY = canvas.height * 0.3
+
+        // Skin tone detection
+        let skinPixels = 0
+        let totalPixels = 0
+        for (let y = centreY - radiusY; y <= centreY + radiusY; y += 4) {
+            for (let x = centreX - radiusX; x <= centreX + radiusX; x += 4) {
+                const ellipse = ((x - centreX) ** 2) / (radiusX ** 2) + ((y - centreY) ** 2) / (radiusY ** 2)
+                if (ellipse <= 1) {
+                    const pixel = ctx.getImageData(x, y, 1, 1).data
+                    const r = pixel[0], g = pixel[1], b = pixel[2]
+                    if (r > 70 && g > 40 && b > 20 && r > g && r > b) skinPixels++
+                    totalPixels++
+                }
+            }
+        }
+        const skinRatio = totalPixels === 0 ? 0 : skinPixels / totalPixels
+        if (skinRatio < 0.2) return false
+
+        // Symmetry check
+        let leftBright = 0, rightBright = 0
+        let leftCount = 0, rightCount = 0
+        for (let y = centreY - radiusY; y <= centreY + radiusY; y += 4) {
+            for (let x = centreX - radiusX; x <= centreX + radiusX; x += 4) {
+                const ellipse = ((x - centreX) ** 2) / (radiusX ** 2) + ((y - centreY) ** 2) / (radiusY ** 2)
+                if (ellipse <= 1) {
+                    const pixel = ctx.getImageData(x, y, 1, 1).data
+                    const bright = (pixel[0] + pixel[1] + pixel[2]) / 3
+                    if (x < centreX) { leftBright += bright; leftCount++ }
+                    else { rightBright += bright; rightCount++ }
+                }
+            }
+        }
+        const leftAvg = leftCount ? leftBright / leftCount : 0
+        const rightAvg = rightCount ? rightBright / rightCount : 0
+        const symmetry = Math.abs(leftAvg - rightAvg) / ((leftAvg + rightAvg) / 2 + 0.01)
+        return symmetry < 0.3
     }
 
+    const startFaceMonitoring = useCallback(() => {
+        let lastFacePresent = false
+        let stableStart = null
+
+        const monitor = () => {
+            if (!webcamRef.current || step !== 'capturing') return
+            const facePresent = isFullFaceCentred()
+            const now = Date.now()
+
+            if (facePresent && !lastFacePresent) {
+                stableStart = now
+                setFaceStatus('detecting')
+            } else if (facePresent && lastFacePresent) {
+                if (stableStart && (now - stableStart) >= 1000) {
+                    setFaceStatus('stable')
+                    if (stabilityTimerRef.current === null) {
+                        stabilityTimerRef.current = setTimeout(() => {
+                            if (step === 'capturing') autoCaptureFace()
+                        }, 100)
+                    }
+                } else {
+                    setFaceStatus('detecting')
+                }
+            } else {
+                stableStart = null
+                if (stabilityTimerRef.current) {
+                    clearTimeout(stabilityTimerRef.current)
+                    stabilityTimerRef.current = null
+                }
+                setFaceStatus('unstable')
+            }
+            lastFacePresent = facePresent
+            animationRef.current = requestAnimationFrame(monitor)
+        }
+        monitor()
+    }, [step])
+
+    useEffect(() => {
+        if (step === 'capturing') {
+            startFaceMonitoring()
+        }
+        return () => {
+            if (animationRef.current) cancelAnimationFrame(animationRef.current)
+            if (stabilityTimerRef.current) clearTimeout(stabilityTimerRef.current)
+        }
+    }, [step, startFaceMonitoring])
+
     const autoCaptureFace = useCallback(async () => {
-        if (!webcamRef.current || hasScannedRef.current || loading) return
-        hasScannedRef.current = true
-        setScanning(true)
+        if (!webcamRef.current || loading) return
         setLoading(true)
         setError('')
+        setScanning(true)
 
         try {
             const imageSrc = webcamRef.current.getScreenshot()
             if (!imageSrc) throw new Error('Failed to capture image')
 
-            const response = await fetch(`${API_URL}/api/auth/face-login`, {
+            const response = await fetch('/api/auth/face-login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image_base64: imageSrc })
@@ -83,32 +172,28 @@ const Login = ({ onSuccess, onRegisterClick }) => {
             if (!response.ok) throw new Error(data.detail || 'Face not recognized')
 
             localStorage.setItem('access_token', data.access_token)
-            localStorage.setItem('user', JSON.stringify(data.employee))
-            onSuccess(data)
+            localStorage.setItem('hrms_employee', JSON.stringify(data.employee))
+            localStorage.setItem('hrms_token', data.access_token)
+            onSuccess(data.access_token, data.employee)
         } catch (err) {
             setError(err.message)
-            hasScannedRef.current = false
-            autoScanTimerRef.current = setTimeout(() => {
-                if (loginMethod === 'face' && step === 'capturing') autoCaptureFace()
+            // Retry detection after error
+            setTimeout(() => {
+                if (step === 'capturing') startFaceMonitoring()
             }, 2000)
         } finally {
             setLoading(false)
             setScanning(false)
         }
-    }, [loginMethod, step, onSuccess, loading])
+    }, [onSuccess, loading, step])
 
-    const handleWebcamReady = useCallback(() => {
-        if (hasScannedRef.current || loading) return
-        autoScanTimerRef.current = setTimeout(() => {
-            if (loginMethod === 'face' && step === 'capturing') autoCaptureFace()
-        }, 1500)
-    }, [loginMethod, step, autoCaptureFace, loading])
+    const handleFaceLogin = () => {
+        setLoginMethod('face')
+        setStep('capturing')
+        setError('')
+    }
 
-    useEffect(() => {
-        return () => { if (autoScanTimerRef.current) clearTimeout(autoScanTimerRef.current) }
-    }, [])
-
-    // ============ PIN LOGIN ============
+    // PIN login handlers (unchanged from previous working version)
     const handlePinLogin = () => {
         setLoginMethod('pin')
         setStep('initial')
@@ -128,7 +213,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                 if (newPin.length !== 6) throw new Error('New PIN must be 6 digits')
                 if (newPin !== confirmNewPin) throw new Error('PINs do not match')
 
-                const res = await fetch(`${API_URL}/api/auth/verify-and-change-pin`, {
+                const res = await fetch('/api/auth/verify-and-change-pin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ identifier, current_pin: currentPin, new_pin: newPin })
@@ -136,11 +221,12 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                 const data = await res.json()
                 if (!res.ok) throw new Error(data.detail || 'Change failed')
                 localStorage.setItem('access_token', data.access_token)
-                localStorage.setItem('user', JSON.stringify(data.user))
+                localStorage.setItem('hrms_employee', JSON.stringify(data.employee))
+                localStorage.setItem('hrms_token', data.access_token)
                 setMessage('PIN changed successfully!')
-                setTimeout(() => onSuccess(data), 1000)
+                setTimeout(() => onSuccess(data.access_token, data.employee), 1000)
             } else {
-                const res = await fetch(`${API_URL}/api/auth/login-with-pin`, {
+                const res = await fetch('/api/auth/login-with-pin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ identifier, pin: currentPin })
@@ -148,8 +234,9 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                 const data = await res.json()
                 if (!res.ok) throw new Error(data.detail || 'Invalid credentials')
                 localStorage.setItem('access_token', data.access_token)
-                localStorage.setItem('user', JSON.stringify(data.user))
-                setTimeout(() => onSuccess(data), 500)
+                localStorage.setItem('hrms_employee', JSON.stringify(data.employee))
+                localStorage.setItem('hrms_token', data.access_token)
+                setTimeout(() => onSuccess(data.access_token, data.employee), 500)
             }
         } catch (err) {
             setError(err.message)
@@ -158,7 +245,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         }
     }
 
-    // ============ RENDER ============
+    // Render (same as before, but add face status indicator)
     return (
         <div className="login-wrapper">
             <div className="login-container">
@@ -195,24 +282,35 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                     {loginMethod === 'face' && step === 'capturing' && (
                         <div className="auth-content">
                             <h2>Face Recognition</h2>
-                            <p className="subtitle">{scanning ? 'Scanning your face...' : 'Position your face in the frame'}</p>
+                            <p className="subtitle">
+                                {faceStatus === 'stable' ? 'Face detected – logging in...' :
+                                    faceStatus === 'detecting' ? 'Hold still – detecting face...' :
+                                        'Position your full face in the frame'}
+                            </p>
                             {error && <div className="alert alert-error">{error}</div>}
                             <div className="webcam-container">
-                                <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg"
+                                <Webcam
+                                    ref={webcamRef}
+                                    audio={false}
+                                    screenshotFormat="image/jpeg"
                                     videoConstraints={{ width: 640, height: 480, facingMode: 'user' }}
-                                    className="webcam-video" onUserMedia={handleWebcamReady} />
+                                    className="webcam-video"
+                                />
                                 <div className="face-overlay">
-                                    <div className={`face-frame ${scanning ? 'scanning' : ''}`}>
+                                    <div className={`face-frame ${faceStatus === 'stable' ? 'stable' : ''}`}>
                                         {scanning && <div className="scanning-indicator"><div className="spinner"></div></div>}
                                     </div>
                                 </div>
                             </div>
                             <div className="action-buttons">
-                                <button className="btn-secondary" onClick={() => switchMethod('choice')} disabled={loading}>Back</button>
+                                <button className="btn-secondary" onClick={() => switchMethod('choice')} disabled={loading}>
+                                    Back
+                                </button>
                             </div>
                         </div>
                     )}
 
+                    {/* PIN login screen unchanged */}
                     {loginMethod === 'pin' && step === 'initial' && (
                         <div className="auth-content">
                             <h2>Login with PIN</h2>

@@ -12,6 +12,7 @@
         "axios": "^1.14.0",
         "dompurify": "^3.3.1",
         "face-api.js": "^0.22.2",
+        "framer-motion": "^12.38.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-markdown": "^10.1.0",

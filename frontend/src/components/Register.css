@@ -1,4 +1,4 @@
-/* Register.css – Idle ring, no continuous movement */
+/* Register.css – Clean dark theme, no center elements */
 
 .register-container {
     min-height: 100vh;
@@ -6,48 +6,48 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 16px;
+    font-family: 'Inter', sans-serif;
 }
 
 .register-card {
     width: 100%;
-    max-width: 550px;
+    max-width: 480px;
     background: #111520;
     border: 1px solid #1e2433;
     border-radius: 24px;
-    padding: 32px 36px;
+    padding: 20px 24px;
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
 }
 
 .register-header h2 {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
     color: #e2e8f0;
     text-align: center;
-    margin: 0 0 4px;
+    margin: 0 0 2px;
 }
 
 .subtitle {
-    font-size: 13px;
+    font-size: 12px;
     color: #4a5168;
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
 }
 
 .steps-indicator {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 28px;
-    gap: 8px;
+    margin-bottom: 16px;
+    gap: 6px;
 }
 
 .step {
     flex: 1;
     text-align: center;
-    padding: 8px 0;
+    padding: 5px 0;
     border-radius: 20px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     background: #0d1017;
     color: #4a5168;
@@ -66,10 +66,10 @@
 }
 
 .message {
-    padding: 10px;
+    padding: 6px 10px;
     border-radius: 8px;
-    margin-bottom: 20px;
-    font-size: 12px;
+    margin-bottom: 14px;
+    font-size: 11px;
     text-align: center;
 }
 
@@ -82,48 +82,48 @@
 .register-form {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 12px;
 }
 
 .form-group {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 
 .form-group label {
-    font-size: 12px;
+    font-size: 11px;
     color: #8b95a9;
     letter-spacing: 0.3px;
 }
 
 .form-group input {
-    padding: 12px 14px;
+    padding: 8px 12px;
     background: #0a0e1a;
     border: 1px solid #1e2433;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 13px;
     color: #e2e8f0;
     outline: none;
-    transition: border-color 0.2s;
 }
 
 .form-group input:focus {
     border-color: #4f8ef7;
 }
 
-/* Face capture step */
 .face-capture-step {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
+    position: relative;
+    min-height: 500px;
 }
 
 .webcam-wrapper {
     position: relative;
     width: 100%;
-    max-width: 480px;
+    max-width: 320px;
     border-radius: 16px;
     overflow: hidden;
     border: 1px solid #1e2433;
@@ -162,46 +162,42 @@
     }
 }
 
-/* Idle circular ring – no transition, no rotation animation */
 .progress-ring-large {
     position: relative;
-    width: 200px;
-    height: 200px;
-    margin: 0 auto;
+    width: 180px;
+    height: 180px;
+    margin: 10px auto;
 }
 
-.progress-ring-bg {
-    transition: none;
-}
-
-.progress-ring-fill {
-    transition: none;
-    /* Removes slow movement */
-    stroke: #34d399;
-    stroke-width: 6;
-    stroke-linecap: round;
+.progress-ring-svg {
+    width: 180px;
+    height: 180px;
 }
 
 .progress-text {
     position: absolute;
-    top: 50%;
+    bottom: 5px;
     left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 28px;
-    font-weight: 700;
-    color: #e2e8f0;
+    transform: translateX(-50%);
+    font-size: 14px;
+    font-weight: 600;
+    color: #4f8ef7;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 2px 8px;
+    border-radius: 20px;
+    z-index: 2;
 }
 
-/* Instruction box */
 .instruction-box {
     text-align: center;
+    margin: 4px 0;
 }
 
 .instruction-title {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     color: #e2e8f0;
-    margin: 0;
+    margin: 0 0 6px;
 }
 
 .start-button {
@@ -209,8 +205,8 @@
     color: white;
     border: none;
     border-radius: 40px;
-    padding: 12px 32px;
-    font-size: 18px;
+    padding: 8px 20px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: 0.2s;
@@ -218,23 +214,21 @@
 
 .start-button:hover {
     background: #3b6fd4;
-    transform: scale(1.02);
 }
 
-/* Thumbnails */
 .thumbnails-grid {
     display: flex;
-    gap: 12px;
+    gap: 6px;
     flex-wrap: wrap;
     justify-content: center;
-    margin: 8px 0;
+    margin: 6px 0;
 }
 
 .thumbnail-item {
     position: relative;
-    width: 60px;
-    height: 60px;
-    border-radius: 12px;
+    width: 45px;
+    height: 45px;
+    border-radius: 8px;
     overflow: hidden;
     border: 1px solid #1e2433;
 }
@@ -247,35 +241,34 @@
 
 .thumbnail-delete {
     position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 22px;
-    height: 22px;
+    top: -5px;
+    right: -5px;
+    width: 18px;
+    height: 18px;
     background: #f87171;
     border: none;
     border-radius: 50%;
     color: white;
-    font-size: 12px;
+    font-size: 10px;
     cursor: pointer;
 }
 
-/* Buttons */
 .action-buttons {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
+    margin-top: 4px;
 }
 
 .btn-primary,
 .btn-secondary {
     flex: 1;
-    padding: 12px 0;
+    padding: 8px 0;
     border: none;
-    border-radius: 10px;
-    font-size: 14px;
+    border-radius: 8px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: 0.2s;
 }
 
 .btn-primary {
@@ -294,18 +287,13 @@
     color: #8b95a9;
 }
 
-.btn-secondary:hover:not(:disabled) {
-    background: rgba(30, 36, 51, 0.5);
-}
-
-/* PIN display */
 .pin-display-step {
     text-align: center;
 }
 
 .success-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: 40px;
+    margin-bottom: 10px;
     color: #10b981;
 }
 
@@ -313,21 +301,21 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    margin: 20px 0;
+    gap: 10px;
+    margin: 14px 0;
 }
 
 .pin-box {
     background: #0a0e1a;
     border: 1px solid #4f8ef7;
     border-radius: 12px;
-    padding: 12px 24px;
+    padding: 6px 16px;
     cursor: pointer;
 }
 
 .pin-value {
-    font-size: 28px;
-    letter-spacing: 4px;
+    font-size: 22px;
+    letter-spacing: 3px;
     color: #4f8ef7;
     font-family: monospace;
 }
@@ -335,49 +323,65 @@
 .copy-button {
     background: transparent;
     border: 1px solid #1e2433;
-    border-radius: 10px;
-    padding: 8px 16px;
+    border-radius: 8px;
+    padding: 5px 10px;
     color: #8b95a9;
     cursor: pointer;
+    font-size: 12px;
 }
 
 .pin-note {
-    font-size: 12px;
+    font-size: 11px;
     color: #4a5168;
-    margin: 16px 0;
+    margin: 10px 0;
 }
 
 /* Responsive */
-@media (max-width: 600px) {
+@media (max-width: 480px) {
     .register-card {
-        padding: 24px 20px;
+        padding: 16px;
+        max-width: 95%;
     }
 
     .progress-ring-large {
-        width: 160px;
-        height: 160px;
+        width: 140px;
+        height: 140px;
     }
 
-    .progress-text {
-        font-size: 22px;
+    .progress-ring-svg {
+        width: 140px;
+        height: 140px;
     }
 
-    .instruction-title {
-        font-size: 14px;
+    .webcam-wrapper {
+        max-width: 280px;
     }
+}
 
-    .start-button {
-        padding: 8px 20px;
-        font-size: 16px;
-    }
+.webcam-wrapper.multiple-faces {
+    border-color: #f87171;
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.5);
+    transition: border-color 0.2s;
+}
 
-    .thumbnail-item {
-        width: 50px;
-        height: 50px;
-    }
+.webcam-wrapper {
+    position: relative;
+}
 
-    .pin-value {
-        font-size: 22px;
-        letter-spacing: 2px;
-    }
+.face-bounding-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.face-bounding-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
 }

@@ -1,61 +1,38 @@
-"""Employee lookup tools."""
-import sqlite3
-import sys
-import os
+"""Employee lookup tools – PostgreSQL version."""
+from backend.database.session import SessionLocal
+from backend.database.models import Employee
 from .base import hr_tool
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import DB_PATH
-
-
-def _get_conn():
-    return sqlite3.connect(DB_PATH)
 
 
 @hr_tool
 def lookup_employee(name: str = None, department: str = None, designation: str = None) -> str:
-    """
-    Search for employee information by name, department, or designation.
-    Returns details including email, manager, join date, and status.
-    At least one search parameter must be provided.
-    """
-    conditions, params = [], []
-    if name:
-        conditions.append("LOWER(name) LIKE ?")
-        params.append(f"%{name.lower()}%")
-    if department:
-        conditions.append("LOWER(department) LIKE ?")
-        params.append(f"%{department.lower()}%")
-    if designation:
-        conditions.append("LOWER(designation) LIKE ?")
-        params.append(f"%{designation.lower()}%")
-
-    if not conditions:
-        return "Please provide at least one search parameter (name, department, or designation)."
-
-    # GAP-024 FIX: Use context manager — connection is always closed even if
-    # an exception is raised mid-function.
+    """Search for employee information by name, department, or designation."""
+    db = SessionLocal()
     try:
-        with _get_conn() as conn:
-            rows = conn.cursor().execute(
-                f"SELECT name, email, department, designation, manager, join_date, status "
-                f"FROM employees WHERE {' AND '.join(conditions)}",
-                params,
-            ).fetchall()
+        query = db.query(Employee).filter(Employee.status == 'active')
+        if name:
+            query = query.filter(Employee.name.ilike(f"%{name}%"))
+        if department:
+            query = query.filter(Employee.department.ilike(f"%{department}%"))
+        if designation:
+            query = query.filter(Employee.designation.ilike(f"%{designation}%"))
+        employees = query.all()
     except Exception as e:
         return f"Error looking up employee: {str(e)}"
+    finally:
+        db.close()
 
-    if not rows:
+    if not employees:
         return "No employees found matching your search."
 
-    result = f"Found {len(rows)} employee(s):\n\n"
-    for r in rows:
+    result = f"Found {len(employees)} employee(s):\n\n"
+    for e in employees:
         result += (
-            f"Name: {r[0]}\n"
-            f"  Role: {r[3]}, {r[2]} Department\n"
-            f"  Email: {r[1]}\n"
-            f"  Manager: {r[4] or 'None'}\n"
-            f"  Joined: {r[5]} | Status: {r[6]}\n\n"
+            f"Name: {e.name}\n"
+            f"  Role: {e.designation or 'N/A'}, {e.department or 'N/A'} Department\n"
+            f"  Email: {e.email}\n"
+            f"  Manager: {e.manager_id or 'None'}\n"
+            f"  Joined: {e.join_date} | Status: {e.status}\n\n"
         )
     return result
 
@@ -63,41 +40,42 @@ def lookup_employee(name: str = None, department: str = None, designation: str =
 @hr_tool
 def count_by_department() -> str:
     """Get employee count grouped by department."""
-    # GAP-024 FIX: context manager
+    db = SessionLocal()
     try:
-        with _get_conn() as conn:
-            rows = conn.cursor().execute(
-                "SELECT department, COUNT(*) FROM employees "
-                "WHERE status='active' GROUP BY department ORDER BY COUNT(*) DESC"
-            ).fetchall()
+        from sqlalchemy import func
+        rows = db.query(Employee.department, func.count(Employee.id)).filter(
+            Employee.status == 'active'
+        ).group_by(Employee.department).order_by(func.count(Employee.id).desc()).all()
     except Exception as e:
         return f"Error retrieving department counts: {str(e)}"
+    finally:
+        db.close()
 
     total = sum(r[1] for r in rows)
     result = f"Employee count by department (Total: {total}):\n"
     for dept, cnt in rows:
-        result += f"  {dept}: {cnt}\n"
+        result += f"  {dept or 'N/A'}: {cnt}\n"
     return result
 
 
 @hr_tool
 def get_team(manager_name: str) -> str:
     """Get all direct reports of a specific manager."""
-    # GAP-024 FIX: context manager
+    db = SessionLocal()
     try:
-        with _get_conn() as conn:
-            rows = conn.cursor().execute(
-                "SELECT name, designation, department, email FROM employees "
-                "WHERE LOWER(manager) LIKE ? AND status='active'",
-                (f"%{manager_name.lower()}%",),
-            ).fetchall()
+        manager = db.query(Employee).filter(Employee.name.ilike(f"%{manager_name}%")).first()
+        if not manager:
+            return f"Manager '{manager_name}' not found."
+        team = db.query(Employee).filter(Employee.manager_id == manager.id).all()
     except Exception as e:
         return f"Error retrieving team: {str(e)}"
+    finally:
+        db.close()
 
-    if not rows:
-        return f"No direct reports found for '{manager_name}'."
+    if not team:
+        return f"No direct reports found for '{manager.name}'."
 
-    result = f"Team of {manager_name} ({len(rows)} direct reports):\n"
-    for r in rows:
-        result += f"  {r[0]} - {r[1]}, {r[2]} ({r[3]})\n"
+    result = f"Team of {manager.name} ({len(team)} direct reports):\n"
+    for e in team:
+        result += f"  {e.name} - {e.designation or 'N/A'}, {e.department or 'N/A'} ({e.email})\n"
     return result
