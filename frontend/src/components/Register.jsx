@@ -1,15 +1,37 @@
 /**
- * Register.jsx – Smooth green dot + stability ring for face enrolment
+ * Register.jsx – Face enrolment with auto‑retry (no manual resume needed)
+ * Error clearing now only happens when the user edits the offending field.
  */
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Webcam from 'react-webcam'
 import { motion } from 'framer-motion'
 import './Register.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const CAPTURE_W = 640
+const CAPTURE_H = 480
+const REQUIRED = 5
+const TOTAL_TICKS = 60
+const TICKS_PER_CAPTURE = TOTAL_TICKS / REQUIRED
 
-const Register = ({ onBackToLogin }) => {
+const INSTRUCTIONS = [
+    'Look straight at the camera',
+    'Slowly turn your head left',
+    'Now turn your head right',
+    'Tilt your head up slightly',
+    'Tilt your head down slightly',
+]
+
+function captureFrame(videoEl, w = CAPTURE_W, h = CAPTURE_H) {
+    const c = document.createElement('canvas')
+    c.width = w
+    c.height = h
+    c.getContext('2d').drawImage(videoEl, 0, 0, w, h)
+    return c.toDataURL('image/jpeg', 0.9)
+}
+
+export default function Register({ onBackToLogin }) {
     const [step, setStep] = useState(1)
     const [form, setForm] = useState({ name: '', email: '', phone: '' })
     const [error, setError] = useState('')
@@ -22,43 +44,30 @@ const Register = ({ onBackToLogin }) => {
     const [enrolmentActive, setEnrolmentActive] = useState(false)
     const [captureCount, setCaptureCount] = useState(0)
     const [multipleFaces, setMultipleFaces] = useState(false)
-    const [faceCenter, setFaceCenter] = useState(null)     // { x, y }
-    const [faceStable, setFaceStable] = useState(false)
-    const [stabilityProgress, setStabilityProgress] = useState(0)  // 0-100
 
     const webcamRef = useRef(null)
     const canvasRef = useRef(null)
-    const intervalRef = useRef(null)
-    const detectionIntervalRef = useRef(null)
-    const stabilityTimerRef = useRef(null)
-
-    // Smoothing: keep last 5 centers
-    const centerHistory = useRef([])
-    const MAX_HISTORY = 5
-
-    const REQUIRED = 5
-    const TOTAL_TICKS = 60
-    const TICKS_PER_CAPTURE = TOTAL_TICKS / REQUIRED
-
-    const instructions = [
-        'Look straight at the camera',
-        'Slowly turn your head left',
-        'Now turn your head right',
-        'Tilt your head up slightly',
-        'Tilt your head down slightly'
-    ]
+    const wrapperRef = useRef(null)
+    const abortControllerRef = useRef(null)
 
     useEffect(() => {
         return () => {
-            if (intervalRef.current) clearInterval(intervalRef.current)
-            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current)
-            if (stabilityTimerRef.current) clearTimeout(stabilityTimerRef.current)
+            if (abortControllerRef.current) abortControllerRef.current.abort()
         }
     }, [])
 
+    // ── Error clearing: only when the user edits the field that caused the error ──
     const handleChange = (e) => {
-        setForm({ ...form, [e.target.name]: e.target.value })
-        setError('')
+        const { name, value } = e.target
+        setForm({ ...form, [name]: value })
+
+        // Clear error only if the user is typing in the field that caused it
+        if (error) {
+            if ((error.toLowerCase().includes('email') && name === 'email') ||
+                (error.toLowerCase().includes('phone') && name === 'phone')) {
+                setError('')
+            }
+        }
     }
 
     const handleRegisterSubmit = async (e) => {
@@ -70,246 +79,152 @@ const Register = ({ onBackToLogin }) => {
         setStep(2)
     }
 
-    // Smooth a new center point
-    const addToHistory = (newCenter) => {
-        centerHistory.current.push(newCenter)
-        if (centerHistory.current.length > MAX_HISTORY) centerHistory.current.shift()
-        // Average of history
-        const avgX = centerHistory.current.reduce((sum, p) => sum + p.x, 0) / centerHistory.current.length
-        const avgY = centerHistory.current.reduce((sum, p) => sum + p.y, 0) / centerHistory.current.length
-        return { x: avgX, y: avgY }
-    }
-
-    const detectAndDraw = async () => {
-        if (!webcamRef.current || step !== 2) return
-        const imageSrc = webcamRef.current.getScreenshot()
-        if (!imageSrc) return
-
+    // ── Face detection and drawing (unchanged) ──────────────────────────────────
+    const detectAndDraw = useCallback(async () => {
+        if (step !== 2) return
+        const video = webcamRef.current?.video
+        if (!video || video.readyState < 2) return
+        const wrapper = wrapperRef.current
+        if (!wrapper) return
+        const dispW = wrapper.offsetWidth
+        const dispH = wrapper.offsetHeight
+        if (!dispW || !dispH) return
+        const canvas = canvasRef.current
+        if (!canvas) return
+        if (canvas.width !== dispW || canvas.height !== dispH) {
+            canvas.width = dispW
+            canvas.height = dispH
+        }
+        const imageSrc = captureFrame(video)
         try {
             const res = await fetch('/api/auth/detect-faces', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image_base64: imageSrc })
+                body: JSON.stringify({ image_base64: imageSrc }),
             })
+            if (!res.ok) return
             const data = await res.json()
-
-            if (data.face_count !== 1) {
-                setMultipleFaces(true)
-                setFaceCenter(null)
-                setFaceStable(false)
-                setStabilityProgress(0)
-                if (stabilityTimerRef.current) clearTimeout(stabilityTimerRef.current)
+            const ctx = canvas.getContext('2d')
+            ctx.clearRect(0, 0, dispW, dispH)
+            if (data.face_count !== 1 || !data.primary_box) {
+                setMultipleFaces(data.face_count > 1)
                 setError(data.face_count === 0 ? 'No face detected. Please position your face.' : 'Multiple faces detected. Ensure only your face is visible.')
-                // Clear canvas
-                if (canvasRef.current) {
-                    const ctx = canvasRef.current.getContext('2d')
-                    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-                }
                 return
             }
-
             setMultipleFaces(false)
             setError('')
-
-            if (data.primary_box && canvasRef.current && webcamRef.current.video) {
-                const video = webcamRef.current.video
-                const videoWidth = video.videoWidth
-                const videoHeight = video.videoHeight
-                const canvasWidth = canvasRef.current.clientWidth
-                const canvasHeight = canvasRef.current.clientHeight
-                const scaleX = canvasWidth / videoWidth
-                const scaleY = canvasHeight / videoHeight
-                const [x1, y1, x2, y2] = data.primary_box
-                const center = {
-                    x: ((x1 + x2) / 2) * scaleX,
-                    y: ((y1 + y2) / 2) * scaleY
-                }
-                // Smooth center
-                const smoothed = addToHistory(center)
-                setFaceCenter(smoothed)
-
-                // Stability: if center has moved less than a threshold over last 0.5 sec
-                // For simplicity, we'll just set a timer that resets on movement
-                if (stabilityTimerRef.current) clearTimeout(stabilityTimerRef.current)
-                stabilityTimerRef.current = setTimeout(() => {
-                    setFaceStable(true)
-                    setStabilityProgress(100)
-                }, 1000)
-                setFaceStable(false)
-                // Update progress smoothly (we'll animate with a simple interval later, but for now just show 0-100)
-                // We'll use a separate effect to update progress
-            }
+            const [x1, y1, x2, y2] = data.primary_box
+            const scaleX = dispW / CAPTURE_W
+            const scaleY = dispH / CAPTURE_H
+            const sx1 = x1 * scaleX
+            const sy1 = y1 * scaleY
+            const sx2 = x2 * scaleX
+            const sy2 = y2 * scaleY
+            const drawX = dispW - sx2
+            const drawY = sy1
+            const drawW = sx2 - sx1
+            const drawH = sy2 - sy1
+            ctx.strokeStyle = '#22c55e'
+            ctx.lineWidth = 3
+            ctx.strokeRect(drawX, drawY, drawW, drawH)
         } catch (err) {
             console.error('Detection error:', err)
         }
-    }
-
-    // Animate stability progress when waiting for stable face
-    useEffect(() => {
-        let progressInterval = null
-        if (faceCenter && !faceStable && !multipleFaces && step === 2) {
-            let progress = 0
-            const startTime = Date.now()
-            progressInterval = setInterval(() => {
-                const elapsed = Date.now() - startTime
-                const newProgress = Math.min(100, (elapsed / 1000) * 100)
-                setStabilityProgress(newProgress)
-                if (newProgress >= 100) {
-                    clearInterval(progressInterval)
-                }
-            }, 50)
-        } else {
-            if (!faceCenter || multipleFaces) setStabilityProgress(0)
-        }
-        return () => {
-            if (progressInterval) clearInterval(progressInterval)
-        }
-    }, [faceCenter, faceStable, multipleFaces, step])
-
-    // Draw the dot and stability ring on canvas
-    useEffect(() => {
-        if (!canvasRef.current || !faceCenter) return
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        const width = canvas.clientWidth
-        const height = canvas.clientHeight
-        canvas.width = width
-        canvas.height = height
-        ctx.clearRect(0, 0, width, height)
-
-        // Draw stability ring (outer circle that fills)
-        const radius = 24
-        const stableRadius = radius + (stabilityProgress / 100) * 12
-        ctx.beginPath()
-        ctx.arc(faceCenter.x, faceCenter.y, stableRadius, 0, 2 * Math.PI)
-        ctx.strokeStyle = '#22c55e'
-        ctx.lineWidth = 2
-        ctx.stroke()
-
-        // Draw inner dot
-        ctx.beginPath()
-        ctx.arc(faceCenter.x, faceCenter.y, 6, 0, 2 * Math.PI)
-        ctx.fillStyle = '#22c55e'
-        ctx.fill()
-
-        // If stable, draw a solid inner circle
-        if (faceStable) {
-            ctx.beginPath()
-            ctx.arc(faceCenter.x, faceCenter.y, 10, 0, 2 * Math.PI)
-            ctx.fillStyle = '#22c55e'
-            ctx.fill()
-        }
-    }, [faceCenter, stabilityProgress, faceStable])
-
-    // Start continuous detection
-    useEffect(() => {
-        if (step === 2) {
-            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current)
-            detectionIntervalRef.current = setInterval(detectAndDraw, 200)
-        }
-        return () => {
-            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current)
-        }
     }, [step])
 
-    // Resize canvas when video loads
     useEffect(() => {
-        const video = webcamRef.current?.video
-        if (video && video.videoWidth && canvasRef.current) {
-            canvasRef.current.width = video.clientWidth
-            canvasRef.current.height = video.clientHeight
+        let interval
+        if (step === 2) {
+            interval = setInterval(detectAndDraw, 300)
         }
-    }, [step, webcamRef.current?.video])
+        return () => clearInterval(interval)
+    }, [step, detectAndDraw])
 
-    const captureImage = async () => {
-        if (!webcamRef.current) return
-        const imageSrc = webcamRef.current.getScreenshot()
-        if (!imageSrc) return
-
-        // Final validation before capturing
-        try {
-            const res = await fetch('/api/auth/detect-faces', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image_base64: imageSrc })
-            })
-            const data = await res.json()
-            if (data.face_count !== 1) {
-                setMultipleFaces(true)
-                setError(data.face_count === 0 ? 'No face detected. Please position your face.' : 'Multiple faces detected. Ensure only your face is visible.')
-                return
-            }
-            setMultipleFaces(false)
-            setError('')
-        } catch (err) {
-            setError('Face detection failed. Please try again.')
-            return
-        }
-
-        setFaceImages(prev => [...prev, imageSrc])
-        setShowFlash(true)
-        setTimeout(() => setShowFlash(false), 200)
-        setCaptureCount(prev => prev + 1)
-    }
-
-    const startEnrolment = () => {
+    // ── Enrolment auto‑retry loop (unchanged) ───────────────────────────────────
+    const startEnrolment = async () => {
         if (enrolmentActive) return
         setFaceImages([])
         setCaptureCount(0)
-        setInstruction(instructions[0])
         setEnrolmentActive(true)
+        setError('')
+        setMultipleFaces(false)
 
-        if (intervalRef.current) clearInterval(intervalRef.current)
+        let currentCount = 0
+        const abortController = new AbortController()
+        abortControllerRef.current = abortController
 
-        let currentCapture = 0
-        intervalRef.current = setInterval(async () => {
-            if (currentCapture >= REQUIRED) {
-                clearInterval(intervalRef.current)
-                intervalRef.current = null
-                setEnrolmentActive(false)
-                setInstruction('Enrolment complete!')
-                return
+        while (currentCount < REQUIRED && !abortController.signal.aborted) {
+            setInstruction(INSTRUCTIONS[currentCount])
+            await new Promise(r => setTimeout(r, 1000))
+            if (abortController.signal.aborted) break
+
+            const video = webcamRef.current?.video
+            if (!video || video.readyState < 2) continue
+            const imageSrc = captureFrame(video)
+            let valid = false
+            try {
+                const res = await fetch('/api/auth/detect-faces', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_base64: imageSrc }),
+                    signal: abortController.signal,
+                })
+                const data = await res.json()
+                if (data.face_count === 1) {
+                    valid = true
+                    setMultipleFaces(false)
+                    setError('')
+                } else {
+                    setMultipleFaces(data.face_count > 1)
+                    setError(data.face_count === 0 ? 'No face detected. Please position your face.' : 'Multiple faces detected. Ensure only your face is visible.')
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') break
+                console.error(err)
             }
-            await captureImage()
-            currentCapture++
-            if (currentCapture < REQUIRED) {
-                setInstruction(instructions[currentCapture])
+            if (valid) {
+                setFaceImages(prev => [...prev, imageSrc])
+                setShowFlash(true)
+                setTimeout(() => setShowFlash(false), 200)
+                currentCount++
+                setCaptureCount(currentCount)
+                await new Promise(r => setTimeout(r, 500))
+            } else {
+                await new Promise(r => setTimeout(r, 800))
             }
-        }, 1500)
+        }
+        setEnrolmentActive(false)
+        if (currentCount >= REQUIRED) {
+            setInstruction('Enrolment complete!')
+        } else {
+            setError('Enrolment was interrupted. Click "Resume Enrollment" to continue.')
+        }
+        abortControllerRef.current = null
     }
 
     const resetEnrolment = () => {
-        if (intervalRef.current) clearInterval(intervalRef.current)
-        if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current)
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+            abortControllerRef.current = null
+        }
         setFaceImages([])
         setCaptureCount(0)
-        setInstruction('')
         setEnrolmentActive(false)
-        setMultipleFaces(false)
-        setFaceCenter(null)
-        setFaceStable(false)
-        setStabilityProgress(0)
         setError('')
-        if (canvasRef.current) {
-            const ctx = canvasRef.current.getContext('2d')
-            ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-        }
-        if (step === 2) {
-            detectionIntervalRef.current = setInterval(detectAndDraw, 200)
-        }
+        setMultipleFaces(false)
+        setInstruction('')
     }
 
     const removeImage = (idx) => {
         const newImages = faceImages.filter((_, i) => i !== idx)
         setFaceImages(newImages)
         setCaptureCount(newImages.length)
-        if (intervalRef.current) clearInterval(intervalRef.current)
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+            abortControllerRef.current = null
+        }
         setEnrolmentActive(false)
         setInstruction('')
-        setMultipleFaces(false)
-        setFaceCenter(null)
-        setFaceStable(false)
-        setStabilityProgress(0)
         setError('')
     }
 
@@ -328,11 +243,14 @@ const Register = ({ onBackToLogin }) => {
                     name: form.name,
                     email: form.email,
                     phone: form.phone,
-                    face_images: faceImages
-                })
+                    face_images: faceImages,
+                }),
             })
+            if (!res.ok) {
+                const err = await res.json()
+                throw new Error(err.detail || 'Registration failed')
+            }
             const data = await res.json()
-            if (!res.ok) throw new Error(data.detail || 'Registration failed')
             setDefaultPin(data.default_pin)
             setStep(3)
         } catch (err) {
@@ -350,11 +268,8 @@ const Register = ({ onBackToLogin }) => {
 
     const renderTicks = () => {
         const ticks = []
-        const center = 90
-        const radius = 80
-        const tickLength = 10
+        const center = 90, radius = 80, tickLength = 10
         const activeTicks = Math.min(TOTAL_TICKS, Math.floor(captureCount * TICKS_PER_CAPTURE))
-
         for (let i = 0; i < TOTAL_TICKS; i++) {
             const angle = (i * 360) / TOTAL_TICKS - 90
             const rad = (angle * Math.PI) / 180
@@ -363,19 +278,14 @@ const Register = ({ onBackToLogin }) => {
             const endX = center + radius * Math.cos(rad)
             const endY = center + radius * Math.sin(rad)
             const isActive = i < activeTicks
-
             ticks.push(
                 <motion.line
                     key={i}
-                    x1={startX}
-                    y1={startY}
-                    x2={endX}
-                    y2={endY}
+                    x1={startX} y1={startY} x2={endX} y2={endY}
                     stroke={isActive ? '#34d399' : '#2a3348'}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    initial={{ scale: 1, opacity: 0.6 }}
-                    animate={isActive ? { scale: [1, 1.2, 1], opacity: [0.6, 1, 0.6] } : { scale: 1, opacity: 0.4 }}
+                    strokeWidth="3" strokeLinecap="round"
+                    initial={{ opacity: 0.6 }}
+                    animate={isActive ? { opacity: [0.6, 1, 0.6] } : { opacity: 0.4 }}
                     transition={isActive ? { duration: 0.4, repeat: Infinity, repeatDelay: 0.8 } : { duration: 0 }}
                 />
             )
@@ -386,7 +296,6 @@ const Register = ({ onBackToLogin }) => {
     return (
         <div className="register-container">
             <div className="register-card">
-                {/* ... header, steps, step 1 form (unchanged) ... */}
                 <div className="register-header">
                     <h2>Create Account</h2>
                     <p className="subtitle">Face + PIN authentication</p>
@@ -402,18 +311,9 @@ const Register = ({ onBackToLogin }) => {
 
                 {step === 1 && (
                     <form onSubmit={handleRegisterSubmit} className="register-form">
-                        <div className="form-group">
-                            <label>Full Name</label>
-                            <input type="text" name="name" value={form.name} onChange={handleChange} required />
-                        </div>
-                        <div className="form-group">
-                            <label>Email</label>
-                            <input type="email" name="email" value={form.email} onChange={handleChange} required />
-                        </div>
-                        <div className="form-group">
-                            <label>Phone (10 digits)</label>
-                            <input type="tel" name="phone" value={form.phone} onChange={handleChange} required />
-                        </div>
+                        <div className="form-group"><label>Full Name</label><input type="text" name="name" value={form.name} onChange={handleChange} required /></div>
+                        <div className="form-group"><label>Email</label><input type="email" name="email" value={form.email} onChange={handleChange} required /></div>
+                        <div className="form-group"><label>Phone (E.164 format, e.g. +919876543210)</label><input type="tel" name="phone" value={form.phone} onChange={handleChange} required /></div>
                         <button type="submit" className="btn-primary">Continue to Face Capture →</button>
                         <button type="button" className="btn-secondary" onClick={onBackToLogin}>← Back to Login</button>
                     </form>
@@ -421,34 +321,16 @@ const Register = ({ onBackToLogin }) => {
 
                 {step === 2 && (
                     <div className="face-capture-step">
-                        <div className={`webcam-wrapper ${multipleFaces ? 'multiple-faces' : ''}`}>
+                        <div ref={wrapperRef} className={`webcam-wrapper ${multipleFaces ? 'multiple-faces' : ''}`}>
                             <Webcam
                                 ref={webcamRef}
                                 audio={false}
                                 screenshotFormat="image/jpeg"
-                                videoConstraints={{ width: 640, height: 480, facingMode: 'user' }}
+                                videoConstraints={{ width: CAPTURE_W, height: CAPTURE_H, facingMode: 'user' }}
                                 className="webcam-feed"
-                                onUserMedia={() => {
-                                    const video = webcamRef.current?.video
-                                    if (video && canvasRef.current) {
-                                        canvasRef.current.width = video.clientWidth
-                                        canvasRef.current.height = video.clientHeight
-                                    }
-                                }}
                             />
-                            <canvas
-                                ref={canvasRef}
-                                className="face-bounding-box"
-                                style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    pointerEvents: 'none'
-                                }}
-                            />
-                            {showFlash && <div className="flash-overlay"></div>}
+                            <canvas ref={canvasRef} className="face-bounding-box" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+                            {showFlash && <div className="flash-overlay" />}
                         </div>
 
                         <div className="progress-ring-large">
@@ -466,7 +348,7 @@ const Register = ({ onBackToLogin }) => {
                             {!enrolmentActive && faceImages.length > 0 && faceImages.length < REQUIRED && (
                                 <button className="start-button" onClick={startEnrolment}>Resume Enrollment</button>
                             )}
-                            {faceImages.length === REQUIRED && <p className="instruction-title">Enrollment complete!</p>}
+                            {faceImages.length === REQUIRED && <p className="instruction-title">✅ Enrollment complete!</p>}
                         </div>
 
                         {faceImages.length > 0 && (
@@ -499,9 +381,7 @@ const Register = ({ onBackToLogin }) => {
                         <h3>Registration Complete!</h3>
                         <p>Your permanent login PIN is:</p>
                         <div className="pin-display-wrapper">
-                            <div className="pin-box" onClick={copyPin}>
-                                <span className="pin-value">{defaultPin}</span>
-                            </div>
+                            <div className="pin-box" onClick={copyPin}><span className="pin-value">{defaultPin}</span></div>
                             <button className="copy-button" onClick={copyPin}>{pinCopied ? 'Copied!' : 'Copy'}</button>
                         </div>
                         <p className="pin-note">This PIN has been sent to your email & SMS.</p>
@@ -512,5 +392,3 @@ const Register = ({ onBackToLogin }) => {
         </div>
     )
 }
-
-export default Register

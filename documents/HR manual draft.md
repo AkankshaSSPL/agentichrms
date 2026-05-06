@@ -696,7 +696,7 @@ This policy shall be governed by and construed in accordance with applicable lab
 
 The HR Department shall administer this policy. The Company reserves the right to amend, modify, or withdraw this policy to ensure continued legal and business compliance.
 
-**14) Employment Benefits Policy**
+**14 Employment Benefits Policy**
 
 **Policy Objective**
 

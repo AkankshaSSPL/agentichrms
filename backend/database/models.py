@@ -22,7 +22,6 @@ class Employee(BaseModel):
     """Employee master data - source of truth for HR data"""
     __tablename__ = "employees"
 
-    # ── Core fields ────────────────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
@@ -33,45 +32,38 @@ class Employee(BaseModel):
     join_date = Column(DateTime)
     status = Column(String, default='active')
 
-    # ── Registration / profile fields ──────────────────────────────────────────
     employee_code = Column(String, unique=True, nullable=True)
     date_of_birth = Column(DateTime, nullable=True)
     onboarding_completed = Column(Boolean, default=False)
     profile_completed = Column(Boolean, default=False)
 
-    # ── Email verification ─────────────────────────────────────────────────────
     email_verified = Column(Boolean, default=False)
     email_verified_at = Column(DateTime, nullable=True)
 
-    # ── Phone verification ─────────────────────────────────────────────────────
     phone_verified = Column(Boolean, default=False)
     phone_verified_at = Column(DateTime, nullable=True)
     phone_country_code = Column(String(5), default='+91')
 
-    # ── Face recognition ───────────────────────────────────────────────────────
     username = Column(String(100), unique=True, nullable=True, index=True)
     face_embedding = Column(LargeBinary, nullable=True)
     face_registered = Column(Boolean, default=False)
     face_enrollment_date = Column(DateTime, nullable=True)
 
-    # ── Permanent PIN (no expiry, hashed) ─────────────────────────────────────
-    permanent_pin_hash = Column(String(255), nullable=True)   # bcrypt hash
-    pin_type = Column(String(20), default='default')          # 'default' or 'custom'
-    pin_set_at = Column(DateTime, nullable=True)              # when first set/updated
-    face_samples_count = Column(Integer, default=0)           # number of face images stored
+    permanent_pin_hash = Column(String(255), nullable=True)
+    pin_type = Column(String(20), default='default')
+    pin_set_at = Column(DateTime, nullable=True)
+    face_samples_count = Column(Integer, default=0)
 
-    # ── Relationships ──────────────────────────────────────────────────────────
     manager = relationship("Employee", remote_side=[id], backref="subordinates")
     user = relationship("User", back_populates="employee", uselist=False)
     leave_balances = relationship("LeaveBalance", back_populates="employee")
     leaves = relationship("Leave", back_populates="employee")
     face_login_attempts = relationship("FaceLoginAttempt", back_populates="employee")
     pin_verifications = relationship("PINVerification", back_populates="employee")
-    onboarding_tasks = relationship("OnboardingTask", back_populates="employee")  # ✅ fixed
+    onboarding_tasks = relationship("OnboardingTask", back_populates="employee")
 
 
 class User(BaseModel):
-    """Authentication & App Access"""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -80,18 +72,14 @@ class User(BaseModel):
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
 
-    # Verification & approval
     is_verified = Column(Boolean, default=False)
     is_approved = Column(Boolean, default=True)
 
-    # Face login
     face_registered = Column(Boolean, default=False)
     face_login_enabled = Column(Boolean, default=False)
 
-    # 2FA
     two_factor_enabled = Column(Boolean, default=False)
 
-    # Login tracking
     last_login = Column(DateTime, nullable=True)
     last_login_ip = Column(String(45), nullable=True)
     failed_login_attempts = Column(Integer, default=0)
@@ -99,26 +87,23 @@ class User(BaseModel):
     locked_until = Column(DateTime, nullable=True)
     preferred_login_method = Column(String(20), default='password')
 
-    # Relationships
     employee = relationship("Employee", back_populates="user")
-    chat_sessions = relationship("ChatSession", back_populates="user")
+    chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
 
 
 class RegistrationToken(BaseModel):
-    """Email verification / password-reset tokens"""
     __tablename__ = "registration_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     token = Column(String(255), unique=True, nullable=False, index=True)
-    token_type = Column(String(50), nullable=False)  # 'email_verification', 'password_reset'
+    token_type = Column(String(50), nullable=False)
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, default=False)
     used_at = Column(DateTime, nullable=True)
 
 
 class LeaveBalance(BaseModel):
-    """Leave balances for employees"""
     __tablename__ = "leave_balances"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -130,7 +115,6 @@ class LeaveBalance(BaseModel):
 
 
 class Leave(BaseModel):
-    """Leave applications"""
     __tablename__ = "leaves"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -138,7 +122,7 @@ class Leave(BaseModel):
     leave_type = Column(String, nullable=False)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
-    status = Column(String, default='Pending')  # Pending, Approved, Rejected
+    status = Column(String, default='Pending')
     reason = Column(Text)
     rejection_reason = Column(Text, nullable=True)
 
@@ -146,7 +130,6 @@ class Leave(BaseModel):
 
 
 class OnboardingTask(BaseModel):
-    """Onboarding tasks assigned to an employee"""
     __tablename__ = "onboarding_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -157,12 +140,10 @@ class OnboardingTask(BaseModel):
     due_date = Column(Date, nullable=True)
     completed_at = Column(DateTime, nullable=True)
 
-    # Relationship
     employee = relationship("Employee", back_populates="onboarding_tasks")
 
 
 class Meeting(BaseModel):
-    """Meetings for conflict checking"""
     __tablename__ = "meetings"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -171,52 +152,55 @@ class Meeting(BaseModel):
     start_time = Column(DateTime)
     end_time = Column(DateTime)
     organizer_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
-    attendees = Column(Text)  # JSON array of employee_ids
+    attendees = Column(Text)
 
 
 class ChatSession(BaseModel):
-    """Groups LangGraph state by conversation"""
     __tablename__ = "chat_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     title = Column(String)
+    is_pinned = Column(Boolean, default=False)   # ✅ Added for pinning
 
     user = relationship("User", back_populates="chat_sessions")
-    messages = relationship("ChatMessage", back_populates="session")
+    messages = relationship(
+        "ChatMessage",
+        back_populates="session",
+        cascade="all, delete-orphan",   # ✅ When session is deleted, delete its messages
+        passive_deletes=True            # ✅ Rely on database cascade
+    )
 
 
 class ChatMessage(BaseModel):
-    """Persistent state for LangGraph Agent"""
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey('chat_sessions.id'), nullable=False)
-    role = Column(String, nullable=False)  # 'user', 'assistant', 'tool'
+    session_id = Column(
+        Integer,
+        ForeignKey('chat_sessions.id', ondelete="CASCADE"),  # ✅ Database-level cascade
+        nullable=False
+    )
+    role = Column(String, nullable=False)
     content = Column(Text)
-    tool_calls = Column(Text)  # JSONB in PostgreSQL
+    tool_calls = Column(Text)
 
     session = relationship("ChatSession", back_populates="messages")
 
 
 class AuditLog(BaseModel):
-    """Universal audit logging"""
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     table_name = Column(String, nullable=False)
     record_id = Column(String, nullable=False)
-    action = Column(String, nullable=False)  # INSERT, UPDATE, SOFT_DELETE, HARD_DELETE
+    action = Column(String, nullable=False)
     old_data = Column(Text)
     new_data = Column(Text)
     changed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
-    # No updated_at — immutable
 
-
-# ── Face Recognition Tables ────────────────────────────────────────────────────
 
 class FaceLoginAttempt(BaseModel):
-    """Track all face login attempts for security and analytics"""
     __tablename__ = "face_login_attempts"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -232,7 +216,6 @@ class FaceLoginAttempt(BaseModel):
 
 
 class PINVerification(BaseModel):
-    """Temporary PIN storage for SMS verification"""
     __tablename__ = "pin_verifications"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -243,7 +226,7 @@ class PINVerification(BaseModel):
     verified = Column(Boolean, default=False)
     attempts = Column(Integer, default=0)
     max_attempts = Column(Integer, default=3)
-    pin_type = Column(String(20), default='login')  # 'login', 'registration', 'phone_verification'
+    pin_type = Column(String(20), default='login')
 
     employee = relationship("Employee", back_populates="pin_verifications")
 

@@ -26,7 +26,7 @@ tools = get_all_tools()
 # only appears when the log level is explicitly set to DEBUG.
 logger.debug("Loaded %d tools: %s", len(tools), [t.name for t in tools])
 
-llm = ChatOpenAI(model=AGENT_MODEL, api_key=OPENAI_API_KEY, temperature=0, streaming=True)
+llm = ChatOpenAI(model=AGENT_MODEL, api_key=OPENAI_API_KEY, temperature=0, streaming=False)
 llm_with_tools = llm.bind_tools(tools, tool_choice="auto")
 
 

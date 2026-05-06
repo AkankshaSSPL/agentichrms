@@ -1,12 +1,12 @@
-# 🏢 AgenticHRMS — AI-Powered HR Assistant
+#  AgenticHRMS — AI-Powered HR Assistant
 
 > A fully agentic HR Management System powered by LangGraph, GPT-4o, and ChromaDB. Ask questions about company policies, look up employees, manage leave, track onboarding, send emails — all through natural language.
 
 ---
 
-## ✨ Features
+##  Features
 
-### 🤖 17 AI-Powered Tools
+###  17 AI-Powered Tools
 
 | Category | Tools | What It Does |
 |----------|-------|-------------|
@@ -17,19 +17,19 @@
 | **Email** | `send_email`, `notify_employee`, `notify_hr` | SMTP email notifications to employees and HR |
 | **Analytics** | `get_leave_summary`, `get_department_summary` | Org-wide leave usage and department stats |
 
-### 📄 Smart Document Processing
+###  Smart Document Processing
 - **Sub-chunking**: Documents split into ~500-character chunks with 80-char overlap for precise retrieval
 - **Multi-format**: PDF, DOCX, Markdown, TXT, Excel, CSV
 - **Metadata preservation**: Source file, section headers, page numbers, line ranges
 - **ChromaDB vector store** with sentence-transformers embeddings
 
-### 🎨 Dual Frontend
+###  Dual Frontend
 - **Streamlit** (legacy): `app.py` — works out of the box
 - **React + Vite** (new): `frontend/` — premium dark theme, 3-column layout, source code viewer with line highlighting
 
 ---
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -56,7 +56,7 @@
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 
 ```
 agentichrms/
@@ -98,7 +98,7 @@ agentichrms/
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 - Python 3.11+
@@ -158,7 +158,7 @@ Opens at `http://localhost:3000`
 
 ---
 
-## 💬 Demo Queries
+##  Demo Queries
 
 | Query | What Happens |
 |-------|-------------|
@@ -173,7 +173,7 @@ Opens at `http://localhost:3000`
 
 ---
 
-## 🔧 Technical Details
+##  Technical Details
 
 ### RAG Pipeline
 - **Embedding Model**: `all-MiniLM-L6-v2` (local, via sentence-transformers)
@@ -197,7 +197,7 @@ Opens at `http://localhost:3000`
 
 ---
 
-## 📦 Dependencies
+##  Dependencies
 
 | Package | Purpose |
 |---------|---------|
@@ -213,10 +213,10 @@ Opens at `http://localhost:3000`
 
 ---
 
-## 📄 License
+##  License
 
 MIT
 
 ---
 
-Built with ❤️ using LangGraph, GPT-4o, ChromaDB, React, and FastAPI.
+Built with using LangGraph, GPT-4o, ChromaDB, React, and FastAPI.

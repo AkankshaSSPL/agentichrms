@@ -15,7 +15,9 @@ from backend.api.face_auth import router as face_auth_router
 from backend.api.pin_auth import router as pin_auth_router
 from backend.api.registration import router as registration_router 
 from backend.api.onboarding import router as onboarding_router
-from backend.api.chat import router as chat_router  # ← ADDED
+from backend.api.chat import router as chat_router
+from backend.api.docs import router as docs_router   # ✅ ADDED
+from backend.api.meetings import router as meetings_router
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -66,14 +68,15 @@ app.add_middleware(
 )
 
 # ── IMPORTANT: Use prefix="/api" to match frontend calls ──────────────────────
-# All auth routes will be: /api/auth/...
 API_PREFIX = "/api"
 
 app.include_router(face_auth_router, prefix=API_PREFIX)
 app.include_router(pin_auth_router,  prefix=API_PREFIX)
 app.include_router(registration_router, prefix=API_PREFIX)  
-app.include_router(onboarding_router, prefix=API_PREFIX) # ← ADDED
+app.include_router(onboarding_router, prefix=API_PREFIX)
 app.include_router(chat_router, prefix=API_PREFIX)
+app.include_router(docs_router, prefix=API_PREFIX)   # ✅ ADDED
+app.include_router(meetings_router, prefix=API_PREFIX)
 
 
 @app.get("/")
