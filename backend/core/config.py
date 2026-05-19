@@ -5,8 +5,10 @@ Variable names match exactly what is in your .env file.
 """
 
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List, Optional
 from pathlib import Path
+import json
 
 
 class Settings(BaseSettings):
@@ -15,10 +17,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://hrms_user:agentichrms@localhost/agentic_hrms"
 
     # ── Security & JWT ─────────────────────────────────────────────────────────
-    # .env uses JWT_SECRET — we expose it as SECRET_KEY for internal use
     JWT_SECRET: str = "change-this-in-production"
     ALGORITHM: str = "HS256"
-    JWT_EXPIRY_HOURS: int = 24  # kept in hours to match .env; converted below
+    JWT_EXPIRY_HOURS: int = 24
 
     @property
     def SECRET_KEY(self) -> str:
@@ -34,26 +35,46 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
 
     # ── CORS ───────────────────────────────────────────────────────────────────
+    # Handles all .env formats:
+    #   ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:8000"]   ← JSON array
+    #   ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000         ← comma-separated
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8080",
     ]
 
-    # ── Email (OTP delivery via SMTP — credentials from .env) ─────────────────
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    pass
+            # Comma-separated fallback
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
+
+    # ── Email ──────────────────────────────────────────────────────────────────
     EMAIL_USER: Optional[str] = None
     EMAIL_PASS: Optional[str] = None
     EMAIL_HOST: str = "smtp.gmail.com"
     EMAIL_PORT: int = 587
     SMTP_TIMEOUT: int = 10
+    HR_EMAIL: Optional[str] = None
+    ADMIN_EMAIL: Optional[str] = None
 
-    # ── Twilio (optional — set to enable SMS OTP instead of email) ─────────────
+    # ── Twilio ─────────────────────────────────────────────────────────────────
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_PHONE_NUMBER: Optional[str] = None
 
     # ── OpenAI ─────────────────────────────────────────────────────────────────
-    # .env exports it as AI_KEY
     AI_KEY: Optional[str] = None
     AI_MODEL: str = "gpt-4o-mini"
 
@@ -65,7 +86,6 @@ class Settings(BaseSettings):
     FACE_CLASSIFIER_PATH: str = "data/face_models/face_classifier.pkl"
     FACE_EMBEDDINGS_PATH: str = "data/face_models/embeddings.npy"
     FACE_LABELS_PATH: str = "data/face_models/labels.npy"
-    # Euclidean distance threshold — predictions with distance > this are rejected
     FACE_DISTANCE_THRESHOLD: float = 1.2
 
     # ── PIN Verification ───────────────────────────────────────────────────────

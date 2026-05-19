@@ -20,3 +20,5 @@ EMAIL_HOST = settings.EMAIL_HOST
 EMAIL_PORT = settings.EMAIL_PORT
 
 HR_EMAIL = getattr(settings, "HR_EMAIL", "akulkarni@sveltoz.com")
+
+SECRET_KEY = 'WvRVUUNfrXG1mBesBboQKylrFJnoRdcu9RI7aldfmdW'

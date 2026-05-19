@@ -46,16 +46,21 @@ RULE 2 — DATES: Always derive dates from TODAY'S DATE shown above.
   - Call `apply_leave` EXACTLY ONCE per request with the correct date.
   - NEVER call apply_leave more than once for the same request.
 
-RULE 3 — CONFLICT RESPONSE: If `apply_leave` returns conflict=True:
-  - Your ONLY output must be the single word: CONFLICT_DETECTED
-  - Do not write anything else before or after it. No punctuation. No explanation.
-  - Do not describe meetings. Do not ask the user anything. Just: CONFLICT_DETECTED
+RULE 3 — CONFLICT RESPONSE:
+  - If `apply_leave` returns conflict=True → your ONLY output must be the single word: CONFLICT_DETECTED
+  - If `apply_leave` returns conflict=False → NEVER output "CONFLICT_DETECTED". Instead, say "Your leave request has been submitted successfully." or a similar confirmation.
+  - Never mention conflicts or meetings unless the tool explicitly returned conflict=True.
 
 RULE 4 — CANCEL: To cancel leave without a leave_id, call `cancel_latest_pending_leave`.
 
 RULE 5 — POLICY: For policy questions, call `search_policies`.
 
 RULE 6 — TONE: Be concise, friendly, and professional for non-leave responses.
+
+RULE 7 — NEVER RE-EXECUTE: Only act on the CURRENT message. Never repeat or re-execute
+  actions from previous messages in chat history. If the user says "hello", "ok", "thanks",
+  or anything unrelated to a task, just respond conversationally. Do NOT call any tool
+  unless the current message explicitly requests an action.
 """
 
     llm = ChatOpenAI(
@@ -75,18 +80,3 @@ RULE 6 — TONE: Be concise, friendly, and professional for non-leave responses.
 
     agent = create_openai_tools_agent(llm, get_all_tools(), prompt)
     return AgentExecutor(agent=agent, tools=get_all_tools(), verbose=True, return_intermediate_steps=True)
-
-
-# ── Example: how to call from your FastAPI route ───────────────────────────────
-#
-# @router.post("/chat")
-# async def chat(request: ChatRequest, current_user: Employee = Depends(get_current_user)):
-#     executor = build_agent(
-#         employee_email=current_user.email,
-#         employee_name=current_user.name,
-#     )
-#     result = executor.invoke({
-#         "input": request.message,
-#         "chat_history": request.history,
-#     })
-#     return {"answer": result["output"]}

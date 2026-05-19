@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from backend.database.session import SessionLocal, engine, Base
-from backend.database.models import Employee, User
+from backend.database.models import Employee, User, Role
 
 # bcrypt for password hashing — already a FastAPI dependency
 from passlib.context import CryptContext
@@ -95,6 +95,7 @@ EMPLOYEES = [
         "department":  "HR",
         "designation": "HR Manager",
         "password":    "Priya@123",
+        "role":        "hr",             # ← HR role
     },
     {
         "name":        "Akansha Kulkarni",
@@ -141,6 +142,27 @@ def seed():
     updated = 0
     skipped = 0
 
+    # ── 1b. Seed roles table (idempotent) ──────────────────────────────────────
+    ROLES = [
+        {"name": "admin",    "description": "Full system access"},
+        {"name": "hr",       "description": "HR management access — approve/reject leaves, manage employees"},
+        {"name": "employee", "description": "Standard employee access — chat, apply leave, view policies"},
+    ]
+    role_map = {}  # name → id
+    for r in ROLES:
+        existing = db.query(Role).filter(Role.name == r["name"]).first()
+        if not existing:
+            new_role = Role(name=r["name"], description=r["description"])
+            db.add(new_role)
+            db.commit()
+            db.refresh(new_role)
+            role_map[r["name"]] = new_role.id
+            print(f"  ✅  Role created : {r['name']}")
+        else:
+            role_map[r["name"]] = existing.id
+            print(f"  ⏭️  Role exists  : {r['name']}")
+    print()
+
     try:
         for data in EMPLOYEES:
             name       = data["name"]
@@ -184,10 +206,11 @@ def seed():
                     face_registered=False,
                     phone_verified=False,
                     phone_country_code=phone[:3] if phone.startswith("+") else "+91",
+                    role_id=role_map.get(data.get("role", "employee"), role_map["employee"]),
                 )
                 db.add(emp)
                 db.flush()   # get emp.id before creating User
-                print(f"  ✅  Inserted   : {name} ({email})  phone={phone}")
+                print(f"  ✅  Inserted   : {name} ({email})  phone={phone}  role={data.get('role','employee')}")
                 seeded += 1
 
             # ── 3. Upsert linked User ──────────────────────────────────────────

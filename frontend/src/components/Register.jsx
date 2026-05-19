@@ -1,11 +1,14 @@
 /**
- * Register.jsx – Face enrolment with auto‑retry (no manual resume needed)
- * Error clearing now only happens when the user edits the offending field.
+ * Register.jsx – Face enrolment with auto‑retry
+ * Step 1: Details (name, email, phone)
+ * Step 2: Face capture & enrolment
+ * Step 3: Show PIN and redirect to login (no auto‑login)
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Webcam from 'react-webcam'
 import { motion } from 'framer-motion'
+import VerifyPin from './VerifyPin'
 import './Register.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -31,19 +34,20 @@ function captureFrame(videoEl, w = CAPTURE_W, h = CAPTURE_H) {
     return c.toDataURL('image/jpeg', 0.9)
 }
 
-export default function Register({ onBackToLogin }) {
+export default function Register({ onBackToLogin, onRegistered }) {
     const [step, setStep] = useState(1)
     const [form, setForm] = useState({ name: '', email: '', phone: '' })
-    const [error, setError] = useState('')
+    const [error, setError] = useState('')           // registration / API errors
+    const [faceError, setFaceError] = useState('')   // face detection errors
     const [loading, setLoading] = useState(false)
     const [faceImages, setFaceImages] = useState([])
-    const [defaultPin, setDefaultPin] = useState('')
-    const [pinCopied, setPinCopied] = useState(false)
     const [instruction, setInstruction] = useState('')
     const [showFlash, setShowFlash] = useState(false)
     const [enrolmentActive, setEnrolmentActive] = useState(false)
     const [captureCount, setCaptureCount] = useState(0)
     const [multipleFaces, setMultipleFaces] = useState(false)
+
+    const [pinData, setPinData] = useState(null)
 
     const webcamRef = useRef(null)
     const canvasRef = useRef(null)
@@ -56,30 +60,26 @@ export default function Register({ onBackToLogin }) {
         }
     }, [])
 
-    // ── Error clearing: only when the user edits the field that caused the error ──
     const handleChange = (e) => {
         const { name, value } = e.target
         setForm({ ...form, [name]: value })
-
-        // Clear error only if the user is typing in the field that caused it
         if (error) {
-            if ((error.toLowerCase().includes('email') && name === 'email') ||
-                (error.toLowerCase().includes('phone') && name === 'phone')) {
-                setError('')
-            }
+            if (
+                (error.toLowerCase().includes('email') && name === 'email') ||
+                (error.toLowerCase().includes('phone') && name === 'phone') ||
+                (error.toLowerCase().includes('name') && name === 'name')
+            ) setError('')
         }
     }
 
-    const handleRegisterSubmit = async (e) => {
+    const handleRegisterSubmit = (e) => {
         e.preventDefault()
-        if (!form.name || !form.email || !form.phone) {
-            setError('All fields are required')
-            return
-        }
+        if (!form.name || !form.email || !form.phone) { setError('All fields are required'); return }
+        if (!form.phone.startsWith('+')) { setError('Phone must be in E.164 format, e.g. +919876543210'); return }
+        setError('')
         setStep(2)
     }
 
-    // ── Face detection and drawing (unchanged) ──────────────────────────────────
     const detectAndDraw = useCallback(async () => {
         if (step !== 2) return
         const video = webcamRef.current?.video
@@ -96,8 +96,9 @@ export default function Register({ onBackToLogin }) {
             canvas.height = dispH
         }
         const imageSrc = captureFrame(video)
+        console.log('imageSrc length:', imageSrc?.length, 'starts with:', imageSrc?.substring(0, 30))
         try {
-            const res = await fetch('/api/auth/detect-faces', {
+            const res = await fetch(`${API_URL}/api/auth/detect-faces`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image_base64: imageSrc }),
@@ -108,45 +109,37 @@ export default function Register({ onBackToLogin }) {
             ctx.clearRect(0, 0, dispW, dispH)
             if (data.face_count !== 1 || !data.primary_box) {
                 setMultipleFaces(data.face_count > 1)
-                setError(data.face_count === 0 ? 'No face detected. Please position your face.' : 'Multiple faces detected. Ensure only your face is visible.')
+                setFaceError(data.face_count === 0
+                    ? 'No face detected. Please position your face.'
+                    : 'Multiple faces detected. Ensure only your face is visible.')
                 return
             }
             setMultipleFaces(false)
-            setError('')
+            setFaceError('')
             const [x1, y1, x2, y2] = data.primary_box
             const scaleX = dispW / CAPTURE_W
             const scaleY = dispH / CAPTURE_H
-            const sx1 = x1 * scaleX
-            const sy1 = y1 * scaleY
-            const sx2 = x2 * scaleX
-            const sy2 = y2 * scaleY
+            const sx1 = x1 * scaleX, sy1 = y1 * scaleY
+            const sx2 = x2 * scaleX, sy2 = y2 * scaleY
             const drawX = dispW - sx2
-            const drawY = sy1
-            const drawW = sx2 - sx1
-            const drawH = sy2 - sy1
             ctx.strokeStyle = '#22c55e'
             ctx.lineWidth = 3
-            ctx.strokeRect(drawX, drawY, drawW, drawH)
-        } catch (err) {
-            console.error('Detection error:', err)
-        }
+            ctx.strokeRect(drawX, sy1, sx2 - sx1, sy2 - sy1)
+        } catch (err) { console.error('Detection error:', err) }
     }, [step])
 
     useEffect(() => {
         let interval
-        if (step === 2) {
-            interval = setInterval(detectAndDraw, 300)
-        }
+        if (step === 2) interval = setInterval(detectAndDraw, 300)
         return () => clearInterval(interval)
     }, [step, detectAndDraw])
 
-    // ── Enrolment auto‑retry loop (unchanged) ───────────────────────────────────
     const startEnrolment = async () => {
         if (enrolmentActive) return
         setFaceImages([])
         setCaptureCount(0)
         setEnrolmentActive(true)
-        setError('')
+        setFaceError('')          // clear only face errors
         setMultipleFaces(false)
 
         let currentCount = 0
@@ -159,11 +152,15 @@ export default function Register({ onBackToLogin }) {
             if (abortController.signal.aborted) break
 
             const video = webcamRef.current?.video
-            if (!video || video.readyState < 2) continue
+            if (!video || video.readyState < 2) {
+                await new Promise(r => setTimeout(r, 300))
+                continue
+            }
             const imageSrc = captureFrame(video)
+            console.log('imageSrc length:', imageSrc?.length, 'starts with:', imageSrc?.substring(0, 30))
             let valid = false
             try {
-                const res = await fetch('/api/auth/detect-faces', {
+                const res = await fetch(`${API_URL}/api/auth/detect-faces`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image_base64: imageSrc }),
@@ -173,10 +170,10 @@ export default function Register({ onBackToLogin }) {
                 if (data.face_count === 1) {
                     valid = true
                     setMultipleFaces(false)
-                    setError('')
+                    setFaceError('')
                 } else {
                     setMultipleFaces(data.face_count > 1)
-                    setError(data.face_count === 0 ? 'No face detected. Please position your face.' : 'Multiple faces detected. Ensure only your face is visible.')
+                    setFaceError(data.face_count === 0 ? 'No face detected.' : 'Multiple faces detected.')
                 }
             } catch (err) {
                 if (err.name === 'AbortError') break
@@ -194,23 +191,18 @@ export default function Register({ onBackToLogin }) {
             }
         }
         setEnrolmentActive(false)
-        if (currentCount >= REQUIRED) {
-            setInstruction('Enrolment complete!')
-        } else {
-            setError('Enrolment was interrupted. Click "Resume Enrollment" to continue.')
-        }
+        if (currentCount >= REQUIRED) setInstruction('Enrolment complete!')
+        else setFaceError('Enrolment was interrupted. Click "Resume Enrollment" to continue.')
         abortControllerRef.current = null
     }
 
     const resetEnrolment = () => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort()
-            abortControllerRef.current = null
-        }
+        if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null }
         setFaceImages([])
         setCaptureCount(0)
         setEnrolmentActive(false)
-        setError('')
+        setFaceError('')
+        setError('')           // also clear registration error, if any
         setMultipleFaces(false)
         setInstruction('')
     }
@@ -219,20 +211,15 @@ export default function Register({ onBackToLogin }) {
         const newImages = faceImages.filter((_, i) => i !== idx)
         setFaceImages(newImages)
         setCaptureCount(newImages.length)
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort()
-            abortControllerRef.current = null
-        }
+        if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null }
         setEnrolmentActive(false)
         setInstruction('')
-        setError('')
+        setFaceError('')
     }
 
+    // ── Submit: register + face enrol ────────────────────────────────────────────
     const submitFaceAndRegister = async () => {
-        if (faceImages.length < 3) {
-            setError('Please capture at least 3 face images')
-            return
-        }
+        if (faceImages.length < 3) { setError('Please capture at least 3 face images'); return }
         setLoading(true)
         setError('')
         try {
@@ -246,24 +233,21 @@ export default function Register({ onBackToLogin }) {
                     face_images: faceImages,
                 }),
             })
-            if (!res.ok) {
-                const err = await res.json()
-                throw new Error(err.detail || 'Registration failed')
-            }
             const data = await res.json()
-            setDefaultPin(data.default_pin)
+            if (!res.ok) throw new Error(data.detail || 'Registration failed')
+
+            setPinData({
+                pin_record_id: data.pin_record_id,
+                masked_phone: data.masked_phone,
+                message: data.message,
+                default_pin: data.default_pin || null,
+            })
             setStep(3)
         } catch (err) {
             setError(err.message)
         } finally {
             setLoading(false)
         }
-    }
-
-    const copyPin = async () => {
-        await navigator.clipboard.writeText(defaultPin)
-        setPinCopied(true)
-        setTimeout(() => setPinCopied(false), 2000)
     }
 
     const renderTicks = () => {
@@ -293,6 +277,25 @@ export default function Register({ onBackToLogin }) {
         return ticks
     }
 
+    if (step === 3 && pinData) {
+        return (
+            <VerifyPin
+                pinData={pinData}
+                onBack={() => {
+                    setPinData(null)
+                    setStep(2)
+                    resetEnrolment()
+                }}
+                onLoginRedirect={() => {
+                    // Clear any leftover auth and go back to login
+                    localStorage.removeItem('hrms_token')
+                    localStorage.removeItem('hrms_employee')
+                    onBackToLogin()
+                }}
+            />
+        )
+    }
+
     return (
         <div className="register-container">
             <div className="register-card">
@@ -307,13 +310,23 @@ export default function Register({ onBackToLogin }) {
                     <div className={`step ${step >= 3 ? 'active' : ''}`}>3. PIN</div>
                 </div>
 
+                {/* Show both types of errors separately */}
                 {error && <div className="message error">{error}</div>}
 
                 {step === 1 && (
                     <form onSubmit={handleRegisterSubmit} className="register-form">
-                        <div className="form-group"><label>Full Name</label><input type="text" name="name" value={form.name} onChange={handleChange} required /></div>
-                        <div className="form-group"><label>Email</label><input type="email" name="email" value={form.email} onChange={handleChange} required /></div>
-                        <div className="form-group"><label>Phone (E.164 format, e.g. +919876543210)</label><input type="tel" name="phone" value={form.phone} onChange={handleChange} required /></div>
+                        <div className="form-group">
+                            <label>Full Name</label>
+                            <input type="text" name="name" value={form.name} onChange={handleChange} required />
+                        </div>
+                        <div className="form-group">
+                            <label>Email</label>
+                            <input type="email" name="email" value={form.email} onChange={handleChange} required />
+                        </div>
+                        <div className="form-group">
+                            <label>Phone (E.164 format, e.g. +919876543210)</label>
+                            <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="+919876543210" required />
+                        </div>
                         <button type="submit" className="btn-primary">Continue to Face Capture →</button>
                         <button type="button" className="btn-secondary" onClick={onBackToLogin}>← Back to Login</button>
                     </form>
@@ -321,6 +334,8 @@ export default function Register({ onBackToLogin }) {
 
                 {step === 2 && (
                     <div className="face-capture-step">
+                        {faceError && <div className="message error">{faceError}</div>}
+
                         <div ref={wrapperRef} className={`webcam-wrapper ${multipleFaces ? 'multiple-faces' : ''}`}>
                             <Webcam
                                 ref={webcamRef}
@@ -329,7 +344,8 @@ export default function Register({ onBackToLogin }) {
                                 videoConstraints={{ width: CAPTURE_W, height: CAPTURE_H, facingMode: 'user' }}
                                 className="webcam-feed"
                             />
-                            <canvas ref={canvasRef} className="face-bounding-box" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+                            <canvas ref={canvasRef} className="face-bounding-box"
+                                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
                             {showFlash && <div className="flash-overlay" />}
                         </div>
 
@@ -372,20 +388,6 @@ export default function Register({ onBackToLogin }) {
                                 {loading ? 'Registering...' : 'Complete Registration'}
                             </button>
                         )}
-                    </div>
-                )}
-
-                {step === 3 && defaultPin && (
-                    <div className="pin-display-step">
-                        <div className="success-icon">✓</div>
-                        <h3>Registration Complete!</h3>
-                        <p>Your permanent login PIN is:</p>
-                        <div className="pin-display-wrapper">
-                            <div className="pin-box" onClick={copyPin}><span className="pin-value">{defaultPin}</span></div>
-                            <button className="copy-button" onClick={copyPin}>{pinCopied ? 'Copied!' : 'Copy'}</button>
-                        </div>
-                        <p className="pin-note">This PIN has been sent to your email & SMS.</p>
-                        <button className="btn-primary" onClick={onBackToLogin}>Go to Login</button>
                     </div>
                 )}
             </div>

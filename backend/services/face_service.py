@@ -1,11 +1,11 @@
 """
 Face Recognition Service
-Wraps your existing MTCNN + InceptionResnetV1 + KNN pipeline.
+Wraps MTCNN + InceptionResnetV1 + KNN pipeline.
 
-Expected files (created by your training script):
-  data/face_models/face_classifier.pkl  — sklearn KNN classifier
-  data/face_models/embeddings.npy       — stored 512-D embeddings
-  data/face_models/labels.npy           — label strings (employee usernames)
+Expected files (created automatically after first enrolment):
+  data/face_models/face_classifier.pkl
+  data/face_models/embeddings.npy
+  data/face_models/labels.npy
 """
 
 import base64
@@ -33,22 +33,20 @@ class FaceRecognitionService:
         self._loaded = False
         self._device = None
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Internal: lazy model loading
-    # ──────────────────────────────────────────────────────────────────────────
+    # ── Internal: lazy model loading ──────────────────────────────────────────
 
     def _load_models(self):
-        """Load MTCNN, InceptionResnetV1, and KNN classifier once."""
+        """Load MTCNN + InceptionResnetV1. Classifier is loaded separately
+        so enrolment can work even before the classifier file exists."""
         if self._loaded:
             return
 
         import torch
-        import joblib
         from facenet_pytorch import MTCNN, InceptionResnetV1
         from backend.core.config import settings
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info("Loading face recognition models on device: %s", device)
+        logger.info("Loading face models on device: %s", device)
 
         self._mtcnn = MTCNN(
             image_size=160,
@@ -58,142 +56,94 @@ class FaceRecognitionService:
             keep_all=False,
             device=device,
         )
-
         self._resnet = InceptionResnetV1(pretrained="vggface2").eval().to(device)
         self._device = device
-
-        classifier_path = str(settings.BASE_DIR / settings.FACE_CLASSIFIER_PATH)
-        self._classifier = joblib.load(classifier_path)
-
-        labels_path = str(settings.BASE_DIR / settings.FACE_LABELS_PATH)
-        self._labels = np.load(labels_path, allow_pickle=True)
-
         self._loaded = True
-        logger.info("Face recognition models loaded successfully.")
+        logger.info("Face encoder models loaded.")
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Public API – Face recognition
-    # ──────────────────────────────────────────────────────────────────────────
+    def _load_classifier(self):
+        """Load KNN classifier from disk. Raises if file missing."""
+        from backend.core.config import settings
+        classifier_path = str(settings.BASE_DIR / settings.FACE_CLASSIFIER_PATH)
+        labels_path = str(settings.BASE_DIR / settings.FACE_LABELS_PATH)
+        self._classifier = joblib.load(classifier_path)
+        self._labels = np.load(labels_path, allow_pickle=True)
+        logger.info("KNN classifier loaded.")
+
+    # ── Public API: Face recognition ──────────────────────────────────────────
 
     def recognize_face(self, image_base64: str) -> dict:
-        """
-        Recognize a face from a Base64-encoded image string.
-
-        Returns:
-            {
-                "recognized": bool,
-                "username": str | None,
-                "distance": float | None,
-                "failure_reason": str | None
-            }
-        """
         from backend.core.config import settings
 
         try:
             self._load_models()
+            self._load_classifier()
         except Exception as exc:
             logger.error("Model loading failed: %s", exc)
-            return {
-                "recognized": False,
-                "username": None,
-                "distance": None,
-                "failure_reason": f"Model loading error: {exc}",
-            }
+            return {"recognized": False, "username": None, "distance": None,
+                    "failure_reason": f"Model loading error: {exc}"}
 
-        # Decode Base64
         try:
             if "," in image_base64:
                 image_base64 = image_base64.split(",", 1)[1]
             img_bytes = base64.b64decode(image_base64)
             pil_img = Image.open(BytesIO(img_bytes)).convert("RGB")
         except Exception as exc:
-            logger.warning("Image decode failed: %s", exc)
-            return {
-                "recognized": False,
-                "username": None,
-                "distance": None,
-                "failure_reason": "Invalid image data",
-            }
+            return {"recognized": False, "username": None, "distance": None,
+                    "failure_reason": "Invalid image data"}
 
-        # Detect face
         try:
             face_tensor = self._mtcnn(pil_img)
         except Exception as exc:
-            logger.warning("MTCNN detection error: %s", exc)
-            return {
-                "recognized": False,
-                "username": None,
-                "distance": None,
-                "failure_reason": "Face detection error",
-            }
+            return {"recognized": False, "username": None, "distance": None,
+                    "failure_reason": "Face detection error"}
 
         if face_tensor is None:
-            return {
-                "recognized": False,
-                "username": None,
-                "distance": None,
-                "failure_reason": "No face detected in frame",
-            }
+            return {"recognized": False, "username": None, "distance": None,
+                    "failure_reason": "No face detected in frame"}
 
-        # Generate embedding
         import torch
         with torch.no_grad():
-            embedding = (
-                self._resnet(face_tensor.unsqueeze(0).to(self._device))
-                .cpu()
-                .numpy()
-            )  # shape (1,512)
+            embedding = self._resnet(
+                face_tensor.unsqueeze(0).to(self._device)
+            ).cpu().numpy()
 
-        # KNN prediction
         try:
             predicted_label = self._classifier.predict(embedding)[0]
             distances, _ = self._classifier.kneighbors(embedding, n_neighbors=1)
             distance = float(distances[0][0])
         except Exception as exc:
             logger.error("KNN prediction error: %s", exc)
-            return {
-                "recognized": False,
-                "username": None,
-                "distance": None,
-                "failure_reason": "Classifier error",
-            }
+            return {"recognized": False, "username": None, "distance": None,
+                    "failure_reason": "Classifier error"}
 
         threshold = settings.FACE_DISTANCE_THRESHOLD
         if distance > threshold:
-            logger.info("Face rejected — distance %.4f > threshold %.4f", distance, threshold)
-            return {
-                "recognized": False,
-                "username": None,
-                "distance": distance,
-                "failure_reason": f"Face similarity too low (distance: {distance:.2f})",
-            }
+            return {"recognized": False, "username": None, "distance": distance,
+                    "failure_reason": f"Face similarity too low (distance: {distance:.2f})"}
 
-        logger.info("Face recognized as '%s' with distance %.4f", predicted_label, distance)
-        return {
-            "recognized": True,
-            "username": str(predicted_label),
-            "distance": distance,
-            "failure_reason": None,
-        }
+        logger.info("Face recognized as '%s' distance=%.4f", predicted_label, distance)
+        return {"recognized": True, "username": str(predicted_label),
+                "distance": distance, "failure_reason": None}
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Public API – Face enrollment (store multiple embeddings)
-    # ──────────────────────────────────────────────────────────────────────────
+    # ── Public API: Face enrolment ────────────────────────────────────────────
 
-    def enroll_faces(self, employee_id: int, images_base64: list[str]) -> dict:
+    def enroll_faces(self, employee_id: int, images_base64: list) -> dict:
         """
-        Enroll multiple face images for an employee.
-        Returns: { "success": bool, "embeddings_stored": int, "error": str | None }
+        Extract embeddings from images and store them on the Employee row.
+        Does NOT require the KNN classifier file to exist yet — that is
+        created/updated by retrain_classifier() called after this.
         """
+        # Only need MTCNN + ResNet, NOT the classifier file
         try:
             self._load_models()
         except Exception as exc:
-            logger.error("Model loading failed for enrollment: %s", exc)
+            logger.error("Model loading failed for enrolment: %s", exc)
             return {"success": False, "embeddings_stored": 0, "error": str(exc)}
 
         from backend.database.session import SessionLocal
         from backend.database.models import Employee
-        import pickle
+        import torch
 
         embeddings = []
         for idx, b64 in enumerate(images_base64):
@@ -203,25 +153,23 @@ class FaceRecognitionService:
                 img_bytes = base64.b64decode(b64)
                 pil_img = Image.open(BytesIO(img_bytes)).convert("RGB")
             except Exception as e:
-                logger.warning(f"Image {idx+1} decode failed: {e}")
+                logger.warning("Image %d decode failed: %s", idx + 1, e)
                 continue
 
             face_tensor = self._mtcnn(pil_img)
             if face_tensor is None:
-                logger.warning(f"Image {idx+1}: no face detected")
+                logger.warning("Image %d: no face detected — skipping", idx + 1)
                 continue
 
-            import torch
             with torch.no_grad():
-                emb = (
-                    self._resnet(face_tensor.unsqueeze(0).to(self._device))
-                    .cpu()
-                    .numpy()
-                )
+                emb = self._resnet(
+                    face_tensor.unsqueeze(0).to(self._device)
+                ).cpu().numpy()
             embeddings.append(emb[0])
 
         if not embeddings:
-            return {"success": False, "embeddings_stored": 0, "error": "No valid face detected in any image"}
+            return {"success": False, "embeddings_stored": 0,
+                    "error": "No valid face detected in any of the submitted images"}
 
         embeddings_blob = pickle.dumps(embeddings)
 
@@ -229,73 +177,89 @@ class FaceRecognitionService:
         try:
             emp = db.query(Employee).filter(Employee.id == employee_id).first()
             if not emp:
-                return {"success": False, "embeddings_stored": 0, "error": "Employee not found"}
+                return {"success": False, "embeddings_stored": 0,
+                        "error": "Employee not found"}
             emp.face_embedding = embeddings_blob
             emp.face_registered = True
             emp.face_enrollment_date = datetime.utcnow()
             emp.face_samples_count = len(embeddings)
             db.commit()
-            logger.info(f"Enrolled {len(embeddings)} face samples for employee {employee_id}")
+            logger.info("Stored %d face embeddings for employee %d", len(embeddings), employee_id)
             return {"success": True, "embeddings_stored": len(embeddings), "error": None}
         except Exception as e:
             db.rollback()
-            logger.error(f"DB error during face enrollment: {e}")
+            logger.error("DB error during face enrolment: %s", e)
             return {"success": False, "embeddings_stored": 0, "error": str(e)}
         finally:
             db.close()
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Public API – Retrain global classifier from all stored embeddings
-    # ──────────────────────────────────────────────────────────────────────────
+    # ── Public API: Detect faces (used during registration capture) ───────────
+
+    # (keep this method available via face_auth.py's /detect-faces endpoint)
+
+    # ── Public API: Retrain global KNN classifier ─────────────────────────────
 
     def retrain_classifier(self):
         """
-        Rebuild the KNN classifier from all face embeddings stored in the database.
-        Saves the updated classifier and embedding files to disk.
+        Rebuild the KNN classifier from ALL face embeddings in the database.
+        Safe to call even when only 1 employee exists (n_neighbors is clamped).
+        Creates the .pkl / .npy files if they don't exist yet.
         """
         from backend.database.session import SessionLocal
         from backend.database.models import Employee
         from backend.core.config import settings
-        import pickle
 
         db = SessionLocal()
         try:
-            # Collect all embeddings and labels
             all_embeddings = []
             all_labels = []
-            employees = db.query(Employee).filter(Employee.face_embedding.isnot(None)).all()
+
+            employees = db.query(Employee).filter(
+                Employee.face_embedding.isnot(None)
+            ).all()
+
             for emp in employees:
-                # Unpickle the stored embeddings (list of numpy arrays)
-                embeddings = pickle.loads(emp.face_embedding)
-                label = emp.username or emp.email
-                for emb in embeddings:
+                try:
+                    stored = pickle.loads(emp.face_embedding)
+                except Exception as e:
+                    logger.warning("Could not unpickle embeddings for emp %s: %s", emp.id, e)
+                    continue
+                label = emp.email  # email is the identifier (no username field)
+                for emb in stored:
                     all_embeddings.append(emb)
                     all_labels.append(label)
 
-            if len(all_embeddings) < 1:
-                logger.info("No face embeddings found in database. Skipping retrain.")
+            if not all_embeddings:
+                logger.info("No face embeddings in DB — skipping retrain.")
                 return
 
             X = np.array(all_embeddings)
             y = np.array(all_labels)
 
-            # Train KNN classifier
-            clf = KNeighborsClassifier(n_neighbors=1, metric='euclidean')
+            # Clamp n_neighbors so it never exceeds the number of samples
+            n_neighbors = min(1, len(X))
+            clf = KNeighborsClassifier(n_neighbors=n_neighbors, metric="euclidean")
             clf.fit(X, y)
 
-            # Save classifier and supporting files
-            classifier_path = str(settings.BASE_DIR / settings.FACE_CLASSIFIER_PATH)
-            embeddings_path = str(settings.BASE_DIR / settings.FACE_EMBEDDINGS_PATH)
-            labels_path = str(settings.BASE_DIR / settings.FACE_LABELS_PATH)
+            # Ensure output directory exists
+            from pathlib import Path
+            classifier_path = settings.BASE_DIR / settings.FACE_CLASSIFIER_PATH
+            classifier_path.parent.mkdir(parents=True, exist_ok=True)
 
-            joblib.dump(clf, classifier_path)
-            np.save(embeddings_path, X)
-            np.save(labels_path, y)
+            joblib.dump(clf, str(classifier_path))
+            np.save(str(settings.BASE_DIR / settings.FACE_EMBEDDINGS_PATH), X)
+            np.save(str(settings.BASE_DIR / settings.FACE_LABELS_PATH), y)
 
-            logger.info(f"Face classifier retrained with {len(X)} embeddings, {len(set(y))} unique labels.")
-            print(f"✅ Retrained classifier: {len(X)} embeddings, {len(set(y))} labels")
+            # Reload in memory so recognize_face uses updated model immediately
+            self._classifier = clf
+            self._labels = y
+
+            logger.info(
+                "Classifier retrained: %d embeddings, %d unique employees.",
+                len(X), len(set(y)),
+            )
         except Exception as e:
-            logger.error(f"Error retraining classifier: {e}")
+            logger.error("Error retraining classifier: %s", e)
             raise
         finally:
             db.close()

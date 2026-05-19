@@ -9,6 +9,7 @@ KEY CHANGES:
 - Meeting conflict check happens BEFORE saving the leave; if conflicts exist the
   leave is still saved as Pending but a warning + options are returned.
 - HR notification email is always sent regardless of conflicts.
+- ADMIN_EMAIL added to approve_leave and reject_leave notifications.
 """
 
 import chromadb
@@ -262,9 +263,10 @@ def apply_leave(
         db.commit()
         db.refresh(new_leave)
 
-        hr_email = getattr(settings, "HR_EMAIL", "akulkarni@sveltoz.com")
-        email_subject = f"Leave Request: {emp.name} ({leave_type}) — {start_date} to {end_date}"
-        email_body = f"""
+        hr_email = getattr(settings, "HR_EMAIL", None)
+        if hr_email:
+            email_subject = f"Leave Request: {emp.name} ({leave_type}) — {start_date} to {end_date}"
+            email_body = f"""
 New Leave Request — Action Required
 =====================================
 Employee  : {emp.name}
@@ -278,12 +280,14 @@ Request ID: {new_leave.id}
 
 Please log in to the HRMS portal to approve or reject this request.
 """
-        try:
-            _send_email(hr_email, email_subject, email_body)
-            email_status = " HR has been notified by email."
-        except Exception as exc:
-            logger.error(f"Failed to send leave email: {exc}")
-            email_status = " Email to HR could not be sent — HR will be notified manually."
+            try:
+                _send_email(hr_email, email_subject, email_body)
+                email_status = " HR has been notified by email."
+            except Exception as exc:
+                logger.error(f"Failed to send leave email: {exc}")
+                email_status = " Email to HR could not be sent — HR will be notified manually."
+        else:
+            email_status = " HR email not configured. Please notify HR manually."
 
         return {
             "answer": f" Leave request submitted successfully (ID: {new_leave.id}). {email_status}",
@@ -335,9 +339,10 @@ def confirm_leave(
         db.commit()
         db.refresh(new_leave)
 
-        hr_email = getattr(settings, "HR_EMAIL", "akulkarni@sveltoz.com")
-        email_subject = f"Leave Request: {emp.name} ({leave_type}) — {start_date} to {end_date}"
-        email_body = f"""
+        hr_email = getattr(settings, "HR_EMAIL", None)
+        if hr_email:
+            email_subject = f"Leave Request: {emp.name} ({leave_type}) — {start_date} to {end_date}"
+            email_body = f"""
 New Leave Request — Action Required
 =====================================
 Employee  : {emp.name}
@@ -353,12 +358,14 @@ Request ID: {new_leave.id}
 
 Please log in to the HRMS portal to approve or reject this request.
 """
-        try:
-            _send_email(hr_email, email_subject, email_body)
-            email_status = " HR has been notified by email."
-        except Exception as exc:
-            logger.error(f"Failed to send leave email: {exc}")
-            email_status = " Email to HR could not be sent — HR will be notified manually."
+            try:
+                _send_email(hr_email, email_subject, email_body)
+                email_status = " HR has been notified by email."
+            except Exception as exc:
+                logger.error(f"Failed to send leave email: {exc}")
+                email_status = " Email to HR could not be sent — HR will be notified manually."
+        else:
+            email_status = " HR email not configured. Please notify HR manually."
 
         return {
             "answer": f" Leave request confirmed and submitted (ID: {new_leave.id}). {email_status}",
@@ -400,31 +407,84 @@ def cancel_latest_pending_leave(employee_email: str) -> dict:
 
 @tool
 def approve_leave(leave_id: int) -> dict:
-    """Approve a leave request (manager action)."""
+    """Approve a leave request (manager action). Notifies HR and admin."""
     db = SessionLocal()
     try:
         leave = db.query(Leave).filter(Leave.id == leave_id).first()
         if not leave:
             return {"answer": f"Leave request {leave_id} not found."}
+        emp = db.query(Employee).filter(Employee.id == leave.employee_id).first()
+        if not emp:
+            return {"answer": f"Employee not found for leave {leave_id}."}
         leave.status = "Approved"
         db.commit()
-        return {"answer": f"Leave request {leave_id} approved."}
+
+        # Prepare email content
+        subject = f"Leave Request Approved: {emp.name} ({leave.leave_type})"
+        body = f"""
+Leave Request Approved
+=======================
+Employee  : {emp.name}
+Email     : {emp.email}
+Leave Type: {leave.leave_type}
+Period    : {leave.start_date.date()} to {leave.end_date.date()}
+Reason    : {leave.reason}
+Request ID: {leave.id}
+
+This leave has been approved.
+"""
+        # Send to HR and Admin if configured
+        hr_email = getattr(settings, "HR_EMAIL", None)
+        admin_email = getattr(settings, "ADMIN_EMAIL", None)
+        recipients = [e for e in (hr_email, admin_email) if e]
+        for recipient in recipients:
+            try:
+                _send_email(recipient, subject, body)
+            except Exception as exc:
+                logger.error(f"Failed to send email to {recipient}: {exc}")
+
+        return {"answer": f"Leave request {leave_id} approved. Notifications sent."}
     finally:
         db.close()
 
 
 @tool
 def reject_leave(leave_id: int, reason: str = "") -> dict:
-    """Reject a leave request."""
+    """Reject a leave request. Notifies HR and admin."""
     db = SessionLocal()
     try:
         leave = db.query(Leave).filter(Leave.id == leave_id).first()
         if not leave:
             return {"answer": f"Leave request {leave_id} not found."}
+        emp = db.query(Employee).filter(Employee.id == leave.employee_id).first()
+        if not emp:
+            return {"answer": f"Employee not found for leave {leave_id}."}
         leave.status = "Rejected"
         leave.rejection_reason = reason
         db.commit()
-        return {"answer": f"Leave request {leave_id} rejected."}
+
+        subject = f"Leave Request Rejected: {emp.name} ({leave.leave_type})"
+        body = f"""
+Leave Request Rejected
+=======================
+Employee  : {emp.name}
+Email     : {emp.email}
+Leave Type: {leave.leave_type}
+Period    : {leave.start_date.date()} to {leave.end_date.date()}
+Reason    : {leave.reason}
+Rejection Reason: {reason}
+Request ID: {leave.id}
+"""
+        hr_email = getattr(settings, "HR_EMAIL", None)
+        admin_email = getattr(settings, "ADMIN_EMAIL", None)
+        recipients = [e for e in (hr_email, admin_email) if e]
+        for recipient in recipients:
+            try:
+                _send_email(recipient, subject, body)
+            except Exception as exc:
+                logger.error(f"Failed to send email to {recipient}: {exc}")
+
+        return {"answer": f"Leave request {leave_id} rejected. Notifications sent."}
     finally:
         db.close()
 

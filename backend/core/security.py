@@ -47,3 +47,44 @@ def verify_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def require_role(allowed_roles: list):
+    """
+    FastAPI dependency — raises 403 if the token's role is not in allowed_roles.
+
+    Usage:
+        @router.get("/admin-only")
+        def admin_only(payload=Depends(require_role(["admin"]))):
+            ...
+
+        @router.get("/hr-or-admin")
+        def hr_view(payload=Depends(require_role(["hr", "admin"]))):
+            ...
+    """
+    from fastapi import Request, HTTPException
+    from fastapi.security import HTTPBearer
+
+    def _check(request: Request) -> dict:
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid token")
+        token = auth.split(" ", 1)[1]
+        payload = verify_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        role = payload.get("role")
+        if not role:
+            # Token was issued before RBAC — user must log out and log back in
+            raise HTTPException(
+                status_code=401,
+                detail="Your session is outdated. Please log out and log in again to continue."
+            )
+        if role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied. Required role: {allowed_roles}. Your role: {role}"
+            )
+        return payload
+
+    return _check

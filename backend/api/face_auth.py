@@ -12,10 +12,9 @@ import base64
 from io import BytesIO
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
-from typing import Optional
 from sqlalchemy.orm import Session
 from PIL import Image
+from sqlalchemy import func
 
 from backend.core.config import settings
 from backend.core.security import create_access_token, verify_password, get_password_hash
@@ -23,7 +22,7 @@ from backend.database.session import SessionLocal
 from backend.database.models import Employee, FaceLoginAttempt, PINVerification
 from backend.services.face_service import face_service
 from backend.services.twilio_service import generate_pin, send_pin_sms
-from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest
+from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest, DetectFacesRequest
 
 logger = logging.getLogger(__name__)
 
@@ -36,33 +35,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-# ── Schemas ────────────────────────────────────────────────────────────────────
-
-class FaceLoginRequest(BaseModel):
-    image_base64: str
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str
-    employee: dict
-
-
-class PermanentPinLoginRequest(BaseModel):
-    identifier: str   # email or phone
-    pin: str
-
-
-class VerifyAndChangePinRequest(BaseModel):
-    identifier: str
-    current_pin: str
-    new_pin: Optional[str] = None
-
-
-class DetectFacesRequest(BaseModel):
-    image_base64: str
 
 
 # ── POST /api/auth/face-login ──────────────────────────────────────────────────
@@ -96,7 +68,7 @@ def face_login(
     employee = (
         db.query(Employee)
         .filter(
-            Employee.username == username,
+            Employee.email == username,
             Employee.status == "active",
             Employee.deleted_at.is_(None),
         )
@@ -121,11 +93,15 @@ def face_login(
     db.commit()
     logger.info("Face login: employee %s (%s) distance=%.3f", employee.id, employee.name, distance)
 
+    # Get role name — fall back to 'employee' if role not set
+    role_name = employee.role.name if (employee.role_id and employee.role) else "employee"
+
     token = create_access_token({
         "sub": str(employee.id),
         "email": employee.email,
         "name": employee.name,
         "department": employee.department,
+        "role": role_name,
     })
 
     return TokenResponse(
@@ -137,25 +113,28 @@ def face_login(
             "email": employee.email,
             "department": employee.department,
             "designation": employee.designation,
+            "role": role_name,
         },
     )
 
-
-# ── POST /api/auth/login-with-pin (direct permanent PIN) ───────────────────────
 
 @router.post("/login-with-pin", response_model=TokenResponse)
 def login_with_permanent_pin(
     payload: PermanentPinLoginRequest,
     db: Session = Depends(get_db),
 ):
-    identifier = payload.identifier.strip()
-    if "@" in identifier:
-        employee = db.query(Employee).filter(
-            Employee.email == identifier,
-            Employee.status == "active",
-            Employee.deleted_at.is_(None)
-        ).first()
-    else:
+    identifier = payload.identifier.strip().lower()  # force lower case and trim
+    logger.info(f"Login attempt with identifier: '{identifier}'")
+
+    # Try email match (case‑insensitive)
+    employee = db.query(Employee).filter(
+        func.lower(Employee.email) == identifier,
+        Employee.status == "active",
+        Employee.deleted_at.is_(None)
+    ).first()
+
+    # If not found by email, try phone (but keep original phone matching)
+    if not employee and "@" not in identifier:
         phone_clean = ''.join(c for c in identifier if c.isdigit())
         employee = db.query(Employee).filter(
             Employee.phone.like(f"%{phone_clean[-10:]}"),
@@ -164,22 +143,30 @@ def login_with_permanent_pin(
         ).first()
 
     if not employee:
+        logger.warning(f"No active employee found for identifier: '{identifier}'")
         raise HTTPException(404, "No active account found with that email/phone.")
 
     if not employee.permanent_pin_hash:
+        logger.warning(f"No PIN set for {employee.email}")
         raise HTTPException(400, "No PIN set for this account. Please contact HR.")
 
+    # Verify PIN
     if not verify_password(payload.pin, employee.permanent_pin_hash):
+        logger.warning(f"Incorrect PIN for {employee.email}")
         raise HTTPException(401, "Incorrect PIN.")
 
+    # Safe role retrieval
+    role_name = employee.role.name if employee.role else "employee"
+
     token = create_access_token({
         "sub": str(employee.id),
         "email": employee.email,
         "name": employee.name,
         "department": employee.department,
+        "role": role_name,
     })
 
-    logger.info(f"PIN login: employee {employee.id} ({employee.name})")
+    logger.info(f"PIN login success: {employee.email} (role: {role_name})")
 
     return TokenResponse(
         access_token=token,
@@ -190,75 +177,11 @@ def login_with_permanent_pin(
             "email": employee.email,
             "department": employee.department,
             "designation": employee.designation,
+            "role": role_name,
         },
     )
-
-
-# ── POST /api/auth/verify-and-change-pin (verify + optional change) ────────────
-
-@router.post("/verify-and-change-pin", response_model=TokenResponse)
-def verify_and_change_pin(
-    payload: VerifyAndChangePinRequest,
-    db: Session = Depends(get_db),
-):
-    identifier = payload.identifier.strip()
-    if "@" in identifier:
-        employee = db.query(Employee).filter(
-            Employee.email == identifier,
-            Employee.status == "active",
-            Employee.deleted_at.is_(None)
-        ).first()
-    else:
-        phone_clean = ''.join(c for c in identifier if c.isdigit())
-        employee = db.query(Employee).filter(
-            Employee.phone.like(f"%{phone_clean[-10:]}"),
-            Employee.status == "active",
-            Employee.deleted_at.is_(None)
-        ).first()
-
-    if not employee:
-        raise HTTPException(404, "No active account found with that email/phone.")
-
-    if not employee.permanent_pin_hash:
-        raise HTTPException(400, "No PIN set for this account. Contact HR.")
-
-    if not verify_password(payload.current_pin, employee.permanent_pin_hash):
-        raise HTTPException(401, "Incorrect current PIN.")
-
-    # If a new PIN is provided, validate and update
-    if payload.new_pin:
-        if len(payload.new_pin) != 6 or not payload.new_pin.isdigit():
-            raise HTTPException(400, "New PIN must be exactly 6 digits.")
-        new_hash = get_password_hash(payload.new_pin)
-        employee.permanent_pin_hash = new_hash
-        employee.pin_type = 'custom'
-        employee.pin_set_at = datetime.utcnow()
-        db.commit()
-        logger.info(f"PIN changed for employee {employee.id}")
-
-    token = create_access_token({
-        "sub": str(employee.id),
-        "email": employee.email,
-        "name": employee.name,
-        "department": employee.department,
-    })
-
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        employee={
-            "id": employee.id,
-            "name": employee.name,
-            "email": employee.email,
-            "department": employee.department,
-            "designation": employee.designation,
-        },
-    )
-
 
 # ── POST /api/auth/detect-faces (for registration validation) ─────────────────
-
-# Add to backend/api/face_auth.py (after other imports)
 
 @router.post("/detect-faces")
 def detect_faces(payload: DetectFacesRequest):
@@ -295,7 +218,7 @@ def detect_faces(payload: DetectFacesRequest):
         return {"face_count": 0, "boxes": [], "primary_box": None, "error": str(e)}
 
 
-# ── GET /api/auth/me (unchanged) ───────────────────────────────────────────────
+# ── GET /api/auth/me ───────────────────────────────────────────────────────────
 
 @router.get("/me")
 def get_current_employee(request: Request, db: Session = Depends(get_db)):

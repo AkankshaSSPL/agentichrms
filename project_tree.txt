@@ -1,0 +1,1642 @@
+D:\agentichrms-main\.env
+D:\agentichrms-main\.gitignore
+D:\agentichrms-main\agent
+D:\agentichrms-main\alembic
+D:\agentichrms-main\alembic.ini
+D:\agentichrms-main\architecture.xml
+D:\agentichrms-main\backend
+D:\agentichrms-main\config.py
+D:\agentichrms-main\data
+D:\agentichrms-main\documents
+D:\agentichrms-main\frontend
+D:\agentichrms-main\project_tree.txt
+D:\agentichrms-main\rag
+D:\agentichrms-main\README.md
+D:\agentichrms-main\requirements.txt
+D:\agentichrms-main\retrain.py
+D:\agentichrms-main\seed_db.py
+D:\agentichrms-main\seed_meetings.py
+D:\agentichrms-main\test_retrieval.py
+D:\agentichrms-main\tools
+D:\agentichrms-main\utils
+D:\agentichrms-main\venv
+D:\agentichrms-main\.git\COMMIT_EDITMSG
+D:\agentichrms-main\.git\config
+D:\agentichrms-main\.git\description
+D:\agentichrms-main\.git\FETCH_HEAD
+D:\agentichrms-main\.git\gk
+D:\agentichrms-main\.git\HEAD
+D:\agentichrms-main\.git\hooks
+D:\agentichrms-main\.git\index
+D:\agentichrms-main\.git\info
+D:\agentichrms-main\.git\logs
+D:\agentichrms-main\.git\objects
+D:\agentichrms-main\.git\ORIG_HEAD
+D:\agentichrms-main\.git\refs
+D:\agentichrms-main\.git\gk\config
+D:\agentichrms-main\.git\hooks\applypatch-msg.sample
+D:\agentichrms-main\.git\hooks\commit-msg.sample
+D:\agentichrms-main\.git\hooks\fsmonitor-watchman.sample
+D:\agentichrms-main\.git\hooks\post-update.sample
+D:\agentichrms-main\.git\hooks\pre-applypatch.sample
+D:\agentichrms-main\.git\hooks\pre-commit.sample
+D:\agentichrms-main\.git\hooks\pre-merge-commit.sample
+D:\agentichrms-main\.git\hooks\pre-push.sample
+D:\agentichrms-main\.git\hooks\pre-rebase.sample
+D:\agentichrms-main\.git\hooks\pre-receive.sample
+D:\agentichrms-main\.git\hooks\prepare-commit-msg.sample
+D:\agentichrms-main\.git\hooks\push-to-checkout.sample
+D:\agentichrms-main\.git\hooks\sendemail-validate.sample
+D:\agentichrms-main\.git\hooks\update.sample
+D:\agentichrms-main\.git\info\exclude
+D:\agentichrms-main\.git\logs\HEAD
+D:\agentichrms-main\.git\logs\refs
+D:\agentichrms-main\.git\logs\refs\heads
+D:\agentichrms-main\.git\logs\refs\remotes
+D:\agentichrms-main\.git\logs\refs\heads\newhrms
+D:\agentichrms-main\.git\logs\refs\heads\newhrms-loginregister
+D:\agentichrms-main\.git\logs\refs\remotes\origin
+D:\agentichrms-main\.git\logs\refs\remotes\origin\agentichrms-mainupdated
+D:\agentichrms-main\.git\logs\refs\remotes\origin\facerecognition
+D:\agentichrms-main\.git\logs\refs\remotes\origin\fix
+D:\agentichrms-main\.git\logs\refs\remotes\origin\main
+D:\agentichrms-main\.git\logs\refs\remotes\origin\newhrms
+D:\agentichrms-main\.git\logs\refs\remotes\origin\newhrms-loginregister
+D:\agentichrms-main\.git\logs\refs\remotes\origin\fix\tools-and-frontend
+D:\agentichrms-main\.git\objects\00
+D:\agentichrms-main\.git\objects\05
+D:\agentichrms-main\.git\objects\06
+D:\agentichrms-main\.git\objects\09
+D:\agentichrms-main\.git\objects\0a
+D:\agentichrms-main\.git\objects\0c
+D:\agentichrms-main\.git\objects\0d
+D:\agentichrms-main\.git\objects\0f
+D:\agentichrms-main\.git\objects\12
+D:\agentichrms-main\.git\objects\13
+D:\agentichrms-main\.git\objects\14
+D:\agentichrms-main\.git\objects\16
+D:\agentichrms-main\.git\objects\18
+D:\agentichrms-main\.git\objects\19
+D:\agentichrms-main\.git\objects\1b
+D:\agentichrms-main\.git\objects\1d
+D:\agentichrms-main\.git\objects\1f
+D:\agentichrms-main\.git\objects\21
+D:\agentichrms-main\.git\objects\22
+D:\agentichrms-main\.git\objects\24
+D:\agentichrms-main\.git\objects\27
+D:\agentichrms-main\.git\objects\28
+D:\agentichrms-main\.git\objects\2c
+D:\agentichrms-main\.git\objects\2e
+D:\agentichrms-main\.git\objects\2f
+D:\agentichrms-main\.git\objects\31
+D:\agentichrms-main\.git\objects\32
+D:\agentichrms-main\.git\objects\36
+D:\agentichrms-main\.git\objects\3b
+D:\agentichrms-main\.git\objects\3d
+D:\agentichrms-main\.git\objects\3f
+D:\agentichrms-main\.git\objects\41
+D:\agentichrms-main\.git\objects\43
+D:\agentichrms-main\.git\objects\44
+D:\agentichrms-main\.git\objects\45
+D:\agentichrms-main\.git\objects\46
+D:\agentichrms-main\.git\objects\47
+D:\agentichrms-main\.git\objects\48
+D:\agentichrms-main\.git\objects\49
+D:\agentichrms-main\.git\objects\4a
+D:\agentichrms-main\.git\objects\4d
+D:\agentichrms-main\.git\objects\4f
+D:\agentichrms-main\.git\objects\50
+D:\agentichrms-main\.git\objects\51
+D:\agentichrms-main\.git\objects\53
+D:\agentichrms-main\.git\objects\55
+D:\agentichrms-main\.git\objects\58
+D:\agentichrms-main\.git\objects\5a
+D:\agentichrms-main\.git\objects\5b
+D:\agentichrms-main\.git\objects\5c
+D:\agentichrms-main\.git\objects\5f
+D:\agentichrms-main\.git\objects\61
+D:\agentichrms-main\.git\objects\62
+D:\agentichrms-main\.git\objects\66
+D:\agentichrms-main\.git\objects\6a
+D:\agentichrms-main\.git\objects\6d
+D:\agentichrms-main\.git\objects\6f
+D:\agentichrms-main\.git\objects\71
+D:\agentichrms-main\.git\objects\72
+D:\agentichrms-main\.git\objects\73
+D:\agentichrms-main\.git\objects\75
+D:\agentichrms-main\.git\objects\77
+D:\agentichrms-main\.git\objects\78
+D:\agentichrms-main\.git\objects\79
+D:\agentichrms-main\.git\objects\7a
+D:\agentichrms-main\.git\objects\7b
+D:\agentichrms-main\.git\objects\81
+D:\agentichrms-main\.git\objects\82
+D:\agentichrms-main\.git\objects\83
+D:\agentichrms-main\.git\objects\84
+D:\agentichrms-main\.git\objects\8c
+D:\agentichrms-main\.git\objects\8e
+D:\agentichrms-main\.git\objects\8f
+D:\agentichrms-main\.git\objects\96
+D:\agentichrms-main\.git\objects\97
+D:\agentichrms-main\.git\objects\99
+D:\agentichrms-main\.git\objects\9a
+D:\agentichrms-main\.git\objects\9c
+D:\agentichrms-main\.git\objects\9e
+D:\agentichrms-main\.git\objects\9f
+D:\agentichrms-main\.git\objects\a4
+D:\agentichrms-main\.git\objects\a5
+D:\agentichrms-main\.git\objects\a6
+D:\agentichrms-main\.git\objects\a7
+D:\agentichrms-main\.git\objects\a8
+D:\agentichrms-main\.git\objects\ab
+D:\agentichrms-main\.git\objects\ac
+D:\agentichrms-main\.git\objects\ad
+D:\agentichrms-main\.git\objects\b0
+D:\agentichrms-main\.git\objects\b1
+D:\agentichrms-main\.git\objects\b3
+D:\agentichrms-main\.git\objects\b4
+D:\agentichrms-main\.git\objects\b6
+D:\agentichrms-main\.git\objects\b7
+D:\agentichrms-main\.git\objects\b8
+D:\agentichrms-main\.git\objects\b9
+D:\agentichrms-main\.git\objects\bc
+D:\agentichrms-main\.git\objects\c1
+D:\agentichrms-main\.git\objects\c2
+D:\agentichrms-main\.git\objects\c3
+D:\agentichrms-main\.git\objects\c4
+D:\agentichrms-main\.git\objects\c6
+D:\agentichrms-main\.git\objects\c7
+D:\agentichrms-main\.git\objects\c9
+D:\agentichrms-main\.git\objects\ca
+D:\agentichrms-main\.git\objects\cf
+D:\agentichrms-main\.git\objects\d0
+D:\agentichrms-main\.git\objects\d2
+D:\agentichrms-main\.git\objects\d4
+D:\agentichrms-main\.git\objects\d5
+D:\agentichrms-main\.git\objects\d6
+D:\agentichrms-main\.git\objects\d7
+D:\agentichrms-main\.git\objects\d9
+D:\agentichrms-main\.git\objects\e0
+D:\agentichrms-main\.git\objects\e6
+D:\agentichrms-main\.git\objects\e7
+D:\agentichrms-main\.git\objects\eb
+D:\agentichrms-main\.git\objects\ed
+D:\agentichrms-main\.git\objects\ef
+D:\agentichrms-main\.git\objects\f2
+D:\agentichrms-main\.git\objects\f4
+D:\agentichrms-main\.git\objects\f5
+D:\agentichrms-main\.git\objects\f6
+D:\agentichrms-main\.git\objects\f9
+D:\agentichrms-main\.git\objects\fa
+D:\agentichrms-main\.git\objects\fc
+D:\agentichrms-main\.git\objects\ff
+D:\agentichrms-main\.git\objects\info
+D:\agentichrms-main\.git\objects\pack
+D:\agentichrms-main\.git\objects\00\05d1951b10b8d866d21ab98d09e873162f6af0
+D:\agentichrms-main\.git\objects\05\fbf6ddd3a8ef06cf938a35da0799dd50dc218c
+D:\agentichrms-main\.git\objects\06\5c92887741839f35fb975f294791a3187bcf3d
+D:\agentichrms-main\.git\objects\09\8fde8ec09bda99c8bd38db4ffd70cca7d30172
+D:\agentichrms-main\.git\objects\0a\4e96b8f810afea812f1cf5dc831b0e83fd0383
+D:\agentichrms-main\.git\objects\0c\7ced3c5e69e0a5763a636e79c592640d5f06dd
+D:\agentichrms-main\.git\objects\0d\432998641b31fc90d8debc4bf932d33162b397
+D:\agentichrms-main\.git\objects\0f\4be6a09ca5c10790a01ba80612e2873e361de7
+D:\agentichrms-main\.git\objects\0f\ebebdf12943d0453aa8bb2b363e99c5838ba7f
+D:\agentichrms-main\.git\objects\12\4f5ca5d94b32a4bd6cb65768cc655db3792f51
+D:\agentichrms-main\.git\objects\12\a4aa2bdfddb23160c84456e1c102e946b5b112
+D:\agentichrms-main\.git\objects\13\0ef1762e886e7e7a4d12e662a74ab4bb27c4f2
+D:\agentichrms-main\.git\objects\13\8dcb048767ac6e8c73b431fd74f96274077f19
+D:\agentichrms-main\.git\objects\13\b7783043ff3c9d68444b268f2742b2ce42ca1a
+D:\agentichrms-main\.git\objects\14\1b5eebda23dddcfa32e41cc5eb3a26d06f37e6
+D:\agentichrms-main\.git\objects\14\3d005e9ff28e7a1da5f469e674a09586215de1
+D:\agentichrms-main\.git\objects\14\722e2eb774abbe98f0e7a38aa6035c93b80a69
+D:\agentichrms-main\.git\objects\16\f02b46c3839911f7bf0e8bf2cf10ac54fa0f81
+D:\agentichrms-main\.git\objects\18\52efe2f3cc7a6b99c9a915868e963aca5ef494
+D:\agentichrms-main\.git\objects\19\71c6039d17563c0bb845c96b5c8c6c4fbf6f13
+D:\agentichrms-main\.git\objects\19\aafc0723f54ba0adc00252821b3241ae7057da
+D:\agentichrms-main\.git\objects\1b\9b78410af5e1121e7e6c6f16e3dd62a22b9ded
+D:\agentichrms-main\.git\objects\1d\f0a2ff8bcd5f7dee822dea9d183f66bd376f58
+D:\agentichrms-main\.git\objects\1f\84a8dc3a488a08215e600e5c22d9ffff4811e2
+D:\agentichrms-main\.git\objects\21\516c4ae0069f35400990b12d82cf56b1430d9c
+D:\agentichrms-main\.git\objects\22\aaae13102dcc4c8f5474d33fbcadd74cd92457
+D:\agentichrms-main\.git\objects\24\b304d3b8f66dfbcada8473666e13e278d7ddaa
+D:\agentichrms-main\.git\objects\27\2da964cb5e502391556c26b3c5f6bca4df31d8
+D:\agentichrms-main\.git\objects\27\647bf2f7e784bb133375a2dece9038bb4a2628
+D:\agentichrms-main\.git\objects\28\dc420350ec9ddf1be8bb4079b319d1337203b9
+D:\agentichrms-main\.git\objects\2c\7f3f1acc4d9b8a388231df799d555cc513df49
+D:\agentichrms-main\.git\objects\2c\fbcd8c9e1d900812d6a2fc1c968fe622ecdefa
+D:\agentichrms-main\.git\objects\2e\8cfbf99cccb1a8bf1ab906417cea8e1df2f132
+D:\agentichrms-main\.git\objects\2f\20274bb0ed707f929bad74cf2902dc4f3333b3
+D:\agentichrms-main\.git\objects\31\21d879d454443e2c4ac749856cc4616b1461fa
+D:\agentichrms-main\.git\objects\31\e4599136c96b93c78558a49ffa79f3777a14a7
+D:\agentichrms-main\.git\objects\32\0be56ac391ba9f6b31563a04712dbec2130f0a
+D:\agentichrms-main\.git\objects\32\a79c49d38307f9f95afde11857f78ad6214c0b
+D:\agentichrms-main\.git\objects\36\3a13177ab1e3bbb87f39e62dfedc4658d2e9c5
+D:\agentichrms-main\.git\objects\36\54be0be10256fd76bc80c1a479874607f4015f
+D:\agentichrms-main\.git\objects\36\5c347f1833cda3426aebe4f85bcc68aa54df34
+D:\agentichrms-main\.git\objects\3b\2214a99dcd5c33ad5de292e8e4439d5cff6b34
+D:\agentichrms-main\.git\objects\3b\3919afca440f8a0a4445687ec1ffdfb522ebc2
+D:\agentichrms-main\.git\objects\3b\b1ad551c7b8a0c2e94a238ac83a369d1525a5b
+D:\agentichrms-main\.git\objects\3d\434bd56cfad1f2aa19d084e2a085b2ac70978b
+D:\agentichrms-main\.git\objects\3f\d5d7b756b1d3d6dfe19f9e34644a765ea3c26f
+D:\agentichrms-main\.git\objects\41\67483dd2d5a4b138abb02c47ac25f9d9ab6335
+D:\agentichrms-main\.git\objects\43\4ff88f6212a0f4647ead425ade176872d5ce16
+D:\agentichrms-main\.git\objects\43\8519f1ef3bc36b71a6cbe341be845d4527bec6
+D:\agentichrms-main\.git\objects\44\a160dde32d177c1991eaf6cebbfd9a6d1eec3a
+D:\agentichrms-main\.git\objects\45\316c21bfce2b893ceaa4306d78bc2f98f1654a
+D:\agentichrms-main\.git\objects\45\799b6a20414514cfc71e5f8c9db70021c8f227
+D:\agentichrms-main\.git\objects\45\f37eb69c0a66edb65faab36a0b18c61611833f
+D:\agentichrms-main\.git\objects\46\b7861963c0e5a86c036f7feddfd0ea63b9f516
+D:\agentichrms-main\.git\objects\46\f891385ddd292c07bfe78d792d1eed654f4dd3
+D:\agentichrms-main\.git\objects\47\a92a1a924cca8c92bf26456ed37dca3309f70d
+D:\agentichrms-main\.git\objects\48\118d1f70f2b9573f32788a05962d6c1785015f
+D:\agentichrms-main\.git\objects\48\d229265bf4a4af5562314ceb2c51c93573419e
+D:\agentichrms-main\.git\objects\49\51f94ba2b46e48c3a6f09cf00786f99f8c8560
+D:\agentichrms-main\.git\objects\4a\15bd9590261f80ff2af8f17cc721347165c700
+D:\agentichrms-main\.git\objects\4d\654823ed9164a2f77207e753b8e10b5a047371
+D:\agentichrms-main\.git\objects\4f\d15c9147f86c5e81310a86f1356b1bfdb48399
+D:\agentichrms-main\.git\objects\50\59c15c8723d2decc35db23739641fb62762056
+D:\agentichrms-main\.git\objects\50\a716e3eadda5f36058cbbf470570e765e0355b
+D:\agentichrms-main\.git\objects\51\deb6d5322c200301b1d2664684836e80c69d5d
+D:\agentichrms-main\.git\objects\51\fd13f8e40b7391eb95d39306bb0c8b965c403a
+D:\agentichrms-main\.git\objects\53\1189a6cc0888935208cb3bd452edf241f966f9
+D:\agentichrms-main\.git\objects\55\07546b38c8b230c73e4bca86e64a99d65a88a8
+D:\agentichrms-main\.git\objects\55\82324c41ca0cd7056d76905e55bfc24e867ebe
+D:\agentichrms-main\.git\objects\58\583fcde841946acd6b734d8a6197bd9c9fbd74
+D:\agentichrms-main\.git\objects\5a\65384b0fd6d4754bd03e02fcbb3ac225e5780c
+D:\agentichrms-main\.git\objects\5a\b880beb61f560924424dce65e548c386dc19a4
+D:\agentichrms-main\.git\objects\5b\ec37a1aa366ca30f92e8fdf87b2caaf2d846e3
+D:\agentichrms-main\.git\objects\5c\e0d812f5c9155fdd06698ef80d07802f085ea9
+D:\agentichrms-main\.git\objects\5f\731983b153673c4083de97e3afe201f99aa5f4
+D:\agentichrms-main\.git\objects\61\9e73e2e9585adb0b1d65e58a3221d9ad5095ec
+D:\agentichrms-main\.git\objects\61\d519075b36e0e50dd10b672970d9ea6eb4e4e2
+D:\agentichrms-main\.git\objects\62\372dad1f53ee8812bdcf0af1b9b7152f9d8c5f
+D:\agentichrms-main\.git\objects\66\5ea66f5408046c3fa151067fa6ee77a4407c86
+D:\agentichrms-main\.git\objects\66\e690593a8fe607a1a82f419c9f698831a573a3
+D:\agentichrms-main\.git\objects\6a\68a32bef91bef57c6597fff12f7854b5c0c9d7
+D:\agentichrms-main\.git\objects\6a\ffb8baf50e609708dd7fb10010ec9a2c583c18
+D:\agentichrms-main\.git\objects\6d\be560cc7ebe3f34be34f8b7a656d5ad78098a7
+D:\agentichrms-main\.git\objects\6d\c1896ed7e67041fd4c13a0ff753cb794dc7e57
+D:\agentichrms-main\.git\objects\6f\59788293af1b9a3a1a3da5ee13e9265047389b
+D:\agentichrms-main\.git\objects\6f\f13ae27ff604aae7d1e6082860d2ccb96466db
+D:\agentichrms-main\.git\objects\71\add33b125295fe5b3ff3386c9d5ffe8dd2b3a7
+D:\agentichrms-main\.git\objects\72\7ba7848e734fbb5f018185633be036f3a68ece
+D:\agentichrms-main\.git\objects\73\4f346c5afec9d1d0fc6598328ba630d4e6fc8a
+D:\agentichrms-main\.git\objects\73\72b3fdb827319635b13d49c35566c7dd2b33ef
+D:\agentichrms-main\.git\objects\73\bd8d480fb710b4c07a0fd6e6e9973f038154d9
+D:\agentichrms-main\.git\objects\75\1b96a702f6a3de0f5cb10088f12ef0901222d8
+D:\agentichrms-main\.git\objects\75\5621d2f1fe1c61889872615c5c447557d8f6fa
+D:\agentichrms-main\.git\objects\77\795559beaf2c9c46a5d199797a0dc1394cf279
+D:\agentichrms-main\.git\objects\78\4dc107ab17a5911f9c9e6f158a0799bb8c07ea
+D:\agentichrms-main\.git\objects\78\c49e7f1d8a55d5dcd306c0066eddb917ee830b
+D:\agentichrms-main\.git\objects\79\38e507f0bc3439b3d6b462c80b96ec3c7e63c5
+D:\agentichrms-main\.git\objects\7a\2c5d488f4fe005118bd29c24dfd0af69bfc72f
+D:\agentichrms-main\.git\objects\7b\611cb1f0bb67fcc2ef7827e48ad1b034bdb741
+D:\agentichrms-main\.git\objects\81\17ff46318e05f6c5a99caa3bf33ed6acccef3c
+D:\agentichrms-main\.git\objects\81\a3784cd1c0f6a83a341de5faccba4ac9276dfc
+D:\agentichrms-main\.git\objects\82\5be2ca4fca62b3bf154f837d44c70ed9dbb6ab
+D:\agentichrms-main\.git\objects\82\d91277612a8d973966d8fffed20e50156f5903
+D:\agentichrms-main\.git\objects\83\6f18e81a42b75b3df0a5d6368fbda4fc7392e5
+D:\agentichrms-main\.git\objects\83\de65ff95d20b33fbe04dca61be5242c6882acd
+D:\agentichrms-main\.git\objects\83\e49c3ed4562ce2fb3168499e9041d8b0806ecc
+D:\agentichrms-main\.git\objects\84\a3ff7f07f4882ce5ced4583c6b8e39e707f4e3
+D:\agentichrms-main\.git\objects\84\d7fcbbf77c6dd31a69a11fdd76687ef1ed2da2
+D:\agentichrms-main\.git\objects\8c\12118d44e2c77359ef81cfb5d5b7de9e41051c
+D:\agentichrms-main\.git\objects\8c\38f9599e3c4b332eee34809c1b9368f64de9e7
+D:\agentichrms-main\.git\objects\8c\85ef2319e7aec0b2e7f47fccef02207d653ed8
+D:\agentichrms-main\.git\objects\8e\0d7593f9f8b501ddaf68c298d9ccd3f9c44052
+D:\agentichrms-main\.git\objects\8f\6bb0f86b43fc7b61413418a7bf6be445a68b49
+D:\agentichrms-main\.git\objects\8f\b8e72e118536d78e2e1ca40c0c92ed9994b539
+D:\agentichrms-main\.git\objects\96\02b23a76db024bc5143d57dbd01310471bbb18
+D:\agentichrms-main\.git\objects\96\b1e4e20a2519b691e2aa160c392df2d93ae082
+D:\agentichrms-main\.git\objects\97\0c5e10f3bf6329de115f654025bbb8bf65d928
+D:\agentichrms-main\.git\objects\97\1a6c320ed1deb1c9a32a4fe00c9a1da4340d4c
+D:\agentichrms-main\.git\objects\97\ea14535bb152507ec73238eedcf3a684db9c61
+D:\agentichrms-main\.git\objects\99\5a02b416c79f3d6b5ef87c9f31ecbae136b176
+D:\agentichrms-main\.git\objects\99\a9f0cd199bc503d3c135d373cf26420fbdb44a
+D:\agentichrms-main\.git\objects\9a\676ff8ef7ec0f3febb319de2ef14f9b6f70720
+D:\agentichrms-main\.git\objects\9c\cea2e0c9333e9576ecad3abd800bcb93134f61
+D:\agentichrms-main\.git\objects\9e\221596e62d1c094c4affc07b9c0ba2eacb4955
+D:\agentichrms-main\.git\objects\9e\45ba1934db87c212e10e9a581a5f56480a429d
+D:\agentichrms-main\.git\objects\9e\f17251397cff1ca06da12fa045247d1d63ae5b
+D:\agentichrms-main\.git\objects\9f\0b0e26345b687d929d5017d0a5b0bac378d287
+D:\agentichrms-main\.git\objects\9f\d483adb7dd5674c27ea8bbab8314bc622c3ecb
+D:\agentichrms-main\.git\objects\a4\753e8624133e45b133071b61fa94f4aec5d0df
+D:\agentichrms-main\.git\objects\a5\0b0ebeb20bef4071b769e8fc840ed24e7db8cf
+D:\agentichrms-main\.git\objects\a6\7dd00560f5000e63d7f67998bd2aa7cd7fc6dd
+D:\agentichrms-main\.git\objects\a7\7a0cfc61d59a0645aaa9783bc432ba74ba62e7
+D:\agentichrms-main\.git\objects\a8\3d74669204767ec47e1ed484d12fd44c7a7b53
+D:\agentichrms-main\.git\objects\ab\60f93a7b64f0e838e4ad5a4a2ee08d289c5e01
+D:\agentichrms-main\.git\objects\ac\96e54ca7e8a5cf722bbd5bfe77a630beb5a2b5
+D:\agentichrms-main\.git\objects\ad\20c68c09ba7670293b915db2864e1708c08233
+D:\agentichrms-main\.git\objects\b0\18d68b198f51192e6ea56716498d1db3a50428
+D:\agentichrms-main\.git\objects\b1\30217ac9218a47cb2cb9ed6a39fa4c8e8c737c
+D:\agentichrms-main\.git\objects\b3\cc672585372b4f4ad0625671b1b777193bdae2
+D:\agentichrms-main\.git\objects\b4\8b432d219d9462e1e197443d3787e3ad4dfa68
+D:\agentichrms-main\.git\objects\b6\234e6bbdae1916d35d86d75f9ad323939d2f20
+D:\agentichrms-main\.git\objects\b6\45039e5d3dd05bba67f9f233d77180405cf270
+D:\agentichrms-main\.git\objects\b6\6ea9b891d8af0cf631118bed8bdf1a7385cf9a
+D:\agentichrms-main\.git\objects\b6\721576fd07f9134bb0aebe6c4c6ca08966e4f6
+D:\agentichrms-main\.git\objects\b7\0e90555a015183d27a430090af3ac704a74799
+D:\agentichrms-main\.git\objects\b7\d5c1c0ff9ecc1536bb2d0bb47001d3390e54ba
+D:\agentichrms-main\.git\objects\b7\db8c5d04c3da25073e4828e0c10574e4c573da
+D:\agentichrms-main\.git\objects\b8\5ae8aae53c9ecd33ac11161d5479d4817e95b7
+D:\agentichrms-main\.git\objects\b8\6d384b7f730b0e124c833a16f817039bf2107f
+D:\agentichrms-main\.git\objects\b9\51f267c18712c7d93a7a035681c64cd6ae4359
+D:\agentichrms-main\.git\objects\b9\5ae661e64c57c014cf96532a19d0b252088826
+D:\agentichrms-main\.git\objects\bc\4e61f94109bf5e74d2c0a40822ac62f1b5d644
+D:\agentichrms-main\.git\objects\c1\6c331218187237b4f10c6596256f0206983a54
+D:\agentichrms-main\.git\objects\c2\0151e05174c45644d7bc88e61da024ccb0d933
+D:\agentichrms-main\.git\objects\c3\0e87720944a8f9971dca30b9e7f30bdb8e4f86
+D:\agentichrms-main\.git\objects\c4\eb5d71d0826850b5f0cc366d6dbd37730dd9f7
+D:\agentichrms-main\.git\objects\c6\7b879ecc6e0e216bb617ba8da17df584a3da01
+D:\agentichrms-main\.git\objects\c6\95cb5bbe8c436c80f6881cb34c908e52eb4cf9
+D:\agentichrms-main\.git\objects\c7\c1bb77fbdc6f0afe7e46fb4db61699bd33f9e9
+D:\agentichrms-main\.git\objects\c9\95fe69b7232e565cf4646dbf12c52b5c02eb6b
+D:\agentichrms-main\.git\objects\ca\b74d92e543f5852dbc1e050e6a43b2ab37a112
+D:\agentichrms-main\.git\objects\cf\5bad3b2bf3dd804f77c410f7a486d54ca03940
+D:\agentichrms-main\.git\objects\d0\444f6b150a5b4865a492a4f05703ee30132533
+D:\agentichrms-main\.git\objects\d2\238486e18d4484783eadadb0b5a8a39a952e00
+D:\agentichrms-main\.git\objects\d4\d181e0e05cb19ae4f064b70dc4af4a83287c0d
+D:\agentichrms-main\.git\objects\d4\e66489bfb8421def696f66d9d7e604a80afe26
+D:\agentichrms-main\.git\objects\d5\00066d2aa7ff3184d397580a8a2fe4a05404b9
+D:\agentichrms-main\.git\objects\d5\8f64efa22d84ab650e6429237b379b38974086
+D:\agentichrms-main\.git\objects\d5\933a4589135f6a233cd19c247aaa4c6451ba5b
+D:\agentichrms-main\.git\objects\d6\4727deb2b70a521260ce1d95b7f6eb71fd9e3c
+D:\agentichrms-main\.git\objects\d7\3af7e8d2d53e679683a02ab15eb71cec683000
+D:\agentichrms-main\.git\objects\d9\a6a939b7e7968c40a216a1644cfbbd6d996f6e
+D:\agentichrms-main\.git\objects\d9\aa3593df772f7ad30ee77c8b701d5342b1c31a
+D:\agentichrms-main\.git\objects\d9\f183d29e6d12084e4b00f4dad9667fce12705d
+D:\agentichrms-main\.git\objects\e0\3b5e147800d9a84445f5172955d433aaa31bd9
+D:\agentichrms-main\.git\objects\e6\de538c2a1be94d6548c32368f885c9279704a8
+D:\agentichrms-main\.git\objects\e7\e802ff571828f632552d1b43eeaba547d32868
+D:\agentichrms-main\.git\objects\e7\f9e713ccd75208add1e34c9852c34396acf75a
+D:\agentichrms-main\.git\objects\eb\a8c20980b2dc0e6d86b1ded6751ff3f08ad178
+D:\agentichrms-main\.git\objects\ed\656b9cd13dc0de641940bcecec89c094cfb613
+D:\agentichrms-main\.git\objects\ef\1e838bc71335e1018a9b81b69d5c504f50f574
+D:\agentichrms-main\.git\objects\ef\2c4b0d2b2694c78ec5b31f89cf6c76c1ef1d41
+D:\agentichrms-main\.git\objects\f2\14c348de46adc2333bee363224c21e8f9f5620
+D:\agentichrms-main\.git\objects\f2\f75f8b6f8d690f8b2177bb2d6cdc9412c71e2a
+D:\agentichrms-main\.git\objects\f4\93f74fee9dfe698bc076106b660fe785b04b07
+D:\agentichrms-main\.git\objects\f5\1ad4cbde38c6bc29789d623707178c532c280d
+D:\agentichrms-main\.git\objects\f6\3bad0dded48aa28c9c31628d06615576df4f7f
+D:\agentichrms-main\.git\objects\f9\a1eb9419dc53f0b971dc869f917d7ac4cc8f94
+D:\agentichrms-main\.git\objects\f9\dcf98a278d2274d753e4efd8b41547e586bda9
+D:\agentichrms-main\.git\objects\fa\9e6e245c1c1cb02190b16f2f9f29b46df59b7e
+D:\agentichrms-main\.git\objects\fa\a623e03c90404a9486234d7a6b6aa3d40d237e
+D:\agentichrms-main\.git\objects\fa\ba89bd1a0752bf00f60f569c75489758b730d6
+D:\agentichrms-main\.git\objects\fc\ca67a36da076dd8cd86b9502d4a3e58009a87e
+D:\agentichrms-main\.git\objects\ff\39db90de6deabadefab7574d5db4485a811b18
+D:\agentichrms-main\.git\objects\pack\pack-fa28efa912fc6c1b312348b3e16d61a9a7f78c81.idx
+D:\agentichrms-main\.git\objects\pack\pack-fa28efa912fc6c1b312348b3e16d61a9a7f78c81.pack
+D:\agentichrms-main\.git\objects\pack\pack-fa28efa912fc6c1b312348b3e16d61a9a7f78c81.rev
+D:\agentichrms-main\.git\refs\heads
+D:\agentichrms-main\.git\refs\remotes
+D:\agentichrms-main\.git\refs\tags
+D:\agentichrms-main\.git\refs\heads\newhrms
+D:\agentichrms-main\.git\refs\heads\newhrms-loginregister
+D:\agentichrms-main\.git\refs\remotes\origin
+D:\agentichrms-main\.git\refs\remotes\origin\agentichrms-mainupdated
+D:\agentichrms-main\.git\refs\remotes\origin\facerecognition
+D:\agentichrms-main\.git\refs\remotes\origin\fix
+D:\agentichrms-main\.git\refs\remotes\origin\main
+D:\agentichrms-main\.git\refs\remotes\origin\newhrms
+D:\agentichrms-main\.git\refs\remotes\origin\newhrms-loginregister
+D:\agentichrms-main\.git\refs\remotes\origin\fix\tools-and-frontend
+D:\agentichrms-main\agent\agent.py
+D:\agentichrms-main\agent\graph.py
+D:\agentichrms-main\agent\state.py
+D:\agentichrms-main\agent\tools_registry.py
+D:\agentichrms-main\agent\__init__.py
+D:\agentichrms-main\alembic\.gitignore
+D:\agentichrms-main\alembic\README
+D:\agentichrms-main\alembic\script.py.mako
+D:\agentichrms-main\alembic\versions
+D:\agentichrms-main\alembic\versions\0a1c40ff2581_sync_models.py
+D:\agentichrms-main\alembic\versions\10afa46b8d8a_sync_models_and_onboarding.py
+D:\agentichrms-main\alembic\versions\1ed8a42632d5_add_onboarding_tasks_table.py
+D:\agentichrms-main\alembic\versions\349faee636ca_sync_models.py
+D:\agentichrms-main\alembic\versions\7064cd011618_initial_schema_with_face_and_pin.py
+D:\agentichrms-main\alembic\versions\74130856f829_sync_models_and_onboarding.py
+D:\agentichrms-main\alembic\versions\e274c21a9d65_fix_onboarding_models_and_cleanup.py
+D:\agentichrms-main\backend\api
+D:\agentichrms-main\backend\core
+D:\agentichrms-main\backend\database
+D:\agentichrms-main\backend\main.py
+D:\agentichrms-main\backend\schemas
+D:\agentichrms-main\backend\services
+D:\agentichrms-main\backend\api\chat.py
+D:\agentichrms-main\backend\api\docs.py
+D:\agentichrms-main\backend\api\face_auth.py
+D:\agentichrms-main\backend\api\meetings.py
+D:\agentichrms-main\backend\api\onboarding.py
+D:\agentichrms-main\backend\api\pin_auth.py
+D:\agentichrms-main\backend\api\registration.py
+D:\agentichrms-main\backend\core\config.py
+D:\agentichrms-main\backend\core\security.py
+D:\agentichrms-main\backend\database\models.py
+D:\agentichrms-main\backend\database\session.py
+D:\agentichrms-main\backend\schemas\auth.py
+D:\agentichrms-main\backend\schemas\chat.py
+D:\agentichrms-main\backend\schemas\hr.py
+D:\agentichrms-main\backend\schemas\user.py
+D:\agentichrms-main\backend\services\email_service.py
+D:\agentichrms-main\backend\services\face_service.py
+D:\agentichrms-main\backend\services\twilio_service.py
+D:\agentichrms-main\data\chroma_db
+D:\agentichrms-main\data\dataset_cropped
+D:\agentichrms-main\data\dataset_raw
+D:\agentichrms-main\data\docs
+D:\agentichrms-main\data\face_models
+D:\agentichrms-main\data\hr_database.sqlite
+D:\agentichrms-main\data\chroma_db\3ced4942-a631-4623-b8d4-a0c099970bf3
+D:\agentichrms-main\data\chroma_db\57734f3b-66ad-4734-bfb1-123841ad5e19
+D:\agentichrms-main\data\chroma_db\907ca910-1efa-4086-8228-01e641741955
+D:\agentichrms-main\data\chroma_db\bf92b18a-bbc9-4f27-a9a6-7be2b28ac4de
+D:\agentichrms-main\data\chroma_db\chroma.sqlite3
+D:\agentichrms-main\data\chroma_db\f4b06c78-e97d-4204-a7c0-ad38b3b993a2
+D:\agentichrms-main\data\chroma_db\feb8ac02-6b08-4c21-99fd-7532b01eac70
+D:\agentichrms-main\data\chroma_db\3ced4942-a631-4623-b8d4-a0c099970bf3\data_level0.bin
+D:\agentichrms-main\data\chroma_db\3ced4942-a631-4623-b8d4-a0c099970bf3\header.bin
+D:\agentichrms-main\data\chroma_db\3ced4942-a631-4623-b8d4-a0c099970bf3\length.bin
+D:\agentichrms-main\data\chroma_db\3ced4942-a631-4623-b8d4-a0c099970bf3\link_lists.bin
+D:\agentichrms-main\data\chroma_db\57734f3b-66ad-4734-bfb1-123841ad5e19\data_level0.bin
+D:\agentichrms-main\data\chroma_db\57734f3b-66ad-4734-bfb1-123841ad5e19\header.bin
+D:\agentichrms-main\data\chroma_db\57734f3b-66ad-4734-bfb1-123841ad5e19\length.bin
+D:\agentichrms-main\data\chroma_db\57734f3b-66ad-4734-bfb1-123841ad5e19\link_lists.bin
+D:\agentichrms-main\data\chroma_db\907ca910-1efa-4086-8228-01e641741955\data_level0.bin
+D:\agentichrms-main\data\chroma_db\907ca910-1efa-4086-8228-01e641741955\header.bin
+D:\agentichrms-main\data\chroma_db\907ca910-1efa-4086-8228-01e641741955\length.bin
+D:\agentichrms-main\data\chroma_db\907ca910-1efa-4086-8228-01e641741955\link_lists.bin
+D:\agentichrms-main\data\chroma_db\bf92b18a-bbc9-4f27-a9a6-7be2b28ac4de\data_level0.bin
+D:\agentichrms-main\data\chroma_db\bf92b18a-bbc9-4f27-a9a6-7be2b28ac4de\header.bin
+D:\agentichrms-main\data\chroma_db\bf92b18a-bbc9-4f27-a9a6-7be2b28ac4de\length.bin
+D:\agentichrms-main\data\chroma_db\bf92b18a-bbc9-4f27-a9a6-7be2b28ac4de\link_lists.bin
+D:\agentichrms-main\data\chroma_db\f4b06c78-e97d-4204-a7c0-ad38b3b993a2\data_level0.bin
+D:\agentichrms-main\data\chroma_db\f4b06c78-e97d-4204-a7c0-ad38b3b993a2\header.bin
+D:\agentichrms-main\data\chroma_db\f4b06c78-e97d-4204-a7c0-ad38b3b993a2\length.bin
+D:\agentichrms-main\data\chroma_db\f4b06c78-e97d-4204-a7c0-ad38b3b993a2\link_lists.bin
+D:\agentichrms-main\data\chroma_db\feb8ac02-6b08-4c21-99fd-7532b01eac70\data_level0.bin
+D:\agentichrms-main\data\chroma_db\feb8ac02-6b08-4c21-99fd-7532b01eac70\header.bin
+D:\agentichrms-main\data\chroma_db\feb8ac02-6b08-4c21-99fd-7532b01eac70\length.bin
+D:\agentichrms-main\data\chroma_db\feb8ac02-6b08-4c21-99fd-7532b01eac70\link_lists.bin
+D:\agentichrms-main\data\dataset_cropped\Akansha
+D:\agentichrms-main\data\dataset_cropped\Amar
+D:\agentichrms-main\data\dataset_cropped\Ashish
+D:\agentichrms-main\data\dataset_cropped\Das
+D:\agentichrms-main\data\dataset_cropped\Dipti
+D:\agentichrms-main\data\dataset_cropped\face_project - Shortcut.lnk
+D:\agentichrms-main\data\dataset_cropped\Gouri
+D:\agentichrms-main\data\dataset_cropped\Gunesh
+D:\agentichrms-main\data\dataset_cropped\Ishan
+D:\agentichrms-main\data\dataset_cropped\Mayur
+D:\agentichrms-main\data\dataset_cropped\Nagesh
+D:\agentichrms-main\data\dataset_cropped\Nikita
+D:\agentichrms-main\data\dataset_cropped\Rangita
+D:\agentichrms-main\data\dataset_cropped\Shweta
+D:\agentichrms-main\data\dataset_cropped\Supriya
+D:\agentichrms-main\data\dataset_cropped\Suraj
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha001.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha002.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha003.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha004.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha005.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha006.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha007.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha008.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha009.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha010.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha011.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha012.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha013.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha014.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha015.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha016.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha017.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha018.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha019.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha020.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha021.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha022.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha023.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha024.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha025.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha026.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha027.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha028.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha029.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha030.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha031.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha032.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha033.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha034.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha035.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha036.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha037.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha038.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha039.jpg
+D:\agentichrms-main\data\dataset_cropped\Akansha\akansha040.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar001.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar002.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar003.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar004.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar005.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar006.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar007.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar008.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar009.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar010.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar011.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar012.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar013.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar014.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar015.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar016.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar017.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar018.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar019.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar020.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar021.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar022.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar023.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar024.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar025.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar026.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar027.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar028.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar029.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar030.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar031.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar032.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar033.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar034.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar035.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar036.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar037.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar038.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar039.jpg
+D:\agentichrms-main\data\dataset_cropped\Amar\amar040.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish001.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish002.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish003.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish004.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish005.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish006.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish007.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish008.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish009.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish010.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish011.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish012.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish013.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish014.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish015.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish016.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish017.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish018.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish019.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish020.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish021.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish022.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish023.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish024.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish025.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish026.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish027.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish028.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish029.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish030.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish031.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish032.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish033.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish034.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish035.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish036.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish037.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish038.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish039.jpg
+D:\agentichrms-main\data\dataset_cropped\Ashish\ashish040.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das001.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das002.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das003.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das004.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das005.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das006.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das007.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das008.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das009.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das010.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das011.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das012.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das013.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das014.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das015.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das016.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das017.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das018.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das019.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das020.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das021.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das022.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das023.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das024.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das025.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das026.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das027.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das028.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das029.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das030.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das031.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das032.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das033.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das034.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das035.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das036.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das037.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das038.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das039.jpg
+D:\agentichrms-main\data\dataset_cropped\Das\das040.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti001.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti002.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti003.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti004.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti005.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti006.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti007.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti008.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti009.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti010.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti011.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti012.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti013.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti014.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti015.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti016.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti017.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti018.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti019.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti020.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti021.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti022.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti023.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti024.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti025.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti026.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti027.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti028.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti029.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti030.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti031.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti032.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti033.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti034.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti035.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti036.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti037.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti038.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti039.jpg
+D:\agentichrms-main\data\dataset_cropped\Dipti\dipti040.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri001.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri002.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri003.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri004.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri005.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri006.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri007.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri008.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri009.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri010.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri011.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri012.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri013.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri014.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri015.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri016.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri017.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri018.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri019.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri020.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri021.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri022.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri023.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri024.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri025.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri026.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri027.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri028.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri029.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri030.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri031.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri032.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri033.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri034.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri035.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri036.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri037.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri038.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri039.jpg
+D:\agentichrms-main\data\dataset_cropped\Gouri\gouri040.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh001.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh002.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh003.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh004.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh005.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh006.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh007.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh008.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh009.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh010.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh011.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh012.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh013.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh014.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh015.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh016.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh017.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh018.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh019.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh020.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh021.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh022.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh023.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh024.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh025.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh026.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh027.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh028.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh029.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh030.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh031.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh032.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh033.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh034.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh035.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh036.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh037.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh038.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh039.jpg
+D:\agentichrms-main\data\dataset_cropped\Gunesh\gunesh040.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan001.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan002.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan003.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan004.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan005.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan006.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan007.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan008.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan009.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan010.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan011.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan012.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan013.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan014.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan015.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan016.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan017.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan018.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan019.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan020.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan021.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan022.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan023.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan024.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan025.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan026.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan027.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan028.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan029.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan030.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan031.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan032.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan033.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan034.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan035.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan036.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan037.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan038.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan039.jpg
+D:\agentichrms-main\data\dataset_cropped\Ishan\ishan040.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur001.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur002.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur003.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur004.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur005.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur006.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur007.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur008.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur009.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur010.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur011.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur012.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur013.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur014.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur015.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur016.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur017.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur018.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur019.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur020.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur021.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur022.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur023.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur024.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur025.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur026.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur027.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur028.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur029.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur030.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur031.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur032.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur033.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur034.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur035.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur036.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur037.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur038.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur039.jpg
+D:\agentichrms-main\data\dataset_cropped\Mayur\mayur040.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh001.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh002.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh003.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh004.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh005.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh006.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh007.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh008.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh009.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh010.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh011.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh012.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh013.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh014.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh015.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh016.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh017.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh018.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh019.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh020.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh021.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh022.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh023.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh024.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh025.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh026.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh027.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh028.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh029.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh030.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh031.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh032.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh033.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh034.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh035.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh036.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh037.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh038.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh039.jpg
+D:\agentichrms-main\data\dataset_cropped\Nagesh\nagesh040.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita001.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita002.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita003.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita004.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita005.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita006.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita007.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita008.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita009.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita010.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita011.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita012.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita013.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita014.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita015.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita016.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita017.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita018.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita019.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita020.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita021.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita022.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita023.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita024.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita025.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita026.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita027.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita028.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita029.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita030.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita031.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita032.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita033.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita034.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita035.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita036.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita037.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita038.jpg
+D:\agentichrms-main\data\dataset_cropped\Nikita\nikita039.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita001.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita002.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita003.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita004.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita005.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita006.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita007.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita008.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita009.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita010.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita011.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita012.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita013.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita014.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita015.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita016.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita017.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita018.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita019.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita020.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita021.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita022.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita023.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita024.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita025.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita026.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita027.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita028.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita029.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita030.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita031.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita032.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita033.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita034.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita035.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita036.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita037.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita038.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita039.jpg
+D:\agentichrms-main\data\dataset_cropped\Rangita\rangita040.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta001.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta002.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta003.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta004.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta005.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta006.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta007.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta008.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta009.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta010.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta011.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta012.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta013.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta014.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta015.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta016.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta017.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta018.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta019.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta020.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta021.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta022.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta023.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta024.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta025.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta026.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta027.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta028.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta029.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta030.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta031.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta032.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta033.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta034.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta035.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta036.jpg
+D:\agentichrms-main\data\dataset_cropped\Shweta\shweta037.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya001.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya002.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya003.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya004.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya005.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya006.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya007.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya008.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya009.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya010.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya011.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya012.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya013.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya014.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya015.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya016.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya017.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya018.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya019.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya020.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya021.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya022.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya023.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya024.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya025.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya026.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya027.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya028.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya029.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya030.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya031.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya032.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya033.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya034.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya035.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya036.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya037.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya038.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya039.jpg
+D:\agentichrms-main\data\dataset_cropped\Supriya\supriya040.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj001.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj002.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj003.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj004.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj005.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj006.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj007.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj008.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj009.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj010.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj011.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj012.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj013.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj014.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj015.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj016.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj017.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj018.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj019.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj020.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj021.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj022.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj023.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj024.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj025.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj026.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj027.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj028.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj029.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj030.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj031.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj032.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj033.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj034.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj035.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj036.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj037.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj038.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj039.jpg
+D:\agentichrms-main\data\dataset_cropped\Suraj\suraj040.jpg
+D:\agentichrms-main\data\dataset_raw\Akansha
+D:\agentichrms-main\data\dataset_raw\Amar
+D:\agentichrms-main\data\dataset_raw\Ashish
+D:\agentichrms-main\data\dataset_raw\Das
+D:\agentichrms-main\data\dataset_raw\Dipti
+D:\agentichrms-main\data\dataset_raw\Gouri
+D:\agentichrms-main\data\dataset_raw\Gunesh
+D:\agentichrms-main\data\dataset_raw\Ishan
+D:\agentichrms-main\data\dataset_raw\Mayur
+D:\agentichrms-main\data\dataset_raw\Nagesh
+D:\agentichrms-main\data\dataset_raw\Nikita
+D:\agentichrms-main\data\dataset_raw\Rangita
+D:\agentichrms-main\data\dataset_raw\Shweta
+D:\agentichrms-main\data\dataset_raw\Supriya
+D:\agentichrms-main\data\dataset_raw\Suraj
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (1).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (10).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (11).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (12).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (13).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (14).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (15).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (16).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (17).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (18).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (19).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (2).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (20).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (21).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (3).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (4).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (5).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (6).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (7).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (8).jpg
+D:\agentichrms-main\data\dataset_raw\Akansha\Akansha (9).jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar001.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar002.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar003.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar004.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar005.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar006.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar007.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar008.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar009.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar010.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar011.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar012.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar013.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar014.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar015.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar016.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar017.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar018.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar019.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar020.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar021.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar022.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar023.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar024.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar025.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar026.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar027.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar028.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar029.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar030.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar031.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar032.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar033.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar034.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar035.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar036.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar037.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar038.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar039.jpg
+D:\agentichrms-main\data\dataset_raw\Amar\amar040.jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (1).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (10).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (11).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (12).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (13).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (14).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (15).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (16).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (17).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (18).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (19).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (2).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (20).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (21).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (22).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (23).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (24).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (25).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (3).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (4).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (5).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (6).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (7).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (8).jpg
+D:\agentichrms-main\data\dataset_raw\Ashish\Ashish (9).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (1).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (10).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (11).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (12).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (13).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (14).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (15).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (16).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (17).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (18).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (19).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (2).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (20).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (21).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (22).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (23).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (24).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (25).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (26).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (27).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (28).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (29).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (3).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (30).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (31).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (32).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (33).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (34).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (35).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (36).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (37).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (38).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (39).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (4).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (40).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (41).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (42).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (43).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (44).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (45).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (46).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (47).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (48).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (49).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (5).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (50).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (51).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (52).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (53).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (54).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (55).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (56).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (57).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (58).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (59).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (6).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (60).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (61).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (62).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (63).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (64).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (65).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (66).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (7).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (8).jpg
+D:\agentichrms-main\data\dataset_raw\Das\Das (9).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (1).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (10).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (11).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (12).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (13).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (14).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (15).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (16).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (17).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (18).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (19).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (2).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (20).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (21).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (22).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (23).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (24).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (25).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (26).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (27).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (28).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (29).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (3).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (30).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (31).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (32).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (33).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (34).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (35).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (36).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (37).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (38).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (39).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (4).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (40).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (5).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (6).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (7).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (8).jpg
+D:\agentichrms-main\data\dataset_raw\Dipti\Dipti (9).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (1).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (10).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (11).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (12).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (13).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (14).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (2).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (3).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (4).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (5).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (6).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (7).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (8).jpg
+D:\agentichrms-main\data\dataset_raw\Gouri\Gouri (9).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (1).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (10).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (11).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (12).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (13).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (14).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (15).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (16).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (17).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (18).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (19).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (2).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (20).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (21).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (22).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (23).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (24).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (25).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (26).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (27).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (3).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (4).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (5).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (6).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (7).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (8).jpg
+D:\agentichrms-main\data\dataset_raw\Gunesh\Gunesh (9).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (1).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (10).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (11).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (12).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (13).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (14).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (15).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (16).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (17).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (18).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (19).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (2).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (20).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (21).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (22).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (23).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (24).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (25).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (26).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (27).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (28).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (29).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (3).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (30).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (31).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (32).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (33).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (34).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (35).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (4).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (5).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (6).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (7).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (8).jpg
+D:\agentichrms-main\data\dataset_raw\Ishan\Ishan (9).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (1).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (10).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (11).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (12).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (13).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (14).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (15).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (16).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (17).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (18).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (19).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (2).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (20).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (3).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (4).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (5).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (6).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (7).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (8).jpg
+D:\agentichrms-main\data\dataset_raw\Mayur\Mayur (9).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (1).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (10).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (11).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (12).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (13).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (14).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (15).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (16).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (17).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (18).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (19).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (2).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (20).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (21).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (22).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (23).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (24).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (25).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (26).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (27).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (28).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (29).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (3).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (30).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (31).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (32).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (33).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (34).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (35).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (36).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (4).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (5).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (6).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (7).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (8).jpg
+D:\agentichrms-main\data\dataset_raw\Nagesh\Nagesh (9).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (1).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (2).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (3).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (4).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (5).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (6).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (7).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (8).jpg
+D:\agentichrms-main\data\dataset_raw\Nikita\Nikita (9).jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita001.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita002.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita003.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita004.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita005.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita006.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita007.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita008.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita009.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita010.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita011.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita012.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita013.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita014.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita015.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita016.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita017.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita018.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita019.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita020.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita021.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita022.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita023.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita024.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita025.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita026.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita027.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita028.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita029.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita030.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita031.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita032.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita033.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita034.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita035.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita036.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita037.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita038.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita039.jpg
+D:\agentichrms-main\data\dataset_raw\Rangita\rangita040.jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (1).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (10).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (11).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (12).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (13).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (14).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (15).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (16).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (17).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (18).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (19).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (2).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (3).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (4).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (5).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (6).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (7).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (8).jpg
+D:\agentichrms-main\data\dataset_raw\Shweta\Shweta (9).jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya001.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya002.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya003.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya004.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya005.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya006.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya007.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya008.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya009.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya010.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya011.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya012.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya013.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya014.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya015.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya016.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya017.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya018.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya019.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya020.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya021.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya022.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya023.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya024.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya025.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya026.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya027.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya028.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya029.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya030.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya031.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya032.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya033.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya034.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya035.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya036.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya037.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya038.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya039.jpg
+D:\agentichrms-main\data\dataset_raw\Supriya\supriya040.jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (1).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (10).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (11).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (12).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (13).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (14).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (15).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (16).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (17).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (18).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (19).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (2).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (20).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (21).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (22).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (23).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (24).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (25).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (26).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (27).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (28).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (29).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (3).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (30).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (31).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (32).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (33).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (34).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (35).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (36).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (37).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (38).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (39).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (4).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (5).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (6).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (7).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (8).jpg
+D:\agentichrms-main\data\dataset_raw\Suraj\Suraj (9).jpg
+D:\agentichrms-main\data\docs\code_of_conduct.txt
+D:\agentichrms-main\data\docs\employee_handbook.md
+D:\agentichrms-main\data\docs\Holiday List 2026 3.pdf
+D:\agentichrms-main\data\docs\HR Manual draft 10-02-2026 - Madhuri.pdf
+D:\agentichrms-main\data\docs\HR manual draft.md
+D:\agentichrms-main\data\docs\leave_policy.md
+D:\agentichrms-main\data\docs\leave_policy.txt
+D:\agentichrms-main\data\docs\NDA letter head copy.pdf
+D:\agentichrms-main\data\docs\onboarding_guide.md
+D:\agentichrms-main\data\docs\remote_work_policy.docx
+D:\agentichrms-main\data\docs\remote_work_policy.md
+D:\agentichrms-main\data\docs\wfh_policy.md
+D:\agentichrms-main\data\face_models\embeddings.npy
+D:\agentichrms-main\data\face_models\face_classifier.pkl
+D:\agentichrms-main\data\face_models\labels.npy
+D:\agentichrms-main\documents\code_of_conduct.txt
+D:\agentichrms-main\documents\employee_handbook.md
+D:\agentichrms-main\documents\expense_policy.xlsx
+D:\agentichrms-main\documents\Holiday List for the Year 2025.pdf
+D:\agentichrms-main\documents\HR manual draft.md
+D:\agentichrms-main\documents\HR Policy Review and Recommendations.pdf
+D:\agentichrms-main\documents\leave_policy.md
+D:\agentichrms-main\documents\leave_policy.txt
+D:\agentichrms-main\documents\onboarding_guide.md
+D:\agentichrms-main\documents\remote_work_policy.docx
+D:\agentichrms-main\documents\remote_work_policy.md
+D:\agentichrms-main\documents\Synise Handbook.pdf
+D:\agentichrms-main\documents\wfh_policy.md
+D:\agentichrms-main\frontend\dist
+D:\agentichrms-main\frontend\index.html
+D:\agentichrms-main\frontend\node_modules
+D:\agentichrms-main\frontend\package-lock.json
+D:\agentichrms-main\frontend\package.json
+D:\agentichrms-main\frontend\src
+D:\agentichrms-main\frontend\vite.config.js
+D:\agentichrms-main\frontend\dist\assets
+D:\agentichrms-main\frontend\dist\index.html
+D:\agentichrms-main\frontend\dist\assets\index-DObhShWY.js
+D:\agentichrms-main\frontend\dist\assets\index-DScl4HIJ.css
+D:\agentichrms-main\frontend\src\App.jsx
+D:\agentichrms-main\frontend\src\components
+D:\agentichrms-main\frontend\src\index.css
+D:\agentichrms-main\frontend\src\main.jsx
+D:\agentichrms-main\frontend\src\components\Calendar.jsx
+D:\agentichrms-main\frontend\src\components\Dashboard.jsx
+D:\agentichrms-main\frontend\src\components\FaceIDAnimation.jsx
+D:\agentichrms-main\frontend\src\components\Login.css
+D:\agentichrms-main\frontend\src\components\Login.jsx
+D:\agentichrms-main\frontend\src\components\Register.css
+D:\agentichrms-main\frontend\src\components\Register.jsx
+D:\agentichrms-main\frontend\src\components\VerifyPin.jsx
+D:\agentichrms-main\rag\ingest_docs.py
+D:\agentichrms-main\rag\__init__.py
+D:\agentichrms-main\tools\analytics_tool.py
+D:\agentichrms-main\tools\base.py
+D:\agentichrms-main\tools\email_tool.py
+D:\agentichrms-main\tools\employee_tool.py
+D:\agentichrms-main\tools\leave_tool.py
+D:\agentichrms-main\tools\onboarding_tool.py
+D:\agentichrms-main\tools\retrieval.py
+D:\agentichrms-main\tools\__init__.py
+D:\agentichrms-main\utils\document_viewer.py
+D:\agentichrms-main\utils\source_preview.py
