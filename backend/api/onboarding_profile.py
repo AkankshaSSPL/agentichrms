@@ -1,18 +1,19 @@
 """
-Onboarding Profile API
-POST /api/onboarding-profile/chat   — AI chat for collecting profile data
-POST /api/onboarding-profile/save   — Save extracted profile fields
-GET  /api/onboarding-profile/me     — Get current employee's profile
+Onboarding Profile API – fully dynamic, no hardcoded fields.
+The AI is told which columns exist in the DB and which are currently empty
+for this employee. It decides what to ask and saves field-by-field as it goes.
 """
 
-import json
 import logging
+import json
+import re
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect as sa_inspect
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import date, datetime
+from typing import Optional, List, Any
+import httpx
 
 from backend.database.session import SessionLocal
 from backend.database.models import Employee
@@ -21,6 +22,42 @@ from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding-profile", tags=["Onboarding Profile"])
+
+# ── Columns to NEVER ask about
+SKIP_COLUMNS = {
+    "id", "name", "email", "phone", "phone_country_code",
+    "permanent_pin", "permanent_pin_hash", "pin_type", "pin_set_at",
+    "face_enrolled", "face_embedding", "face_registered",
+    "face_enrollment_date", "face_samples_count",
+    "email_verified", "phone_verified",
+    "onboarding_completed", "profile_completed",
+    "role_id", "manager_id", "employee_code",
+    "status", "created_at", "updated_at", "deleted_at",
+}
+
+COLUMN_LABELS = {
+    "department": "Department",
+    "designation": "Job Title / Designation",
+    "join_date": "Date of Joining (YYYY-MM-DD)",
+    "employment_type": "Employment Type (Full-time / Part-time / Contract)",
+    "date_of_birth": "Date of Birth (YYYY-MM-DD)",
+    "gender": "Gender (Male / Female / Other)",
+    "address_line1": "Address Line 1",
+    "address_line2": "Address Line 2 (optional)",
+    "city": "City",
+    "state": "State / Province",
+    "country": "Country",
+    "emergency_contact_name": "Emergency Contact Name",
+    "emergency_contact_phone": "Emergency Contact Phone",
+    "emergency_contact_relation": "Emergency Contact Relation",
+    "bank_name": "Bank Name",
+    "account_holder_name": "Account Holder Name",
+    "account_number": "Bank Account Number",
+    "bank_branch": "Bank Branch",
+    "base_salary": "Base Salary (optional)",
+}
+
+OPTIONAL_COLUMNS = {"address_line2", "base_salary"}
 
 
 def get_db():
@@ -44,145 +81,160 @@ def get_current_employee(request: Request, db: Session = Depends(get_db)):
     return emp
 
 
-# ── Chat endpoint ─────────────────────────────────────────────────────────────
+def get_profile_columns(employee: Employee) -> dict:
+    mapper = sa_inspect(Employee)
+    result = {}
+    for col in mapper.columns:
+        name = col.key
+        if name in SKIP_COLUMNS:
+            continue
+        val = getattr(employee, name, None)
+        result[name] = val
+    return result
+
+
+def build_dynamic_system_prompt(employee: Employee) -> str:
+    profile = get_profile_columns(employee)
+
+    filled = {k: v for k, v in profile.items() if v is not None and str(v).strip() not in ("", "None")}
+    missing_required = [k for k, v in profile.items() if (v is None or str(v).strip() in ("", "None")) and k not in OPTIONAL_COLUMNS]
+    missing_optional = [k for k, v in profile.items() if (v is None or str(v).strip() in ("", "None")) and k in OPTIONAL_COLUMNS]
+
+    filled_lines = "\n".join(f"  - {COLUMN_LABELS.get(k,k)}: {v}" for k, v in filled.items()) or "  (none yet)"
+    required_lines = "\n".join(f"  - {k}: {COLUMN_LABELS.get(k,k)}" for k in missing_required) or "  (all filled!)"
+    optional_lines = "\n".join(f"  - {k}: {COLUMN_LABELS.get(k,k)}" for k in missing_optional) or "  (none)"
+
+    all_fields = list(profile.keys())
+    json_template = "{" + ", ".join(f'"{k}": ""' for k in all_fields) + "}"
+
+    return f"""You are a friendly HR onboarding assistant for {employee.name}.
+
+ALREADY FILLED — DO NOT ASK FOR THESE:
+{filled_lines}
+
+REQUIRED FIELDS YOU MUST COLLECT:
+{required_lines}
+
+OPTIONAL FIELDS (ask but accept skip):
+{optional_lines}
+
+RULES:
+1. Only ask for MISSING fields. Never re-ask already-filled ones.
+2. Ask 1-2 related fields at a time. Never dump all questions at once.
+3. Accept natural language — infer correct values (e.g. "I joined in January 2024" → 2024-01-01).
+4. If resume is provided, extract everything you can and confirm gaps.
+5. Be warm, concise, encouraging. Use the employee's first name sometimes.
+6. After collecting a group of answers, output a partial save tag immediately:
+   <PARTIAL_SAVE>{{"field": "value"}}</PARTIAL_SAVE>
+7. When ALL required fields are collected (optional can be skipped), output at end of message:
+   <PROFILE_DATA>{json_template}</PROFILE_DATA>
+   with only newly collected values filled in (leave others as empty string "").
+8. If all required fields were already filled, say so and output <PROFILE_DATA>{{}}</PROFILE_DATA>.
+"""
+
+
+def apply_fields_to_employee(employee: Employee, fields: dict, db: Session):
+    date_fields = {"join_date", "date_of_birth"}
+    for key, val in fields.items():
+        if not val or str(val).strip() in ("", "None"):
+            continue
+        if not hasattr(employee, key):
+            continue
+        if key in date_fields:
+            for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%B %d, %Y", "%d %B %Y", "%Y-%m-%dT%H:%M:%S"):
+                try:
+                    parsed = datetime.strptime(str(val).strip()[:10], fmt[:len(str(val).strip()[:10])])
+                    setattr(employee, key, parsed.date() if key == "date_of_birth" else parsed)
+                    break
+                except ValueError:
+                    continue
+            else:
+                # fallback: just try the first 10 chars as YYYY-MM-DD
+                try:
+                    setattr(employee, key, datetime.strptime(str(val).strip()[:10], "%Y-%m-%d"))
+                except Exception:
+                    pass
+        elif key == "base_salary":
+            try:
+                setattr(employee, key, float(str(val).replace(",", "")))
+            except (ValueError, TypeError):
+                pass
+        else:
+            setattr(employee, key, str(val).strip())
+    db.commit()
+
+
 class OnboardingChatRequest(BaseModel):
     message: str
     history: Optional[List[dict]] = []
-    resume_text: Optional[str] = None   # extracted text from uploaded resume
-
-
-SYSTEM_PROMPT = """You are a friendly HR onboarding assistant. Your job is to collect the employee's profile information through natural conversation.
-
-Fields to collect (collect them conversationally, one topic at a time):
-1. Department (e.g. Engineering, Marketing, Finance, HR, Sales, Operations)
-2. Designation / Job Title
-3. Date of Joining (format: YYYY-MM-DD)
-4. Employment Type (Full-time, Part-time, Contract, Intern)
-5. Date of Birth (format: YYYY-MM-DD)
-6. Gender (Male, Female, Other)
-7. Address Line 1
-8. Address Line 2 (optional)
-9. City
-10. State/Province
-11. Country
-12. Emergency Contact Name
-13. Emergency Contact Phone
-14. Emergency Contact Relation (e.g. Father, Spouse, Friend)
-15. Bank Name
-16. Account Holder Name
-17. Account Number
-18. Bank Branch
-19. Base Salary (number only)
-
-RULES:
-- Be warm, friendly and conversational. Never list all fields at once.
-- Ask 1-2 related questions at a time (e.g. ask name + department together, then address fields together).
-- Accept natural language and infer the correct value (e.g. "I joined last Monday" → compute date).
-- If a resume is provided, extract all fields you can from it and ask the user to confirm or fill gaps.
-- When you have collected ALL required fields (all except optional ones), say exactly: "PROFILE_COMPLETE" on its own line, followed by a JSON block with all collected fields like this:
-
-PROFILE_COMPLETE
-```json
-{
-  "department": "...",
-  "designation": "...",
-  "join_date": "YYYY-MM-DD",
-  "employment_type": "...",
-  "date_of_birth": "YYYY-MM-DD",
-  "gender": "...",
-  "address_line1": "...",
-  "address_line2": "...",
-  "city": "...",
-  "state": "...",
-  "country": "...",
-  "emergency_contact_name": "...",
-  "emergency_contact_phone": "...",
-  "emergency_contact_relation": "...",
-  "bank_name": "...",
-  "account_holder_name": "...",
-  "account_number": "...",
-  "bank_branch": "...",
-  "base_salary": 0
-}
-```
-
-- Skip optional fields (address_line2) if the user says they don't have them.
-- If the user uploads a resume, say which fields you extracted and which still need confirmation.
-- Keep responses concise and friendly. Use emojis sparingly.
-"""
+    resume_text: Optional[str] = None
 
 
 @router.post("/chat")
 async def onboarding_chat(
-    req: OnboardingChatRequest,
+    payload: OnboardingChatRequest,
     request: Request,
     db: Session = Depends(get_db),
 ):
     employee = get_current_employee(request, db)
+    system_prompt = build_dynamic_system_prompt(employee)
 
-    # Build messages for Claude API
-    messages = []
-
-    # Add history
-    for msg in req.history:
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in payload.history:
         if msg.get("role") in ("user", "assistant"):
             messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # Current user message — include resume text if provided
-    user_content = req.message
-    if req.resume_text:
-        user_content = f"[Resume uploaded]\n\nExtracted resume text:\n{req.resume_text}\n\nUser message: {req.message}"
-
+    user_content = payload.message
+    if payload.resume_text:
+        user_content = f"[Resume uploaded]\n\nResume:\n{payload.resume_text}\n\nMessage: {payload.message}"
     messages.append({"role": "user", "content": user_content})
 
-    # Call OpenAI API
-    import httpx
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.AI_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.AI_MODEL,
-                    "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-                    "temperature": 0.4,
-                    "max_tokens": 1024,
-                },
+                headers={"Authorization": f"Bearer {settings.AI_KEY}", "Content-Type": "application/json"},
+                json={"model": settings.AI_MODEL, "temperature": 0.3, "max_tokens": 1024, "messages": messages},
             )
             data = response.json()
     except Exception as e:
-        logger.error("OpenAI API error: %s", e)
-        raise HTTPException(500, f"AI service error: {str(e)}")
+        logger.error("OpenAI error: %s", e)
+        raise HTTPException(500, f"AI service error: {e}")
 
     if "error" in data:
         raise HTTPException(500, data["error"].get("message", "AI error"))
 
-    reply = data["choices"][0]["message"]["content"] if data.get("choices") else ""
+    answer = data["choices"][0]["message"]["content"]
 
-    # Check if profile is complete
-    profile_complete = "PROFILE_COMPLETE" in reply
-    extracted = None
-
-    if profile_complete:
+    # Partial save
+    for m in re.finditer(r"<PARTIAL_SAVE>(.*?)</PARTIAL_SAVE>", answer, re.DOTALL):
         try:
-            import re
-            json_match = re.search(r"```json\s*([\s\S]+?)\s*```", reply)
-            if json_match:
-                extracted = json.loads(json_match.group(1))
+            apply_fields_to_employee(employee, json.loads(m.group(1).strip()), db)
         except Exception as e:
-            logger.warning("Failed to parse profile JSON: %s", e)
+            logger.warning("Partial save failed: %s", e)
+    answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
 
-    return JSONResponse({
-        "reply": reply,
-        "profile_complete": profile_complete,
-        "extracted_profile": extracted,
-    })
+    # Full profile complete
+    profile_data = None
+    profile_complete = False
+    pm = re.search(r"<PROFILE_DATA>(.*?)</PROFILE_DATA>", answer, re.DOTALL)
+    if pm:
+        try:
+            raw = pm.group(1).strip()
+            profile_data = json.loads(raw) if raw and raw != "{}" else {}
+            profile_complete = True
+            answer = re.sub(r"<PROFILE_DATA>.*?</PROFILE_DATA>", "", answer, flags=re.DOTALL).strip()
+            if profile_data:
+                apply_fields_to_employee(employee, profile_data, db)
+            employee.onboarding_completed = True
+            employee.profile_completed = True
+            db.commit()
+        except Exception as e:
+            logger.error("Profile parse failed: %s", e)
+
+    return {"reply": answer, "extracted_profile": profile_data, "profile_complete": profile_complete}
 
 
-# ── Save profile endpoint ─────────────────────────────────────────────────────
 class ProfileSaveRequest(BaseModel):
     department: Optional[str] = None
     designation: Optional[str] = None
@@ -205,81 +257,24 @@ class ProfileSaveRequest(BaseModel):
     base_salary: Optional[float] = None
 
 
-def _parse_date(val: Optional[str]):
-    if not val:
-        return None
-    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(val, fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
 @router.post("/save")
-def save_profile(
-    req: ProfileSaveRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-):
+async def save_profile(payload: ProfileSaveRequest, request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
-
-    # Map all fields
-    if req.department:           employee.department = req.department
-    if req.designation:          employee.designation = req.designation
-    if req.join_date:            employee.join_date = _parse_date(req.join_date)
-    if req.employment_type:      employee.employment_type = req.employment_type
-    if req.date_of_birth:        employee.date_of_birth = _parse_date(req.date_of_birth)
-    if req.gender:               employee.gender = req.gender
-    if req.address_line1:        employee.address_line1 = req.address_line1
-    if req.address_line2:        employee.address_line2 = req.address_line2
-    if req.city:                 employee.city = req.city
-    if req.state:                employee.state = req.state
-    if req.country:              employee.country = req.country
-    if req.emergency_contact_name:     employee.emergency_contact_name = req.emergency_contact_name
-    if req.emergency_contact_phone:    employee.emergency_contact_phone = req.emergency_contact_phone
-    if req.emergency_contact_relation: employee.emergency_contact_relation = req.emergency_contact_relation
-    if req.bank_name:            employee.bank_name = req.bank_name
-    if req.account_holder_name:  employee.account_holder_name = req.account_holder_name
-    if req.account_number:       employee.account_number = req.account_number
-    if req.bank_branch:          employee.bank_branch = req.bank_branch
-    if req.base_salary is not None: employee.base_salary = req.base_salary
-
+    apply_fields_to_employee(employee, {k: v for k, v in payload.dict().items() if v is not None}, db)
     employee.onboarding_completed = True
     employee.profile_completed = True
     db.commit()
+    return {"message": "Profile saved", "onboarding_completed": True}
 
-    return {"message": "Profile saved successfully", "onboarding_completed": True}
 
-
-# ── Get my profile ────────────────────────────────────────────────────────────
 @router.get("/me")
 def get_my_profile(request: Request, db: Session = Depends(get_db)):
     emp = get_current_employee(request, db)
+    profile = get_profile_columns(emp)
     return {
-        "id": emp.id,
-        "name": emp.name,
-        "email": emp.email,
-        "phone": emp.phone,
-        "department": emp.department,
-        "designation": emp.designation,
-        "join_date": emp.join_date.isoformat() if emp.join_date else None,
-        "employment_type": getattr(emp, "employment_type", None),
-        "date_of_birth": emp.date_of_birth.isoformat() if emp.date_of_birth else None,
-        "gender": getattr(emp, "gender", None),
-        "address_line1": getattr(emp, "address_line1", None),
-        "address_line2": getattr(emp, "address_line2", None),
-        "city": getattr(emp, "city", None),
-        "state": getattr(emp, "state", None),
-        "country": getattr(emp, "country", None),
-        "emergency_contact_name": getattr(emp, "emergency_contact_name", None),
-        "emergency_contact_phone": getattr(emp, "emergency_contact_phone", None),
-        "emergency_contact_relation": getattr(emp, "emergency_contact_relation", None),
-        "bank_name": getattr(emp, "bank_name", None),
-        "account_holder_name": getattr(emp, "account_holder_name", None),
-        "account_number": getattr(emp, "account_number", None),
-        "bank_branch": getattr(emp, "bank_branch", None),
-        "base_salary": getattr(emp, "base_salary", None),
+        "id": emp.id, "name": emp.name, "email": emp.email, "phone": emp.phone,
+        "role": emp.role.name if emp.role else None,
         "onboarding_completed": emp.onboarding_completed,
         "profile_completed": emp.profile_completed,
+        **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in profile.items()},
     }

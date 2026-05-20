@@ -84,26 +84,31 @@ class Employee(BaseModel):
     onboarding_completed = Column(Boolean, default=False)
     profile_completed = Column(Boolean, default=False)
 
-    # ── Foreign key to Role (replaces old role string) ──
-    role_id = Column(Integer, ForeignKey('roles.id'), nullable=False)
-
-    # ── Extended Profile Fields ──────────────────────────────────────────────
+    # ── Extended profile fields ──
     date_of_birth = Column(Date, nullable=True)
-    gender = Column(String(20), nullable=True)                    # Male / Female / Other
-    employment_type = Column(String(50), nullable=True)           # Full-time / Part-time / Contract
+    gender = Column(String(20), nullable=True)
+    employment_type = Column(String(50), nullable=True)   # Full-time, Part-time, Contract
+
+    # Address
     address_line1 = Column(String(255), nullable=True)
     address_line2 = Column(String(255), nullable=True)
     city = Column(String(100), nullable=True)
     state = Column(String(100), nullable=True)
     country = Column(String(100), nullable=True)
-    emergency_contact_name = Column(String(150), nullable=True)
+
+    # Emergency contact
+    emergency_contact_name = Column(String(100), nullable=True)
     emergency_contact_phone = Column(String(30), nullable=True)
-    emergency_contact_relation = Column(String(80), nullable=True)
-    bank_name = Column(String(150), nullable=True)
-    account_number = Column(String(50), nullable=True)
-    bank_branch = Column(String(150), nullable=True)
-    account_holder_name = Column(String(150), nullable=True)
+    emergency_contact_relation = Column(String(50), nullable=True)
+
+    # Banking
+    bank_name = Column(String(100), nullable=True)
+    bank_account_number = Column(String(50), nullable=True)
+    bank_branch = Column(String(100), nullable=True)
     base_salary = Column(Float, nullable=True)
+
+    # ── Foreign key to Role (replaces old role string) ──
+    role_id = Column(Integer, ForeignKey('roles.id'), nullable=False)
 
     # ── Relationships ──
     role = relationship("Role")   # access employee.role.name

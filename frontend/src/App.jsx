@@ -7,6 +7,7 @@ import NotificationBell from './components/NotificationBell'
 import LeaveRequests from './components/LeaveRequests'
 import AdminPanel from './components/AdminPanel'
 import OnboardingChat from './components/OnboardingChat'
+import ProfileView from './components/ProfileView'
 
 const API = '/api'
 
@@ -45,335 +46,6 @@ function _contentToLines(text) {
     }))
 }
 
-/* ── Profile View (Clean, No Icons, Centered, Scrollable) ─────────────────── */
-function ProfileView({ employee, token, onBack, onSaved }) {
-    const [profile, setProfile] = useState(null)
-    const [saving, setSaving] = useState(false)
-    const [saved, setSaved] = useState(false)
-    const [form, setForm] = useState({})
-    const [editMode, setEditMode] = useState({})
-
-    useEffect(() => {
-        fetch('/api/onboarding-profile/me', { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.json()).then(data => { setProfile(data); setForm(data) }).catch(() => { })
-    }, [token])
-
-    const handleChange = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
-    const handleSave = async () => {
-        setSaving(true)
-        try {
-            const res = await fetch('/api/onboarding-profile/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(form),
-            })
-            if (res.ok) {
-                setSaved(true)
-                setEditMode({})
-                onSaved(form)
-                setTimeout(() => setSaved(false), 3000)
-            }
-        } catch (e) { console.error(e) } finally { setSaving(false) }
-    }
-
-    const toggleEdit = (section) => {
-        setEditMode(prev => ({ ...prev, [section]: !prev[section] }))
-    }
-
-    if (!profile) return <div style={styles.loading}>Loading profile…</div>
-
-    const Field = ({ label, field, type = 'text', options = null, section }) => {
-        const isEditing = editMode[section]
-        const value = form[field] || ''
-        if (!isEditing) {
-            return (
-                <div style={styles.fieldRow}>
-                    <div style={styles.fieldLabel}>{label}</div>
-                    <div style={styles.fieldValue}>{value || '—'}</div>
-                </div>
-            )
-        }
-        return (
-            <div style={styles.fieldRow}>
-                <div style={styles.fieldLabel}>{label}</div>
-                {options ? (
-                    <select
-                        value={value}
-                        onChange={e => handleChange(field, e.target.value)}
-                        style={styles.input}
-                    >
-                        <option value="">Select</option>
-                        {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                ) : (
-                    <input
-                        type={type}
-                        value={value}
-                        onChange={e => handleChange(field, e.target.value)}
-                        style={styles.input}
-                    />
-                )}
-            </div>
-        )
-    }
-
-    return (
-        <div style={styles.container}>
-            <div style={styles.headerBar}>
-                <button onClick={onBack} style={styles.backBtn}>← Back to Chat</button>
-                <h2 style={styles.pageTitle}>My Profile</h2>
-                <div style={{ width: 80 }}></div>
-            </div>
-
-            <div style={styles.profileCards}>
-                {/* Basic Information */}
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <span style={styles.cardTitle}>Basic Information</span>
-                        <button onClick={() => toggleEdit('basic')} style={styles.editBtn}>
-                            {editMode.basic ? 'Cancel' : 'Edit'}
-                        </button>
-                    </div>
-                    <div style={styles.cardBody}>
-                        <Field label="Full Name" field="name" section="basic" />
-                        <Field label="Email" field="email" type="email" section="basic" />
-                        <Field label="Phone" field="phone" section="basic" />
-                        <Field label="Gender" field="gender" options={['Male', 'Female', 'Other']} section="basic" />
-                        <Field label="Date of Birth" field="date_of_birth" type="date" section="basic" />
-                    </div>
-                </div>
-
-                {/* Employment Details */}
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <span style={styles.cardTitle}>Employment Details</span>
-                        <button onClick={() => toggleEdit('employment')} style={styles.editBtn}>
-                            {editMode.employment ? 'Cancel' : 'Edit'}
-                        </button>
-                    </div>
-                    <div style={styles.cardBody}>
-                        <Field label="Department" field="department" section="employment" />
-                        <Field label="Designation" field="designation" section="employment" />
-                        <Field label="Employment Type" field="employment_type" options={['Full-time', 'Part-time', 'Contract', 'Intern']} section="employment" />
-                        <Field label="Date of Joining" field="join_date" type="date" section="employment" />
-                    </div>
-                </div>
-
-                {/* Address */}
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <span style={styles.cardTitle}>Address</span>
-                        <button onClick={() => toggleEdit('address')} style={styles.editBtn}>
-                            {editMode.address ? 'Cancel' : 'Edit'}
-                        </button>
-                    </div>
-                    <div style={styles.cardBody}>
-                        <Field label="Address Line 1" field="address_line1" section="address" />
-                        <Field label="Address Line 2" field="address_line2" section="address" />
-                        <Field label="City" field="city" section="address" />
-                        <Field label="State / Province" field="state" section="address" />
-                        <Field label="Country" field="country" section="address" />
-                    </div>
-                </div>
-
-                {/* Emergency Contact */}
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <span style={styles.cardTitle}>Emergency Contact</span>
-                        <button onClick={() => toggleEdit('emergency')} style={styles.editBtn}>
-                            {editMode.emergency ? 'Cancel' : 'Edit'}
-                        </button>
-                    </div>
-                    <div style={styles.cardBody}>
-                        <Field label="Name" field="emergency_contact_name" section="emergency" />
-                        <Field label="Phone" field="emergency_contact_phone" section="emergency" />
-                        <Field label="Relation" field="emergency_contact_relation" section="emergency" />
-                    </div>
-                </div>
-
-                {/* Banking Information */}
-                <div style={styles.card}>
-                    <div style={styles.cardHeader}>
-                        <span style={styles.cardTitle}>Banking Information</span>
-                        <button onClick={() => toggleEdit('banking')} style={styles.editBtn}>
-                            {editMode.banking ? 'Cancel' : 'Edit'}
-                        </button>
-                    </div>
-                    <div style={styles.cardBody}>
-                        <Field label="Bank Name" field="bank_name" section="banking" />
-                        <Field label="Account Holder Name" field="account_holder_name" section="banking" />
-                        <Field label="Account Number" field="account_number" section="banking" />
-                        <Field label="Bank Branch" field="bank_branch" section="banking" />
-                        <Field label="Base Salary" field="base_salary" type="number" section="banking" />
-                    </div>
-                </div>
-            </div>
-
-            {/* Sticky Save Bar */}
-            {Object.values(editMode).some(v => v) && (
-                <div style={styles.saveBar}>
-                    <button onClick={handleSave} disabled={saving} style={styles.saveBtn}>
-                        {saving ? 'Saving...' : 'Save All Changes'}
-                    </button>
-                    {saved && <span style={styles.savedMsg}>✓ Saved successfully</span>}
-                </div>
-            )}
-        </div>
-    )
-}
-
-const styles = {
-    container: {
-        width: '100%',
-        height: '100%',
-        overflowY: 'auto',
-        padding: '24px 32px',
-        boxSizing: 'border-box',
-    },
-    headerBar: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 28,
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    backBtn: {
-        background: 'rgba(79,142,247,0.08)',
-        border: '1px solid rgba(79,142,247,0.2)',
-        borderRadius: 8,
-        padding: '8px 16px',
-        color: '#60a5fa',
-        fontSize: 13,
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-    },
-    pageTitle: {
-        fontSize: 20,
-        fontWeight: 700,
-        color: '#e2e8f0',
-        margin: 0,
-        letterSpacing: '-0.2px',
-    },
-    profileCards: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
-        gap: 24,
-        maxWidth: 1400,
-        margin: '0 auto',
-    },
-    card: {
-        background: 'rgba(17,21,32,0.7)',
-        backdropFilter: 'blur(4px)',
-        border: '1px solid rgba(79,142,247,0.12)',
-        borderRadius: 20,
-        overflow: 'hidden',
-        transition: 'border-color 0.2s',
-    },
-    cardHeader: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '16px 20px',
-        borderBottom: '1px solid rgba(79,142,247,0.08)',
-        background: 'rgba(6,8,18,0.4)',
-    },
-    cardTitle: {
-        fontSize: 15,
-        fontWeight: 600,
-        color: '#e2e8f0',
-        letterSpacing: '-0.2px',
-    },
-    editBtn: {
-        background: 'transparent',
-        border: '1px solid rgba(79,142,247,0.3)',
-        borderRadius: 6,
-        padding: '4px 12px',
-        color: '#60a5fa',
-        fontSize: 11,
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-    },
-    cardBody: {
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
-    },
-    fieldRow: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
-    },
-    fieldLabel: {
-        fontSize: 10,
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        color: '#64748b',
-        fontWeight: 500,
-    },
-    fieldValue: {
-        fontSize: 14,
-        color: '#e2e8f0',
-        fontWeight: 500,
-        wordBreak: 'break-word',
-        background: 'rgba(6,8,18,0.5)',
-        padding: '8px 12px',
-        borderRadius: 10,
-        border: '1px solid rgba(79,142,247,0.1)',
-    },
-    input: {
-        background: '#0d1117',
-        border: '1px solid rgba(79,142,247,0.25)',
-        borderRadius: 10,
-        padding: '8px 12px',
-        color: '#e2e8f0',
-        fontSize: 13,
-        outline: 'none',
-        width: '100%',
-        boxSizing: 'border-box',
-        transition: 'border-color 0.15s',
-    },
-    saveBar: {
-        position: 'sticky',
-        bottom: 20,
-        marginTop: 24,
-        background: 'rgba(6,8,18,0.9)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(79,142,247,0.2)',
-        borderRadius: 40,
-        padding: '12px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 20,
-        zIndex: 10,
-    },
-    saveBtn: {
-        background: '#4f8ef7',
-        border: 'none',
-        borderRadius: 30,
-        padding: '10px 28px',
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 600,
-        cursor: 'pointer',
-        transition: 'opacity 0.15s',
-    },
-    savedMsg: {
-        color: '#34d399',
-        fontSize: 13,
-        fontWeight: 500,
-    },
-    loading: {
-        padding: 40,
-        color: '#475569',
-        fontSize: 14,
-        textAlign: 'center',
-    },
-}
-
 export default function App() {
     const [authed, setAuthed] = useState(() => !!localStorage.getItem('hrms_token'))
     const [employee, setEmployee] = useState(() => {
@@ -391,6 +63,20 @@ export default function App() {
     const [expandedIdx, setExpandedIdx] = useState(null)
     const [previewData, setPreviewData] = useState(null)
     const chatEnd = useRef(null)
+
+    // Theme state
+    const [theme, setTheme] = useState(() => localStorage.getItem('hrms_theme') || 'dark')
+
+    // Apply theme class to body
+    useEffect(() => {
+        document.body.classList.remove('theme-dark', 'theme-light')
+        document.body.classList.add(`theme-${theme}`)
+        localStorage.setItem('hrms_theme', theme)
+    }, [theme])
+
+    const toggleTheme = () => {
+        setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+    }
 
     // Session management
     const [sessions, setSessions] = useState([])
@@ -451,7 +137,7 @@ export default function App() {
         r.start()
     }
 
-    // ── Session API ───────────────────────────────────────────────────────────
+    // ── Session API (unchanged) ───────────────────────────────────────────────
     const fetchSessions = useCallback(async () => {
         if (!authed) return
         try {
@@ -566,7 +252,7 @@ export default function App() {
         setMenuOpen(null)
     }
 
-    // ── Welcome message ───────────────────────────────────────────────────────
+    // Welcome message
     useEffect(() => {
         if (loadingSessions || !currentSessionId || !employee) return
         if (loadingMsgs.current) return
@@ -591,17 +277,14 @@ export default function App() {
         else { setSessions([]); setCurrentSessionId(null); setMessages([]); welcomedSessions.current.clear() }
     }, [authed, fetchSessions])
 
-    // MODIFIED: set default view based on role
     async function handleLoginSuccess(token, emp) {
         localStorage.setItem('hrms_token', token)
-        // Fetch fresh employee data from server to get latest onboarding_completed status
         try {
             const res = await fetch(`${API}/onboarding-profile/me`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
             if (res.ok) {
                 const fresh = await res.json()
-                // Merge server data with JWT data (server has profile fields, JWT has role)
                 const merged = { ...emp, ...fresh, role: emp.role }
                 localStorage.setItem('hrms_employee', JSON.stringify(merged))
                 setEmployee(merged)
@@ -635,7 +318,6 @@ export default function App() {
         return <Login onSuccess={handleLoginSuccess} onRegisterClick={() => setShowRegister(true)} />
     }
 
-    // ── Onboarding gate ───────────────────────────────────────────────────────
     const isAdminOrHr = employee?.role === 'admin' || employee?.role === 'hr'
     if (employee && !employee.onboarding_completed && !isAdminOrHr) {
         return (
@@ -644,15 +326,13 @@ export default function App() {
                 token={localStorage.getItem('hrms_token')}
                 onComplete={async () => {
                     const token = localStorage.getItem('hrms_token')
-                    // Mark onboarding complete (even if skipped — saves whatever was collected)
                     try {
                         await fetch(`${API}/onboarding-profile/save`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({}), // empty = just mark complete
+                            body: JSON.stringify({}),
                         })
                     } catch { }
-                    // Fetch fresh employee data
                     try {
                         const res = await fetch(`${API}/onboarding-profile/me`, {
                             headers: { Authorization: `Bearer ${token}` }
@@ -710,7 +390,6 @@ export default function App() {
                 return
             }
 
-            // Never save empty assistant messages
             if (!data.answer || !data.answer.trim()) {
                 setLoading(false)
                 return
@@ -727,12 +406,7 @@ export default function App() {
         setLoading(false)
     }
 
-    // ── Conflict popup handlers ───────────────────────────────────────────────
-    function handleConflictDismiss() {
-        setConflictPopup(null)
-        // Leave status will appear in the notification bell once HR acts on it
-    }
-
+    function handleConflictDismiss() { setConflictPopup(null) }
     async function handleConflictProceed() {
         if (!conflictPopup?.pending_leave) return
         const pl = conflictPopup.pending_leave
@@ -759,18 +433,11 @@ export default function App() {
             setMessages(prev => [...prev, { role: 'assistant', content: reply, sources: [], steps: [] }])
         } finally { setLoading(false) }
     }
-
     function handleConflictReschedule() {
         setConflictPopup(null)
         window.open('https://outlook.office365.com/calendar/view/workweek', '_blank', 'noopener,noreferrer')
-        const msg = {
-            role: 'assistant',
-            content: 'Your Outlook calendar has been opened in a new tab. Please reschedule your meeting there, then come back here and apply for leave again on the updated date.',
-            sources: [], steps: [],
-        }
-        setMessages(prev => [...prev, msg])
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Your Outlook calendar has been opened in a new tab. Please reschedule your meeting there, then come back here and apply for leave again on the updated date.', sources: [], steps: [] }])
     }
-
     async function handleConflictCancel() {
         const pl = conflictPopup?.pending_leave
         setConflictPopup(null)
@@ -788,16 +455,13 @@ export default function App() {
             })
             const data = await res.json()
             const reply = data.answer || 'Your leave request has been cancelled. No email has been sent to HR.'
-            const msg = { role: 'assistant', content: reply, sources: [], steps: [] }
-            setMessages(prev => [...prev, msg])
+            setMessages(prev => [...prev, { role: 'assistant', content: reply, sources: [], steps: [] }])
             if (currentSessionId) await saveMessage('assistant', reply, currentSessionId)
         } catch (e) {
-            const reply = 'Your leave request has been cancelled. No email has been sent to HR.'
-            setMessages(prev => [...prev, { role: 'assistant', content: reply, sources: [], steps: [] }])
+            setMessages(prev => [...prev, { role: 'assistant', content: 'Your leave request has been cancelled. No email has been sent to HR.', sources: [], steps: [] }])
         } finally { setLoading(false) }
     }
 
-    // ── Preview helpers ───────────────────────────────────────────────────────
     const lastUserQuery = (() => { const m = [...messages].reverse().find(m => m.role === 'user'); return m ? m.content : '' })()
     const latestSources = (() => { for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === 'assistant' && messages[i].sources?.length) return messages[i].sources; return [] })()
 
@@ -843,128 +507,85 @@ export default function App() {
         }
     }
 
-    // ── Action buttons ────────────────────────────────────────────────────────
-    const SpeakerIcon = () => (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-            <path d="M3 9v6h4l5 5V4L7 9H3z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
-            <path d="M16.5 8.5c2 1.5 2 5.5 0 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-            <path d="M19 5c3 2.5 3 9.5 0 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-        </svg>
-    )
-    const ThumbUpIcon = () => (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h10.5a3 3 0 0 0 3-3l1-5a3 3 0 0 0-3-3h-4.5zM5 19H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h2v8z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    )
-    const ThumbDownIcon = () => (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V5H6.5a3 3 0 0 0-3 3l-1 5a3 3 0 0 0 3 3H10zM19 5h2a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2V5z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    )
-    const RegenerateIcon = () => (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-            <path d="M23 4v6h-6" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M1 20v-6h6" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-            <path d="M20.49 15a9 9 0 01-14.85 3.36L1 14" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-        </svg>
-    )
+    // Icons for action bar (simple, no emoji)
+    const SpeakerIcon = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 9v6h4l5 5V4L7 9H3z" /><path d="M16.5 8.5c2 1.5 2 5.5 0 7" /><path d="M19 5c3 2.5 3 9.5 0 12" /></svg>)
+    const ThumbUpIcon = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h10.5a3 3 0 0 0 3-3l1-5a3 3 0 0 0-3-3h-4.5zM5 19H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h2v8z" /></svg>)
+    const ThumbDownIcon = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V5H6.5a3 3 0 0 0-3 3l-1 5a3 3 0 0 0 3 3H10zM19 5h2a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2V5z" /></svg>)
+    const RegenerateIcon = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M23 4v6h-6" /><path d="M1 20v-6h6" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10" /><path d="M20.49 15a9 9 0 01-14.85 3.36L1 14" /></svg>)
 
     const actionBarStyle = {
         display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px',
-        marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(30,36,51,0.7)',
+        marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border)',
     }
     const btnBase = {
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px',
-        background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#4a5168',
+        background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: 'var(--text-muted)',
         transition: 'background 0.15s, color 0.15s', padding: 0,
     }
 
-    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="app-layout">
-            {/* Conflict popup modal */}
+        <div className={`app-layout ${view === "profile" ? "profile-mode" : ""}`}>
             {conflictPopup && (
                 <div style={{
-                    position: 'fixed', inset: 0, zIndex: 99999,
-                    background: 'rgba(0,0,0,0.65)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    pointerEvents: 'all',
+                    position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.65)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'all',
                 }}>
                     <div style={{
-                        background: '#1a1f2e', border: '1px solid rgba(248,113,113,0.3)',
+                        background: 'var(--bg-card)', border: '1px solid rgba(248,113,113,0.3)',
                         borderRadius: 14, padding: '28px 28px 24px', maxWidth: 440, width: '90%',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                        position: 'relative', zIndex: 100000,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6)', position: 'relative', zIndex: 100000,
                         pointerEvents: 'all',
                     }}>
-                        {/* × close button */}
-                        <button
-                            onClick={handleConflictDismiss}
-                            title="Dismiss — you can check leave status in the notification bell"
-                            style={{
-                                position: 'absolute', top: 12, right: 14,
-                                background: 'transparent', border: 'none',
-                                color: '#6b7280', fontSize: 20, lineHeight: 1,
-                                cursor: 'pointer', padding: '2px 6px', borderRadius: 6,
-                                transition: 'color 0.15s, background 0.15s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = '#e5e7eb'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)' }}
-                            onMouseLeave={e => { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent' }}
-                        >✕</button>
+                        <button onClick={handleConflictDismiss} style={{
+                            position: 'absolute', top: 12, right: 14, background: 'transparent', border: 'none',
+                            color: 'var(--text-muted)', fontSize: 20, cursor: 'pointer',
+                        }}>✕</button>
                         <div style={{ fontSize: 20, marginBottom: 6 }}>⚠️</div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: '#f87171', marginBottom: 8 }}>
-                            Calendar Conflict Detected
-                        </div>
-                        <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 14 }}>
-                            You have the following meetings during your requested leave period:
-                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--red)', marginBottom: 8 }}>Calendar Conflict Detected</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>You have the following meetings during your requested leave period:</div>
                         <ul style={{ margin: '0 0 18px 0', padding: '0 0 0 16px', listStyle: 'disc' }}>
                             {(conflictPopup.meetings || []).map((m, i) => {
                                 const dateStr = m.date || m.meeting_date || ''
                                 const displayDate = dateStr ? (() => { try { return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return dateStr } })() : ''
                                 const displayTime = m.time || m.start_time || ''
-                                return (
-                                    <li key={i} style={{ fontSize: 13, color: '#e5e7eb', marginBottom: 4 }}>
-                                        <strong>{m.title || 'Meeting'}</strong>
-                                        {displayDate ? ` — ${displayDate}` : ''}
-                                        {displayTime ? ` at ${displayTime}` : ''}
-                                    </li>
-                                )
+                                return <li key={i} style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 4 }}><strong>{m.title || 'Meeting'}</strong>{displayDate ? ` — ${displayDate}` : ''}{displayTime ? ` at ${displayTime}` : ''}</li>
                             })}
-                            {(!conflictPopup.meetings || conflictPopup.meetings.length === 0) && (
-                                <li style={{ fontSize: 13, color: '#e5e7eb' }}>A meeting is scheduled on this date</li>
-                            )}
                         </ul>
-                        <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 18 }}>
-                            What would you like to do?
-                        </div>
-                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            <button
-                                onClick={handleConflictProceed}
-                                style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: '#4f8ef7', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', pointerEvents: 'all' }}
-                            >Proceed</button>
-                            <button
-                                onClick={handleConflictReschedule}
-                                style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: '1px solid rgba(250,204,21,0.4)', background: 'rgba(250,204,21,0.08)', color: '#fcd34d', fontWeight: 600, fontSize: 13, cursor: 'pointer', pointerEvents: 'all' }}
-                            > Reschedule</button>
-                            <button
-                                onClick={handleConflictCancel}
-                                style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.08)', color: '#f87171', fontWeight: 600, fontSize: 13, cursor: 'pointer', pointerEvents: 'all' }}
-                            > Cancel leave</button>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 18 }}>What would you like to do?</div>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            <button onClick={handleConflictProceed} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Proceed</button>
+                            <button onClick={handleConflictReschedule} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: '1px solid var(--yellow)', background: 'transparent', color: 'var(--yellow)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Reschedule</button>
+                            <button onClick={handleConflictCancel} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: '1px solid var(--red)', background: 'transparent', color: 'var(--red)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel leave</button>
                         </div>
                     </div>
                 </div>
             )}
 
             <style>{`
-                .msg-action-btn { color: #4a5168 !important; transition: background 0.15s, color 0.15s; }
-                .msg-action-btn:hover { background: rgba(79,142,247,0.1) !important; color: #4f8ef7 !important; }
-                .msg-action-btn.active-btn { color: #4f8ef7 !important; background: rgba(79,142,247,0.12) !important; }
-                .msg-action-btn.liked { color: #34d399 !important; background: rgba(52,211,153,0.1) !important; }
-                .msg-action-btn.disliked { color: #f87171 !important; background: rgba(248,113,113,0.1) !important; }
+                .msg-action-btn { color: var(--text-muted) !important; transition: background 0.15s, color 0.15s; }
+                .msg-action-btn:hover { background: rgba(79,142,247,0.1) !important; color: var(--accent) !important; }
+                .msg-action-btn.active-btn { color: var(--accent) !important; background: rgba(79,142,247,0.12) !important; }
+                .msg-action-btn.liked { color: var(--green) !important; background: rgba(52,211,153,0.1) !important; }
+                .msg-action-btn.disliked { color: var(--red) !important; background: rgba(248,113,113,0.1) !important; }
                 .user-msg-actions { opacity: 0 !important; transition: opacity 0.15s; }
                 .msg-user:hover .user-msg-actions { opacity: 1 !important; }
+                .theme-toggle-icon {
+                    background: transparent;
+                    border: none;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 8px;
+                    color: var(--text-secondary);
+                    transition: all 0.2s;
+                }
+                .theme-toggle-icon:hover {
+                    background: var(--accent-dim);
+                    color: var(--accent);
+                }
             `}</style>
 
             <aside className="sidebar">
@@ -976,45 +597,25 @@ export default function App() {
                     </div>
                 </div>
                 {employee && (
-                    <div
-                        onClick={() => setView('profile')}
-                        style={{
-                            background: view === 'profile' ? 'rgba(52,211,153,0.15)' : 'rgba(52,211,153,0.08)',
-                            border: `1px solid ${view === 'profile' ? 'rgba(52,211,153,0.4)' : 'rgba(52,211,153,0.2)'}`,
-                            borderRadius: '8px',
-                            padding: '10px 12px',
-                            marginBottom: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                        }}
-                        title="View / Edit my profile"
-                    >
+                    <div onClick={() => setView('profile')} style={{
+                        background: view === 'profile' ? 'rgba(52,211,153,0.15)' : 'rgba(52,211,153,0.08)',
+                        border: `1px solid ${view === 'profile' ? 'rgba(52,211,153,0.4)' : 'rgba(52,211,153,0.2)'}`,
+                        borderRadius: '8px', padding: '10px 12px', marginBottom: '12px',
+                        display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                    }}>
                         <div style={{
                             width: 32, height: 32, borderRadius: '50%',
-                            background: 'linear-gradient(135deg,#34d399,#059669)',
+                            background: 'linear-gradient(135deg,var(--green),#059669)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
-                        }}>
-                            {(employee.name || 'U')[0].toUpperCase()}
-                        </div>
+                            fontSize: 13, fontWeight: 700, color: '#fff',
+                        }}>{(employee.name || 'U')[0].toUpperCase()}</div>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#34d399', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {employee.name}
-                            </div>
-                            <div style={{ fontSize: 10, color: '#4a5168', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {employee.email}
-                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{employee.name}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{employee.email}</div>
                         </div>
-                        <span style={{ fontSize: 10, color: '#34d399', opacity: 0.6 }}>👤</span>
                     </div>
                 )}
-                <div className="sidebar-status">
-                    <span className="dot" />
-                    Knowledge base · {docCount} docs
-                </div>
+                <div className="sidebar-status"><span className="dot" />Knowledge base · {docCount} docs</div>
 
                 <div className="sidebar-section">Your Conversations</div>
                 {loadingSessions ? (
@@ -1033,10 +634,7 @@ export default function App() {
                                         {groups[groupKey].map(s => (
                                             <div key={s.id} className="session-item">
                                                 <div className="session-btn-wrapper">
-                                                    <button
-                                                        className={`sidebar-btn session-btn ${currentSessionId === s.id ? 'active-session' : ''}`}
-                                                        onClick={() => { setCurrentSessionId(s.id); loadMessages(s.id); setMenuOpen(null) }}
-                                                    >
+                                                    <button className={`sidebar-btn session-btn ${currentSessionId === s.id ? 'active-session' : ''}`} onClick={() => { setCurrentSessionId(s.id); loadMessages(s.id); setMenuOpen(null) }}>
                                                         <span className="session-title">{s.title}</span>
                                                         {s.is_pinned && <span className="pin-icon">📌</span>}
                                                     </button>
@@ -1045,8 +643,8 @@ export default function App() {
                                                         {menuOpen === s.id && (
                                                             <div className="dropdown-menu">
                                                                 <div className="dropdown-item" onClick={() => renameSession(s.id, s.title)}>Rename</div>
-                                                                <div className="dropdown-item" onClick={() => togglePinSession(s.id, s.is_pinned)}>{s.is_pinned ? '📌 Unpin' : ' Pin'}</div>
-                                                                <div className="dropdown-item danger" onClick={() => deleteSession(s.id)}> Delete</div>
+                                                                <div className="dropdown-item" onClick={() => togglePinSession(s.id, s.is_pinned)}>{s.is_pinned ? 'Unpin' : 'Pin'}</div>
+                                                                <div className="dropdown-item danger" onClick={() => deleteSession(s.id)}>Delete</div>
                                                             </div>
                                                         )}
                                                     </div>
@@ -1059,49 +657,27 @@ export default function App() {
                         })()}
                     </>
                 )}
-
-
-                <button className="sidebar-clear" onClick={() => { setMessages([]); setExpandedIdx(null); setPreviewData(null) }}>
-                    Clear current conversation
-                </button>
-                <button className="sidebar-clear" onClick={handleLogout} style={{ marginTop: 4, borderColor: 'rgba(248,113,113,.3)', color: '#f87171' }}>
-                    Logout
-                </button>
+                <button className="sidebar-clear" onClick={() => { setMessages([]); setExpandedIdx(null); setPreviewData(null) }}>Clear current conversation</button>
+                <button className="sidebar-clear" onClick={handleLogout} style={{ marginTop: 4, borderColor: 'rgba(248,113,113,.3)', color: 'var(--red)' }}>Logout</button>
             </aside>
 
-            {/* Main content area */}
-            {/* Top nav for admin/hr — shown when they're on non-chat views OR always visible to switch */}
+            {/* Main content (chat, admin, profile) – with theme toggle icon beside notification bell */}
             {employee && (employee.role === 'admin' || employee.role === 'hr') && (view === 'admin' || view === 'leaveRequests') ? (
-                <main style={{ gridColumn: '2 / -1', overflow: 'auto', background: 'var(--bg-primary, #060812)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-                    {/* Admin top navbar */}
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '14px 28px', borderBottom: '1px solid rgba(79,142,247,0.12)',
-                        background: 'rgba(6,8,18,0.95)', backdropFilter: 'blur(12px)',
-                        position: 'sticky', top: 0, zIndex: 100, flexShrink: 0,
-                    }}>
-                        <button
-                            onClick={() => setView('chat')}
-                            style={{
-                                background: 'transparent', border: '1px solid rgba(79,142,247,0.2)',
-                                borderRadius: 8, padding: '7px 16px', color: '#64748b',
-                                fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                                transition: 'all 0.18s',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = '#93c5fd'; e.currentTarget.style.borderColor = 'rgba(79,142,247,0.5)' }}
-                            onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = 'rgba(79,142,247,0.2)' }}
-                        >
-                            ← Chat
-                        </button>
+                <main style={{ gridColumn: '2 / -1', overflow: 'auto', background: 'var(--bg-primary)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', backdropFilter: 'blur(12px)', position: 'sticky', top: 0, zIndex: 100 }}>
+                        <button onClick={() => setView('chat')} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 16px', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>← Chat</button>
                         <div style={{ flex: 1 }} />
+                        <button className="theme-toggle-icon" onClick={toggleTheme} title="Toggle theme">
+                            {theme === 'dark' ? (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+                            ) : (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+                            )}
+                        </button>
                         <NotificationBell token={localStorage.getItem('hrms_token')} />
                     </div>
                     <div style={{ flex: 1, overflow: 'auto' }}>
-                        {view === 'leaveRequests' ? (
-                            <LeaveRequests token={localStorage.getItem('hrms_token')} />
-                        ) : (
-                            <AdminPanel token={localStorage.getItem('hrms_token')} />
-                        )}
+                        {view === 'leaveRequests' ? <LeaveRequests token={localStorage.getItem('hrms_token')} /> : <AdminPanel token={localStorage.getItem('hrms_token')} />}
                     </div>
                 </main>
             ) : view === 'chat' ? (
@@ -1111,32 +687,17 @@ export default function App() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             {employee && (employee.role === 'admin' || employee.role === 'hr') && (
                                 <div style={{ display: 'flex', gap: 6 }}>
-                                    {employee.role === 'admin' && (
-                                        <button
-                                            onClick={() => setView('admin')}
-                                            style={{
-                                                background: 'rgba(79,142,247,0.1)', border: '1px solid rgba(79,142,247,0.3)',
-                                                borderRadius: 7, padding: '5px 13px', color: '#60a5fa',
-                                                fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.18s',
-                                            }}
-                                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,142,247,0.2)'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(79,142,247,0.1)'}
-                                        >Admin Dashboard</button>
-                                    )}
-                                    {employee.role === 'hr' && (
-                                        <button
-                                            onClick={() => setView('leaveRequests')}
-                                            style={{
-                                                background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)',
-                                                borderRadius: 7, padding: '5px 13px', color: '#34d399',
-                                                fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.18s',
-                                            }}
-                                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(52,211,153,0.18)'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(52,211,153,0.08)'}
-                                        > Leaves</button>
-                                    )}
+                                    {employee.role === 'admin' && <button onClick={() => setView('admin')} style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, padding: '5px 13px', color: 'var(--accent)', fontSize: 12, cursor: 'pointer' }}>Admin Dashboard</button>}
+                                    {employee.role === 'hr' && <button onClick={() => setView('leaveRequests')} style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 7, padding: '5px 13px', color: 'var(--green)', fontSize: 12, cursor: 'pointer' }}>Leaves</button>}
                                 </div>
                             )}
+                            <button className="theme-toggle-icon" onClick={toggleTheme} title="Toggle theme">
+                                {theme === 'dark' ? (
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+                                ) : (
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+                                )}
+                            </button>
                             <NotificationBell token={localStorage.getItem('hrms_token')} />
                         </div>
                     </div>
@@ -1146,63 +707,33 @@ export default function App() {
                                 <div key={i} className="msg-user" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                                     <div className="msg-user-bubble">{msg.content}</div>
                                     <div style={{ display: 'flex', gap: 2, opacity: 0.5 }} className="user-msg-actions">
-                                        <button className="msg-action-btn" style={btnBase} title="Copy" onClick={() => navigator.clipboard.writeText(msg.content)}>
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="1.8" /></svg>
-                                        </button>
-                                        <button className="msg-action-btn" style={btnBase} title="Edit & resend" onClick={() => setInput(msg.content)}>
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-                                        </button>
-                                        <button className="msg-action-btn" style={btnBase} title="Resend" onClick={() => sendMessage(msg.content)}>
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                        </button>
+                                        <button className="msg-action-btn" style={btnBase} title="Copy" onClick={() => navigator.clipboard.writeText(msg.content)}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></button>
+                                        <button className="msg-action-btn" style={btnBase} title="Edit & resend" onClick={() => setInput(msg.content)}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button>
+                                        <button className="msg-action-btn" style={btnBase} title="Resend" onClick={() => sendMessage(msg.content)}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 2L11 13" /><path d="M22 2L15 22l-4-9-9-4 20-7z" /></svg></button>
                                     </div>
                                 </div>
                             ) : (
                                 <div key={i} className="msg-assistant">
                                     <div className="answer-card">
-                                        <div className="answer-content">
-                                            {msg.content.split('\n').map((line, j) => <p key={j}>{line || '\u00A0'}</p>)}
-                                        </div>
-                                        {msg.sources?.length > 0 && (
-                                            <div className="sources-list">
-                                                {msg.sources.map((s, j) => <span key={j} className="source-tag">📄 {s.source_file} — {s.section}</span>)}
-                                            </div>
-                                        )}
+                                        <div className="answer-content">{msg.content.split('\n').map((line, j) => <p key={j}>{line || '\u00A0'}</p>)}</div>
+                                        {msg.sources?.length > 0 && <div className="sources-list">{msg.sources.map((s, j) => <span key={j} className="source-tag">📄 {s.source_file} — {s.section}</span>)}</div>}
                                         <div style={actionBarStyle}>
-                                            <button className={`msg-action-btn ${playingMsgIndex === i ? 'active-btn' : ''}`} style={btnBase} onClick={() => speakText(msg.content, i)} title={playingMsgIndex === i ? 'Stop speaking' : 'Read aloud'}><SpeakerIcon /></button>
-                                            <button className={`msg-action-btn ${likedMsgs[i] ? 'liked' : ''}`} style={btnBase} onClick={() => handleLike(i)} title="Good answer"><ThumbUpIcon /></button>
-                                            <button className={`msg-action-btn ${dislikedMsgs[i] ? 'disliked' : ''}`} style={btnBase} onClick={() => handleDislike(i)} title="Bad answer"><ThumbDownIcon /></button>
-                                            <button className="msg-action-btn" style={btnBase} onClick={regenerate} title="Regenerate"><RegenerateIcon /></button>
+                                            <button className={`msg-action-btn ${playingMsgIndex === i ? 'active-btn' : ''}`} style={btnBase} onClick={() => speakText(msg.content, i)}><SpeakerIcon /></button>
+                                            <button className={`msg-action-btn ${likedMsgs[i] ? 'liked' : ''}`} style={btnBase} onClick={() => handleLike(i)}><ThumbUpIcon /></button>
+                                            <button className={`msg-action-btn ${dislikedMsgs[i] ? 'disliked' : ''}`} style={btnBase} onClick={() => handleDislike(i)}><ThumbDownIcon /></button>
+                                            <button className="msg-action-btn" style={btnBase} onClick={regenerate}><RegenerateIcon /></button>
                                         </div>
                                     </div>
                                 </div>
                             )
                         ))}
-                        {loading && (
-                            <div className="thinking">
-                                <div className="dots"><span /><span /><span /></div>
-                                Searching knowledge base...
-                            </div>
-                        )}
+                        {loading && <div className="thinking"><div className="dots"><span /><span /><span /></div>Searching knowledge base...</div>}
                         <div ref={chatEnd} />
                     </div>
                     <div className="chat-input-area">
                         <div className="chat-input-wrap">
-                            <input
-                                value={input}
-                                onChange={e => setInput(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }}
-                                placeholder="Ask about HR policies, employees, leave..."
-                                disabled={loading}
-                            />
-                            <button
-                                onClick={startVoiceRecognition}
-                                disabled={loading || isListening || isSpeaking || voiceCooldown}
-                                className={`mic-button ${isListening ? 'listening' : ''}`}
-                                title="Voice input"
-                            >
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="9" y="4" width="6" height="10" rx="3" fill="white" /><path d="M6 11C6 14.3137 8.68629 17 12 17C15.3137 17 18 14.3137 18 11" stroke="white" strokeWidth="1.5" strokeLinecap="round" /><path d="M12 17V20" stroke="white" strokeWidth="1.5" strokeLinecap="round" /><rect x="10" y="20" width="4" height="2" rx="1" fill="white" /></svg>
-                            </button>
+                            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }} placeholder="Ask about HR policies, employees, leave..." disabled={loading} />
+                            <button onClick={startVoiceRecognition} disabled={loading || isListening || isSpeaking || voiceCooldown} className={`mic-button ${isListening ? 'listening' : ''}`} title="Voice input"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="9" y="4" width="6" height="10" rx="3" fill="white" /><path d="M6 11C6 14.3137 8.68629 17 12 17C15.3137 17 18 14.3137 18 11" stroke="white" strokeWidth="1.5" /><path d="M12 17V20" stroke="white" strokeWidth="1.5" /><rect x="10" y="20" width="4" height="2" rx="1" fill="white" /></svg></button>
                             <button onClick={() => sendMessage(input)} disabled={loading || !input.trim()}>↑</button>
                         </div>
                     </div>
@@ -1237,11 +768,7 @@ export default function App() {
                                     </div>
                                     {isExpanded && previewData && (
                                         <>
-                                            {previewData.isFallbackAnswer && (
-                                                <div style={{ padding: '8px 12px', background: 'rgba(99,102,241,0.08)', borderRadius: 6, margin: '8px 0 4px', fontSize: 11, color: '#818cf8' }}>
-                                                    📌 Showing the assistant's answer for this source — full document not available in preview.
-                                                </div>
-                                            )}
+                                            {previewData.isFallbackAnswer && <div style={{ padding: '8px 12px', background: 'rgba(99,102,241,0.08)', borderRadius: 6, margin: '8px 0 4px', fontSize: 11, color: '#818cf8' }}>Showing the assistant's answer for this source — full document not available in preview.</div>}
                                             {['pdf-snippet', 'text-snippet'].includes(previewData.type) && (
                                                 <div className="pdf-preview-container">
                                                     {(previewData.pages?.length > 1 || previewData.segments?.length > 1) && (

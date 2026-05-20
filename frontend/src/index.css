@@ -1,5 +1,36 @@
-/* ── HR Assistant — Design System ─────────────────────── */
+/* ── HR Assistant — Design System (Manual Theme) ── */
 :root {
+  /* Light theme (default) */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-input: #ffffff;
+  --border: #e2e8f0;
+  --border-hover: #cbd5e1;
+  --accent: #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.12);
+  --accent-dim: rgba(59, 130, 246, 0.05);
+  --green: #10b981;
+  --green-dim: rgba(16, 185, 129, 0.08);
+  --yellow: #f59e0b;
+  --yellow-dim: rgba(245, 158, 11, 0.06);
+  --red: #ef4444;
+  --red-dim: rgba(239, 68, 68, 0.08);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-accent: #3b82f6;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'DM Mono', 'Fira Code', monospace;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark theme – applied via class on body */
+body.theme-dark {
   --bg-primary: #060812;
   --bg-secondary: #0d1017;
   --bg-card: #111520;
@@ -20,12 +51,6 @@
   --text-secondary: #8b95a9;
   --text-muted: #4a5168;
   --text-accent: #4f8ef7;
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --mono: 'DM Mono', 'Fira Code', monospace;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -41,13 +66,14 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   height: 100vh;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 #root {
   height: 100vh;
 }
 
-/* ── Layout ──────────────────────────────────────────── */
+/* Layout */
 .app-layout {
   display: grid;
   grid-template-columns: 240px 1fr 360px;
@@ -55,7 +81,31 @@ body {
   overflow: hidden;
 }
 
-/* ── Sidebar ─────────────────────────────────────────── */
+/* Profile mode: hide sidebar + preview */
+.app-layout.profile-mode {
+  grid-template-columns: 0 1fr 0;
+}
+
+.app-layout.profile-mode .sidebar {
+  display: none;
+}
+
+.app-layout.profile-mode .preview-panel {
+  display: none !important;
+}
+
+.app-layout.profile-mode main {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+}
+
+.app-layout.profile-mode .dashboard-panel {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  overflow-y: auto;
+}
+
+/* Sidebar */
 .sidebar {
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
@@ -99,6 +149,40 @@ body {
   letter-spacing: 0.5px;
 }
 
+/* Theme toggle button */
+.theme-toggle {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 20px;
+  width: fit-content;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--text-primary);
+  stroke-width: 1.8;
+  fill: none;
+}
+
+.theme-toggle span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .sidebar-status {
   background: var(--green-dim);
   border: 1px solid rgba(52, 211, 153, 0.2);
@@ -124,11 +208,11 @@ body {
 
   0%,
   100% {
-    opacity: 1;
+    opacity: 1
   }
 
   50% {
-    opacity: 0.4;
+    opacity: 0.4
   }
 }
 
@@ -181,7 +265,7 @@ body {
   background: var(--red-dim);
 }
 
-/* ── Chat Panel (unchanged) ──────────────────────────────────────── */
+/* Chat Panel */
 .chat-panel {
   display: flex;
   flex-direction: column;
@@ -247,7 +331,7 @@ body {
 }
 
 .answer-card::before {
-  content: '✦ ANSWER';
+  content: 'ANSWER';
   display: block;
   font-size: 10px;
   font-weight: 700;
@@ -318,37 +402,12 @@ body {
   0%,
   80%,
   100% {
-    opacity: 0.2;
+    opacity: 0.2
   }
 
   40% {
-    opacity: 1;
+    opacity: 1
   }
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  gap: 12px;
-  color: var(--text-muted);
-}
-
-.empty-state .icon {
-  font-size: 48px;
-  opacity: 0.3;
-}
-
-.empty-state h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.empty-state p {
-  font-size: 13px;
 }
 
 .chat-input-area {
@@ -403,7 +462,7 @@ body {
 }
 
 .chat-input-wrap button:hover {
-  background: #3b7de8;
+  filter: brightness(0.9);
 }
 
 .chat-input-wrap button:disabled {
@@ -411,7 +470,7 @@ body {
   cursor: not-allowed;
 }
 
-/* ── Preview Panel (unchanged, except for source card styles) ── */
+/* Preview Panel */
 .preview-panel {
   display: flex;
   flex-direction: column;
@@ -507,7 +566,7 @@ body {
 }
 
 .source-card-toggle:hover {
-  background: #3b7de8;
+  filter: brightness(0.9);
 }
 
 .source-card-toggle.active {
@@ -530,15 +589,6 @@ body {
   font-size: 13px;
   line-height: 1.65;
   overflow-wrap: anywhere;
-}
-
-.code-viewer::-webkit-scrollbar {
-  width: 4px;
-}
-
-.code-viewer::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
 }
 
 .code-line {
@@ -577,7 +627,7 @@ body {
 }
 
 .code-line.highlighted .line-text {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 mark {
@@ -637,35 +687,6 @@ mark {
   margin-left: 4px;
 }
 
-.pdf-content-preview {
-  padding: 16px;
-  font-size: 13.5px;
-  line-height: 1.8;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-.pdf-content-preview pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  font-family: inherit;
-  font-size: inherit;
-}
-
-.pdf-content-preview mark {
-  background-color: #fffbeb;
-  color: #b45309;
-  border-radius: 4px;
-  padding: 0 4px;
-  border-bottom: 2px solid #fbbf24;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1);
-  opacity: 1 !important;
-}
-
 .preview-empty {
   display: flex;
   flex-direction: column;
@@ -680,10 +701,6 @@ mark {
 .preview-empty .icon {
   font-size: 32px;
   opacity: 0.3;
-}
-
-.preview-empty p {
-  font-size: 12px;
 }
 
 .agent-steps {
@@ -709,16 +726,7 @@ mark {
   font-family: var(--mono);
 }
 
-/* Dashboard styles (trimmed for brevity, keep yours) */
-.dashboard-container {
-  padding: 24px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-}
-
-/* ... (rest of dashboard styles as in your original) ... */
-
-/* ── THREE-DOT MENU OVER THE BUTTON (corrected) ── */
+/* Session menu */
 .session-item {
   width: 100%;
   position: relative;
@@ -735,7 +743,6 @@ mark {
 .session-btn {
   flex: 1;
   padding: 10px 36px 10px 14px;
-  /* space for absolute dots */
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -831,16 +838,4 @@ mark {
 
 .dropdown-item.danger {
   color: var(--red);
-}
-
-/* Ensure no extra spacing or overlapping */
-.sidebar-btn.session-btn {
-  margin-bottom: 0;
-}
-
-/* Group header spacing – already present in your CSS, but ensure it's there */
-.sidebar-section:not(:first-of-type) {
-  margin-top: 16px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
 }

@@ -6,9 +6,11 @@ POST /api/auth/register   — Register a new employee (assigns default 'employee
 """
 
 import logging
+import traceback
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 
@@ -41,33 +43,45 @@ class EmployeeRegisterRequest(BaseModel):
     designation: Optional[str] = None
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+def _mask(phone: str) -> str:
+    return f"{'*' * max(0, len(phone) - 4)}{phone[-4:]}"
+
+
+def _friendly_integrity_error(exc: IntegrityError) -> str:
+    msg = str(exc.orig).lower()
+    if "employees_email" in msg or '"email"' in msg or "key (email)" in msg:
+        return "This email address is already registered. Please log in or use a different email."
+    if "employees_phone" in msg or '"phone"' in msg or "key (phone)" in msg:
+        return "This phone number is already registered. Please use a different phone number."
+    return "An account with these details already exists. Please check your information."
+
+
+@router.post("/register")
 def register_employee(
     payload: EmployeeRegisterRequest,
     db: Session = Depends(get_db),
 ):
-    import traceback as _tb
     try:
-        return _register_employee_inner(payload, db)
-    except Exception as e:
-        _tb.print_exc()
+        return _do_register(payload, db)
+    except HTTPException:
         raise
+    except IntegrityError as exc:
+        db.rollback()
+        logger.error("IntegrityError: %s", exc)
+        raise HTTPException(status_code=400, detail=_friendly_integrity_error(exc))
+    except Exception as exc:
+        db.rollback()
+        logger.error("Registration error:\n%s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(exc)}")
 
 
-def _register_employee_inner(payload, db):
-    # 1. Duplicate email/phone check
-    existing = db.query(Employee).filter(Employee.email == payload.email).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered."
-        )
-    existing_phone = db.query(Employee).filter(Employee.phone == payload.phone).first()
-    if existing_phone:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Phone number already registered."
-        )
+def _do_register(payload: EmployeeRegisterRequest, db: Session):
+    # 1. Explicit duplicate checks
+    if db.query(Employee).filter(Employee.email == payload.email).first():
+        raise HTTPException(400, "This email address is already registered. Please log in or use a different email.")
+
+    if db.query(Employee).filter(Employee.phone == payload.phone).first():
+        raise HTTPException(400, "This phone number is already registered. Please use a different phone number.")
 
     # 2. Default role
     default_role = db.query(Role).filter(Role.name == "employee").first()
@@ -76,11 +90,9 @@ def _register_employee_inner(payload, db):
         db.add(default_role)
         db.commit()
         db.refresh(default_role)
-        logger.warning("Role 'employee' was missing; created automatically.")
 
-    # 3. Generate the PIN
+    # 3. Generate PIN & create employee
     pin = generate_pin(length=settings.PIN_LENGTH)
-
     new_employee = Employee(
         name=payload.name,
         email=payload.email,
@@ -94,11 +106,14 @@ def _register_employee_inner(payload, db):
         created_at=datetime.utcnow(),
     )
     db.add(new_employee)
-    db.commit()
-    db.refresh(new_employee)
-    logger.info("Employee row created: id=%s email=%s", new_employee.id, new_employee.email)
+    try:
+        db.commit()
+        db.refresh(new_employee)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(400, _friendly_integrity_error(exc))
 
-    # 4. Enrol face embeddings
+    # 4. Enrol face
     try:
         enrol_result = face_service.enroll_faces(
             employee_id=new_employee.id,
@@ -107,36 +122,22 @@ def _register_employee_inner(payload, db):
         if not enrol_result.get("success"):
             db.delete(new_employee)
             db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=enrol_result.get("error", "Face enrolment failed. Please retake photos."),
-            )
-        logger.info(
-            "Face enrolled for employee %s — %d embeddings stored",
-            new_employee.id,
-            enrol_result.get("embeddings_stored", 0),
-        )
+            raise HTTPException(422, enrol_result.get("error", "Face enrolment failed. Please retake your photos."))
     except HTTPException:
         raise
     except Exception as exc:
         db.delete(new_employee)
         db.commit()
-        logger.error("Face enrolment exception for %s: %s", new_employee.email, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Face enrolment error: {exc}",
-        )
+        raise HTTPException(500, f"Face enrolment failed: {str(exc)}")
 
-    # 5. Retrain classifier
+    # 5. Retrain (non-fatal)
     try:
         face_service.retrain_classifier()
-        logger.info("Classifier retrained after registering %s", new_employee.email)
     except Exception as exc:
         logger.error("Classifier retrain failed (non-fatal): %s", exc)
 
-    # 6. Store PIN verification record
+    # 6. PIN record
     expires_at = datetime.utcnow() + timedelta(minutes=settings.PIN_EXPIRY_MINUTES)
-
     pin_record = PINVerification(
         employee_id=new_employee.id,
         pin_code=pin,
@@ -151,43 +152,18 @@ def _register_employee_inner(payload, db):
     db.commit()
     db.refresh(pin_record)
 
-    # 7. Send SMS
-    sms_result = send_pin_sms(
-        phone_number=new_employee.phone,
-        employee_name=new_employee.name,
-        pin=pin,
-    )
-
-    # Helper to mask phone
-    def _mask(phone: str) -> str:
-        return f"{'*' * max(0, len(phone) - 4)}{phone[-4:]}"
-
+    # 7. Send SMS (non-fatal)
+    sms_result = send_pin_sms(phone_number=new_employee.phone, employee_name=new_employee.name, pin=pin)
     if not sms_result["success"]:
-        logger.error("SMS failed for employee %s: %s", new_employee.id, sms_result["error"])
-        return {
-            "message": "Registered but SMS could not be sent. Please contact IT.",
-            "employee_id": new_employee.id,
-            "email": new_employee.email,
-            "role": "employee",
-            "pin_record_id": pin_record.id,
-            "masked_phone": _mask(new_employee.phone),
-            "sms_sent": False,
-            "default_pin": pin,          # ← ADDED
-        }
-
-    logger.info(
-        "Registration complete: %s — PIN SMS sent to %s",
-        new_employee.email,
-        _mask(new_employee.phone),
-    )
+        logger.error("SMS failed for %s: %s", new_employee.id, sms_result["error"])
 
     return {
-        "message": "Registration successful. Please verify your phone to complete setup.",
+        "message": "Registration successful!" if sms_result["success"] else "Registered! SMS could not be sent — use the PIN shown below to log in.",
         "employee_id": new_employee.id,
         "email": new_employee.email,
         "role": "employee",
         "pin_record_id": pin_record.id,
         "masked_phone": _mask(new_employee.phone),
-        "sms_sent": True,
-        "default_pin": pin,              # ← ADDED
+        "sms_sent": sms_result["success"],
+        "default_pin": pin,
     }

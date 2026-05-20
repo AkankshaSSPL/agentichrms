@@ -1,5 +1,6 @@
 /**
  * Login.jsx - Face login with stability & symmetry check (no half-face capture)
+ * Theme‑aware + manual toggle icon at top‑right.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
@@ -22,10 +23,24 @@ const Login = ({ onSuccess, onRegisterClick }) => {
     const [confirmNewPin, setConfirmNewPin] = useState('')
     const [showChangePin, setShowChangePin] = useState(false)
 
+    // Theme state (local)
+    const [theme, setTheme] = useState(() => localStorage.getItem('hrms_theme') || 'dark')
+
     const webcamRef = useRef(null)
     const canvasRef = useRef(document.createElement('canvas'))
     const animationRef = useRef(null)
     const stabilityTimerRef = useRef(null)
+
+    // Apply theme class to body
+    useEffect(() => {
+        document.body.classList.remove('theme-dark', 'theme-light')
+        document.body.classList.add(`theme-${theme}`)
+        localStorage.setItem('hrms_theme', theme)
+    }, [theme])
+
+    const toggleTheme = () => {
+        setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+    }
 
     const resetState = () => {
         setLoginMethod('choice')
@@ -52,7 +67,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         if (method === 'choice') resetState()
     }
 
-    // Face detection helpers
+    // Face detection helpers (unchanged)
     const isFullFaceCentred = () => {
         if (!webcamRef.current) return false
         const video = webcamRef.current.video
@@ -69,7 +84,6 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         const radiusX = canvas.width * 0.19
         const radiusY = canvas.height * 0.3
 
-        // Skin tone detection
         let skinPixels = 0
         let totalPixels = 0
         for (let y = centreY - radiusY; y <= centreY + radiusY; y += 4) {
@@ -86,7 +100,6 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         const skinRatio = totalPixels === 0 ? 0 : skinPixels / totalPixels
         if (skinRatio < 0.2) return false
 
-        // Symmetry check
         let leftBright = 0, rightBright = 0
         let leftCount = 0, rightCount = 0
         for (let y = centreY - radiusY; y <= centreY + radiusY; y += 4) {
@@ -177,7 +190,6 @@ const Login = ({ onSuccess, onRegisterClick }) => {
             onSuccess(data.access_token, data.employee)
         } catch (err) {
             setError(err.message)
-            // Retry detection after error
             setTimeout(() => {
                 if (step === 'capturing') startFaceMonitoring()
             }, 2000)
@@ -185,7 +197,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
             setLoading(false)
             setScanning(false)
         }
-    }, [onSuccess, loading, step])
+    }, [onSuccess, loading, step, startFaceMonitoring])
 
     const handleFaceLogin = () => {
         setLoginMethod('face')
@@ -193,7 +205,6 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         setError('')
     }
 
-    // PIN login handlers (unchanged from previous working version)
     const handlePinLogin = () => {
         setLoginMethod('pin')
         setStep('initial')
@@ -245,10 +256,53 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         }
     }
 
-    // Render (same as before, but add face status indicator)
     return (
         <div className="login-wrapper">
             <div className="login-container">
+                {/* Theme toggle button - top right corner */}
+                <button
+                    onClick={toggleTheme}
+                    className="theme-toggle-login"
+                    title="Toggle theme"
+                    style={{
+                        position: 'absolute',
+                        top: '16px',
+                        right: '16px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '30px',
+                        width: '36px',
+                        height: '36px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        zIndex: 10,
+                        color: 'var(--text-primary)',   // ensures white in dark mode, dark in light mode
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-dim)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card)'}
+                >
+                    {theme === 'dark' ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <circle cx="12" cy="12" r="5" />
+                            <line x1="12" y1="1" x2="12" y2="3" />
+                            <line x1="12" y1="21" x2="12" y2="23" />
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                            <line x1="1" y1="12" x2="3" y2="12" />
+                            <line x1="21" y1="12" x2="23" y2="12" />
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                        </svg>
+                    ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                        </svg>
+                    )}
+                </button>
+
                 <div className="login-left">
                     <div className="branding">
                         <div className="logo-icon">H</div>
@@ -310,7 +364,6 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                         </div>
                     )}
 
-                    {/* PIN login screen unchanged */}
                     {loginMethod === 'pin' && step === 'initial' && (
                         <div className="auth-content">
                             <h2>Login with PIN</h2>
