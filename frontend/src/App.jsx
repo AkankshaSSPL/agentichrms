@@ -634,12 +634,18 @@ export default function App() {
                                         {groups[groupKey].map(s => (
                                             <div key={s.id} className="session-item">
                                                 <div className="session-btn-wrapper">
-                                                    <button className={`sidebar-btn session-btn ${currentSessionId === s.id ? 'active-session' : ''}`} onClick={() => { setCurrentSessionId(s.id); loadMessages(s.id); setMenuOpen(null) }}>
+                                                    <button
+                                                        className={`session-btn ${currentSessionId === s.id ? 'active-session' : ''}`}
+                                                        onClick={() => { setCurrentSessionId(s.id); loadMessages(s.id); setMenuOpen(null) }}
+                                                    >
                                                         <span className="session-title">{s.title}</span>
                                                         {s.is_pinned && <span className="pin-icon">📌</span>}
                                                     </button>
                                                     <div className="session-menu">
-                                                        <button className="menu-dots" onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === s.id ? null : s.id) }}>⋯</button>
+                                                        <button
+                                                            className="menu-dots"
+                                                            onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === s.id ? null : s.id) }}
+                                                        >⋯</button>
                                                         {menuOpen === s.id && (
                                                             <div className="dropdown-menu">
                                                                 <div className="dropdown-item" onClick={() => renameSession(s.id, s.title)}>Rename</div>

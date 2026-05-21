@@ -1,3 +1,6 @@
+/* ── Google Fonts ──────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
 /* ── HR Assistant — Design System (Manual Theme) ── */
 :root {
   /* Light theme (default) */
@@ -21,7 +24,7 @@
   --text-secondary: #475569;
   --text-muted: #94a3b8;
   --text-accent: #3b82f6;
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: 'DM Mono', 'Fira Code', monospace;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -53,10 +56,11 @@ body.theme-dark {
   --text-accent: #4f8ef7;
 }
 
-* {
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  font-family: var(--font) !important;
 }
 
 body {
@@ -726,34 +730,40 @@ mark {
   font-family: var(--mono);
 }
 
-/* Session menu */
+/* ── Session list ────────────────────────────────────── */
 .session-item {
   width: 100%;
   position: relative;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
+/* wrapper: flex row, button + dots side by side */
 .session-btn-wrapper {
-  position: relative;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
+  gap: 0;
+  border-radius: var(--radius-sm);
+  overflow: visible;          /* let dropdown escape */
 }
 
+/* the clickable session button */
 .session-btn {
   flex: 1;
-  padding: 10px 36px 10px 14px;
+  min-width: 0;               /* allow text truncation */
+  padding: 9px 12px;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-right: none;         /* share border with dots button */
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
   transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .session-btn:hover {
@@ -763,12 +773,15 @@ mark {
 }
 
 .session-btn.active-session {
-  background: var(--accent);
-  color: white;
-  border-color: transparent;
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
+/* title span inside button */
 .session-title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -776,59 +789,79 @@ mark {
 }
 
 .pin-icon {
-  margin-left: 6px;
-  font-size: 11px;
-  color: var(--yellow);
+  font-size: 10px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* three-dot menu container — sits to the right of the button */
+.session-menu {
+  position: relative;
   flex-shrink: 0;
 }
 
-.session-menu {
-  position: absolute;
-  right: 8px;
-  top: 0;
-  bottom: 0;
+/* the ⋯ button */
+.menu-dots {
   display: flex;
   align-items: center;
-  z-index: 5;
-}
-
-.menu-dots {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
+  justify-content: center;
+  width: 28px;
+  height: 100%;
+  min-height: 36px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 16px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  font-size: 14px;
+  transition: var(--transition);
+  padding: 0;
   line-height: 1;
 }
 
+.session-btn:hover ~ .session-menu .menu-dots,
 .menu-dots:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
   color: var(--text-primary);
 }
 
+.session-btn.active-session ~ .session-menu .menu-dots {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* dropdown floats below the dots button */
 .dropdown-menu {
   position: absolute;
   right: 0;
-  top: 100%;
+  top: calc(100% + 4px);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 10;
-  min-width: 120px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 200;
+  min-width: 130px;
+  overflow: hidden;
+  animation: dropIn 0.12s ease;
+}
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .dropdown-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 9px 14px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-secondary);
-  transition: background 0.1s;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
 }
 
 .dropdown-item:hover {
@@ -837,5 +870,10 @@ mark {
 }
 
 .dropdown-item.danger {
+  color: var(--red);
+}
+
+.dropdown-item.danger:hover {
+  background: var(--red-dim);
   color: var(--red);
 }

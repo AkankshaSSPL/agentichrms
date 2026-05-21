@@ -59,9 +59,22 @@ export default function Dashboard({ employee }) {
     const totalCount = tasks.length
 
     return (
-        <div style={styles.container}>
+        <>
+        <style>{`
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .dash-welcome { transition: all 0.22s ease; }
+    .dash-welcome:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.1) !important; border-color: var(--border-hover) !important; }
+    .dash-stat { transition: all 0.2s ease; cursor: default; }
+    .dash-stat:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important; border-color: var(--border-hover) !important; }
+    .dash-progress { transition: all 0.2s ease; }
+    .dash-progress:hover { border-color: var(--border-hover) !important; }
+    .dash-task { transition: all 0.18s ease; }
+    .dash-task:hover { transform: translateX(4px); border-color: var(--accent) !important; box-shadow: 0 3px 14px rgba(79,142,247,0.1) !important; }
+    input[type=checkbox] { accent-color: var(--accent); }
+`}</style>
+        <div style={{...styles.container}}>
             {/* Welcome Section */}
-            <div style={styles.welcomeCard}>
+            <div className="dash-welcome" style={styles.welcomeCard}>
                 <div>
                     <h1 style={styles.welcomeTitle}>Welcome aboard, {employee.name?.split(' ')[0]}! 🎉</h1>
                     <p style={styles.welcomeText}>Complete your onboarding checklist to get started.</p>
@@ -77,7 +90,7 @@ export default function Dashboard({ employee }) {
             </div>
 
             {/* Progress Section */}
-            <div style={styles.progressCard}>
+            <div className="dash-progress" style={styles.progressCard}>
                 <div style={styles.progressHeader}>
                     <span style={styles.progressLabel}>Overall Progress</span>
                     <span style={styles.progressPercent}>{Math.round(progress)}%</span>
@@ -98,7 +111,7 @@ export default function Dashboard({ employee }) {
                 ) : (
                     <div style={styles.tasksGrid}>
                         {tasks.map(task => (
-                            <div key={task.id} style={{ ...styles.taskCard, opacity: task.is_completed ? 0.7 : 1 }}>
+                            <div key={task.id} className="dash-task" style={{ ...styles.taskCard, opacity: task.is_completed ? 0.7 : 1 }}>
                                 <div style={styles.taskCheck}>
                                     <input
                                         type="checkbox"
@@ -126,12 +139,13 @@ export default function Dashboard({ employee }) {
                 )}
             </div>
         </div>
+        </>
     )
 }
 
 // Helper Components
 const StatCard = ({ label, value, icon, color }) => (
-    <div style={styles.statCard}>
+    <div className="dash-stat" style={styles.statCard}>
         <div style={{ ...styles.statIcon, background: `${color}15`, color }}>{icon}</div>
         <div style={styles.statInfo}>
             <span style={styles.statValue}>{value}</span>
@@ -163,7 +177,7 @@ const styles = {
         boxSizing: 'border-box',
     },
     welcomeCard: {
-        background: 'rgba(15,18,25,0.8)',
+        background: 'var(--bg-card)',
         backdropFilter: 'blur(4px)',
         border: '1px solid rgba(79,142,247,0.12)',
         borderRadius: '24px',
@@ -176,12 +190,12 @@ const styles = {
     welcomeTitle: {
         fontSize: '24px',
         fontWeight: 700,
-        color: '#e2e8f0',
+        color: 'var(--text-primary)',
         margin: '0 0 6px 0',
     },
     welcomeText: {
         fontSize: '13px',
-        color: '#64748b',
+        color: 'var(--text-muted)',
         margin: 0,
     },
     welcomeEmoji: {
@@ -195,7 +209,7 @@ const styles = {
         marginBottom: '28px',
     },
     statCard: {
-        background: 'rgba(15,18,25,0.6)',
+        background: 'var(--bg-card)',
         border: '1px solid rgba(79,142,247,0.08)',
         borderRadius: '20px',
         padding: '18px',
@@ -220,15 +234,15 @@ const styles = {
     statValue: {
         fontSize: '28px',
         fontWeight: 700,
-        color: '#e2e8f0',
+        color: 'var(--text-primary)',
         lineHeight: 1.2,
     },
     statLabel: {
         fontSize: '12px',
-        color: '#64748b',
+        color: 'var(--text-muted)',
     },
     progressCard: {
-        background: 'rgba(15,18,25,0.6)',
+        background: 'var(--bg-card)',
         border: '1px solid rgba(79,142,247,0.08)',
         borderRadius: '20px',
         padding: '20px 24px',
@@ -243,15 +257,15 @@ const styles = {
     progressLabel: {
         fontSize: '14px',
         fontWeight: 500,
-        color: '#94a3b8',
+        color: 'var(--text-secondary)',
     },
     progressPercent: {
         fontSize: '20px',
         fontWeight: 700,
-        color: '#4f8ef7',
+        color: 'var(--accent)',
     },
     progressBarBg: {
-        background: 'rgba(79,142,247,0.1)',
+        background: 'var(--bg-secondary)',
         borderRadius: '20px',
         height: '8px',
         overflow: 'hidden',
@@ -263,7 +277,7 @@ const styles = {
         transition: 'width 0.3s ease',
     },
     tasksCard: {
-        background: 'rgba(15,18,25,0.6)',
+        background: 'var(--bg-card)',
         border: '1px solid rgba(79,142,247,0.08)',
         borderRadius: '20px',
         padding: '24px',
@@ -271,7 +285,7 @@ const styles = {
     tasksTitle: {
         fontSize: '18px',
         fontWeight: 600,
-        color: '#e2e8f0',
+        color: 'var(--text-primary)',
         margin: '0 0 20px 0',
     },
     tasksGrid: {
@@ -280,7 +294,7 @@ const styles = {
         gap: '12px',
     },
     taskCard: {
-        background: 'rgba(6,8,18,0.6)',
+        background: 'var(--bg-secondary)',
         border: '1px solid rgba(79,142,247,0.1)',
         borderRadius: '16px',
         padding: '16px',
@@ -304,12 +318,12 @@ const styles = {
     taskName: {
         fontSize: '15px',
         fontWeight: 600,
-        color: '#e2e8f0',
+        color: 'var(--text-primary)',
         margin: '0 0 4px 0',
     },
     taskDesc: {
         fontSize: '13px',
-        color: '#94a3b8',
+        color: 'var(--text-secondary)',
         margin: '0 0 6px 0',
     },
     dueDate: {
@@ -338,13 +352,13 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         height: '400px',
-        color: '#64748b',
+        color: 'var(--text-muted)',
     },
     spinner: {
         width: '40px',
         height: '40px',
-        border: '2px solid rgba(79,142,247,0.2)',
-        borderTopColor: '#4f8ef7',
+        border: '2px solid var(--border)',
+        borderTopColor: 'var(--accent)',
         borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
         marginBottom: '16px',
@@ -356,15 +370,4 @@ const styles = {
         background: 'rgba(248,113,113,0.05)',
         borderRadius: '20px',
     },
-}
-
-// Add this CSS to your global styles or inside a <style> tag in the component
-if (typeof document !== 'undefined') {
-    const style = document.createElement('style')
-    style.textContent = `
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  `
-    document.head.appendChild(style)
 }

@@ -7,6 +7,8 @@ for this employee. It decides what to ask and saves field-by-field as it goes.
 import logging
 import json
 import re
+import base64
+import io
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -162,6 +164,39 @@ def apply_fields_to_employee(employee: Employee, fields: dict, db: Session):
         else:
             setattr(employee, key, str(val).strip())
     db.commit()
+
+
+# ── PDF Resume Extraction ─────────────────────────────────────────────────────
+class ResumeExtractRequest(BaseModel):
+    pdf_base64: str
+    filename: Optional[str] = "resume.pdf"
+
+
+@router.post("/extract-resume")
+async def extract_resume(payload: ResumeExtractRequest, request: Request, db: Session = Depends(get_db)):
+    """Decode base64 PDF and extract plain text using pypdf."""
+    get_current_employee(request, db)  # auth check only
+    try:
+        pdf_bytes = base64.b64decode(payload.pdf_base64)
+        text = ""
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        except ImportError:
+            try:
+                import PyPDF2
+                reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+                text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            except ImportError:
+                logger.error("pypdf not installed")
+                return {"text": "", "error": "pypdf not installed. Run: pip install pypdf --break-system-packages"}
+        text = text.strip()[:8000]
+        logger.info("Extracted %d chars from %s", len(text), payload.filename)
+        return {"text": text, "chars": len(text)}
+    except Exception as e:
+        logger.error("PDF extraction error: %s", e)
+        return {"text": "", "error": str(e)}
 
 
 class OnboardingChatRequest(BaseModel):

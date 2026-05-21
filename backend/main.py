@@ -25,6 +25,7 @@ from backend.api.admin import router as admin_router
 from backend.api.email_settings import router as email_settings_router
 
 
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 

@@ -74,224 +74,212 @@ export default function LeaveRequests({ token: tokenProp, onAlert }) {
         }
     }
 
-    if (loading) return <LeaveLoading />
-    if (error) return <LeaveError message={error} />
-
-    return (
-        <div style={styles.container}>
-            <div style={styles.header}>
-                <h2 style={styles.title}> Pending Leave Requests</h2>
-                <span style={styles.badge}>{leaves.length} pending</span>
-            </div>
-
-            {leaves.length === 0 ? (
-                <div style={styles.emptyState}>
-                    <div style={styles.emptyIcon}></div>
-                    <p>No pending leave requests</p>
-                </div>
-            ) : (
-                <div style={styles.cardsGrid}>
-                    {leaves.map(l => (
-                        <div key={l.id} style={styles.leaveCard}>
-                            <div style={styles.cardHeader}>
-                                <div>
-                                    <div style={styles.employeeName}>{l.employee_name}</div>
-                                    <div style={styles.employeeEmail}>{l.employee_email}</div>
-                                </div>
-                                <div style={styles.leaveType}>{l.leave_type}</div>
-                            </div>
-                            <div style={styles.dateRange}>
-                                {l.start_date} → {l.end_date}
-                            </div>
-                            <div style={styles.reasonBox}>
-                                <span style={styles.reasonLabel}>Reason:</span> "{l.reason}"
-                            </div>
-                            <div style={styles.actionRow}>
-                                <button
-                                    onClick={() => handleApprove(l.id)}
-                                    disabled={actionLoading === l.id}
-                                    style={styles.approveBtn}
-                                >
-                                    {actionLoading === l.id ? '...' : '✓ Approve'}
-                                </button>
-                                <div style={styles.rejectGroup}>
-                                    <input
-                                        type="text"
-                                        placeholder="Rejection reason..."
-                                        value={rejectionReasons[l.id] || ""}
-                                        onChange={(e) => setRejectionReasons(prev => ({ ...prev, [l.id]: e.target.value }))}
-                                        style={styles.reasonInput}
-                                    />
-                                    <button
-                                        onClick={() => handleReject(l.id)}
-                                        disabled={actionLoading === l.id}
-                                        style={styles.rejectBtn}
-                                    >
-                                        Reject
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+    if (loading) return (
+        <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            Loading leave requests…
         </div>
     )
-}
 
-// Loading & Error components
-const LeaveLoading = () => (
-    <div style={styles.loader}> Loading leave requests...</div>
-)
-const LeaveError = ({ message }) => (
-    <div style={styles.errorBox}> Error: {message}</div>
-)
+    if (error) return (
+        <div style={{ padding: '20px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '16px', color: '#f87171', textAlign: 'center', margin: '20px' }}>
+            Error: {error}
+        </div>
+    )
 
-const styles = {
-    container: {
-        padding: '28px 32px',
-        maxWidth: '900px',
-        margin: '0 auto',
-        width: '100%',
-        boxSizing: 'border-box',
-    },
-    header: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '28px',
-    },
-    title: {
-        fontSize: '20px',
-        fontWeight: 600,
-        color: '#e2e8f0',
-        margin: 0,
-    },
-    badge: {
-        background: 'rgba(79,142,247,0.15)',
-        color: '#60a5fa',
-        padding: '4px 12px',
-        borderRadius: '20px',
-        fontSize: '12px',
-        fontWeight: 500,
-    },
-    emptyState: {
-        textAlign: 'center',
-        padding: '60px 20px',
-        background: 'rgba(15,18,25,0.6)',
-        borderRadius: '24px',
-        color: '#64748b',
-    },
-    emptyIcon: {
-        fontSize: '48px',
-        marginBottom: '12px',
-        opacity: 0.6,
-    },
-    cardsGrid: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-    },
-    leaveCard: {
-        background: 'rgba(15,18,25,0.8)',
-        border: '1px solid rgba(79,142,247,0.12)',
-        borderRadius: '20px',
-        padding: '20px',
-        transition: 'all 0.2s',
-    },
-    cardHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: '12px',
-    },
-    employeeName: {
-        fontSize: '16px',
-        fontWeight: 600,
-        color: '#e2e8f0',
-    },
-    employeeEmail: {
-        fontSize: '12px',
-        color: '#64748b',
-        marginTop: '2px',
-    },
-    leaveType: {
-        background: 'rgba(52,211,153,0.1)',
-        color: '#34d399',
-        padding: '4px 12px',
-        borderRadius: '20px',
-        fontSize: '12px',
-        fontWeight: 500,
-    },
-    dateRange: {
-        fontSize: '13px',
-        color: '#94a3b8',
-        marginBottom: '12px',
-    },
-    reasonBox: {
-        background: 'rgba(6,8,18,0.5)',
-        borderRadius: '12px',
-        padding: '12px',
-        fontSize: '13px',
-        color: '#cbd5e1',
-        marginBottom: '16px',
-        borderLeft: '2px solid #4f8ef7',
-    },
-    reasonLabel: {
-        fontWeight: 600,
-        color: '#94a3b8',
-    },
-    actionRow: {
-        display: 'flex',
-        gap: '12px',
-        flexWrap: 'wrap',
-    },
-    approveBtn: {
-        background: 'rgba(52,211,153,0.15)',
-        border: '1px solid rgba(52,211,153,0.3)',
-        padding: '8px 20px',
-        borderRadius: '10px',
-        color: '#34d399',
-        fontWeight: 600,
-        fontSize: '13px',
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-    },
-    rejectGroup: {
-        flex: 1,
-        display: 'flex',
-        gap: '8px',
-    },
-    reasonInput: {
-        flex: 1,
-        background: '#0f1219',
-        border: '1px solid rgba(79,142,247,0.2)',
-        borderRadius: '10px',
-        padding: '8px 12px',
-        color: '#e2e8f0',
-        fontSize: '12px',
-        outline: 'none',
-    },
-    rejectBtn: {
-        background: 'rgba(248,113,113,0.1)',
-        border: '1px solid rgba(248,113,113,0.3)',
-        padding: '8px 16px',
-        borderRadius: '10px',
-        color: '#f87171',
-        fontWeight: 600,
-        fontSize: '13px',
-        cursor: 'pointer',
-    },
-    loader: {
-        padding: '60px',
-        textAlign: 'center',
-        color: '#64748b',
-    },
-    errorBox: {
-        padding: '20px',
-        background: 'rgba(248,113,113,0.1)',
-        borderRadius: '16px',
-        color: '#f87171',
-        textAlign: 'center',
-    },
+    return (
+        <>
+            <style>{`
+                .lr-card {
+                    background: var(--bg-card);
+                    border: 1px solid var(--border);
+                    border-radius: 20px;
+                    padding: 20px;
+                    transition: all 0.2s;
+                }
+                .lr-card:hover {
+                    border-color: var(--border-hover);
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                    transform: translateY(-1px);
+                }
+                .lr-reason-input {
+                    flex: 1;
+                    background: var(--bg-input);
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    padding: 8px 12px;
+                    color: var(--text-primary);
+                    font-size: 12px;
+                    outline: none;
+                    font-family: inherit;
+                    transition: border-color 0.15s;
+                }
+                .lr-reason-input:focus {
+                    border-color: var(--accent);
+                }
+                .lr-reason-input::placeholder {
+                    color: var(--text-muted);
+                }
+                .lr-approve-btn {
+                    background: rgba(52,211,153,0.1);
+                    border: 1px solid rgba(52,211,153,0.25);
+                    padding: 8px 20px;
+                    border-radius: 10px;
+                    color: #34d399;
+                    font-weight: 600;
+                    font-size: 13px;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                    font-family: inherit;
+                }
+                .lr-approve-btn:hover:not(:disabled) {
+                    background: rgba(52,211,153,0.18);
+                    border-color: rgba(52,211,153,0.4);
+                    transform: translateY(-1px);
+                }
+                .lr-approve-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+                .lr-reject-btn {
+                    background: rgba(248,113,113,0.08);
+                    border: 1px solid rgba(248,113,113,0.25);
+                    padding: 8px 16px;
+                    border-radius: 10px;
+                    color: #f87171;
+                    font-weight: 600;
+                    font-size: 13px;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                    font-family: inherit;
+                }
+                .lr-reject-btn:hover:not(:disabled) {
+                    background: rgba(248,113,113,0.15);
+                    border-color: rgba(248,113,113,0.4);
+                }
+                .lr-reject-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+            `}</style>
+
+            <div style={{ padding: '28px 32px', maxWidth: '900px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                        Pending Leave Requests
+                    </h2>
+                    <span style={{
+                        background: 'rgba(79,142,247,0.1)',
+                        color: 'var(--accent)',
+                        border: '1px solid rgba(79,142,247,0.2)',
+                        padding: '4px 14px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                    }}>
+                        {leaves.length} pending
+                    </span>
+                </div>
+
+                {/* Empty state */}
+                {leaves.length === 0 ? (
+                    <div style={{
+                        textAlign: 'center',
+                        padding: '60px 20px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '24px',
+                        color: 'var(--text-muted)',
+                    }}>
+                        <div style={{ fontSize: '40px', marginBottom: '12px', opacity: 0.5 }}></div>
+                        <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>All clear!</div>
+                        <div style={{ fontSize: '13px' }}>No pending leave requests at the moment.</div>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {leaves.map(l => (
+                            <div key={l.id} className="lr-card">
+
+                                {/* Card header */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                                    <div>
+                                        <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{l.employee_name}</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{l.employee_email}</div>
+                                    </div>
+                                    <span style={{
+                                        background: 'rgba(52,211,153,0.1)',
+                                        color: '#34d399',
+                                        border: '1px solid rgba(52,211,153,0.2)',
+                                        padding: '4px 12px',
+                                        borderRadius: '20px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                    }}>
+                                        {l.leave_type}
+                                    </span>
+                                </div>
+
+                                {/* Date range */}
+                                <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '10px',
+                                    padding: '6px 14px',
+                                    fontSize: '12px',
+                                    color: 'var(--text-secondary)',
+                                    marginBottom: '12px',
+                                    fontWeight: 500,
+                                }}>
+                                    📅 {l.start_date} → {l.end_date}
+                                </div>
+
+                                {/* Reason */}
+                                <div style={{
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                    borderLeft: '3px solid var(--accent)',
+                                    borderRadius: '10px',
+                                    padding: '10px 14px',
+                                    fontSize: '13px',
+                                    color: 'var(--text-secondary)',
+                                    marginBottom: '16px',
+                                    lineHeight: 1.5,
+                                }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reason </span>
+                                    <br/>
+                                    "{l.reason}"
+                                </div>
+
+                                {/* Actions */}
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <button
+                                        className="lr-approve-btn"
+                                        onClick={() => handleApprove(l.id)}
+                                        disabled={actionLoading === l.id}
+                                    >
+                                        {actionLoading === l.id ? '…' : '✓ Approve'}
+                                    </button>
+                                    <div style={{ flex: 1, display: 'flex', gap: '8px', minWidth: 220 }}>
+                                        <input
+                                            className="lr-reason-input"
+                                            type="text"
+                                            placeholder="Rejection reason…"
+                                            value={rejectionReasons[l.id] || ""}
+                                            onChange={e => setRejectionReasons(prev => ({ ...prev, [l.id]: e.target.value }))}
+                                        />
+                                        <button
+                                            className="lr-reject-btn"
+                                            onClick={() => handleReject(l.id)}
+                                            disabled={actionLoading === l.id}
+                                        >
+                                            Reject
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </>
+    )
 }
