@@ -7,8 +7,6 @@ for this employee. It decides what to ask and saves field-by-field as it goes.
 import logging
 import json
 import re
-import base64
-import io
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -109,29 +107,43 @@ def build_dynamic_system_prompt(employee: Employee) -> str:
     all_fields = list(profile.keys())
     json_template = "{" + ", ".join(f'"{k}": ""' for k in all_fields) + "}"
 
-    return f"""You are a friendly HR onboarding assistant for {employee.name}.
+    first_name = employee.name.split()[0] if employee.name else employee.name
 
-ALREADY FILLED — DO NOT ASK FOR THESE:
+    return f"""You are a warm, friendly HR onboarding assistant helping {first_name} set up their profile.
+
+ALREADY FILLED — NEVER ask for these again:
 {filled_lines}
 
-REQUIRED FIELDS YOU MUST COLLECT:
+REQUIRED FIELDS STILL NEEDED:
 {required_lines}
 
-OPTIONAL FIELDS (ask but accept skip):
+OPTIONAL FIELDS (ask casually, accept if they skip):
 {optional_lines}
 
-RULES:
-1. Only ask for MISSING fields. Never re-ask already-filled ones.
-2. Ask 1-2 related fields at a time. Never dump all questions at once.
-3. Accept natural language — infer correct values (e.g. "I joined in January 2024" → 2024-01-01).
-4. If resume is provided, extract everything you can and confirm gaps.
-5. Be warm, concise, encouraging. Use the employee's first name sometimes.
-6. After collecting a group of answers, output a partial save tag immediately:
+PERSONALITY & TONE RULES:
+- Talk like a helpful colleague, not a form. Be casual, warm, encouraging.
+- Use {first_name}'s name occasionally but not every message.
+- Keep messages short — 2-4 sentences max unless confirming multiple things.
+- Never use bullet points or numbered lists in your replies.
+- Never start a message with "Great!" or "Sure!" — vary your acknowledgements.
+- When someone gives you info, acknowledge it naturally in 1 sentence then move on.
+
+RESUME HANDLING (CRITICAL):
+- If a resume is provided, silently extract everything you can. DO NOT show the user a list of what you extracted.
+- Instead, just say something like: "Thanks! I've pulled a few things from your resume. Let me just confirm a couple of details..."
+- Then ask ONLY about the 1-2 most important missing fields, naturally in conversation.
+- Never show a bullet-point summary of extracted data to the user. Ever.
+
+CONVERSATION RULES:
+1. Ask for MISSING fields only. Never re-ask filled ones.
+2. Ask 1-2 related things at a time — never dump everything at once.
+3. Accept natural language and infer values ("joined in Jan 2024" → 2024-01-01).
+4. After each group of answers, immediately output a save tag (invisible to user):
    <PARTIAL_SAVE>{{"field": "value"}}</PARTIAL_SAVE>
-7. When ALL required fields are collected (optional can be skipped), output at end of message:
+5. When ALL required fields collected (optional can be skipped), output at end of your message:
    <PROFILE_DATA>{json_template}</PROFILE_DATA>
-   with only newly collected values filled in (leave others as empty string "").
-8. If all required fields were already filled, say so and output <PROFILE_DATA>{{}}</PROFILE_DATA>.
+   Only include newly collected values (leave others as empty string "").
+6. If all required fields were already filled, say so warmly and output <PROFILE_DATA>{{}}</PROFILE_DATA>.
 """
 
 
@@ -164,39 +176,6 @@ def apply_fields_to_employee(employee: Employee, fields: dict, db: Session):
         else:
             setattr(employee, key, str(val).strip())
     db.commit()
-
-
-# ── PDF Resume Extraction ─────────────────────────────────────────────────────
-class ResumeExtractRequest(BaseModel):
-    pdf_base64: str
-    filename: Optional[str] = "resume.pdf"
-
-
-@router.post("/extract-resume")
-async def extract_resume(payload: ResumeExtractRequest, request: Request, db: Session = Depends(get_db)):
-    """Decode base64 PDF and extract plain text using pypdf."""
-    get_current_employee(request, db)  # auth check only
-    try:
-        pdf_bytes = base64.b64decode(payload.pdf_base64)
-        text = ""
-        try:
-            import pypdf
-            reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
-            text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        except ImportError:
-            try:
-                import PyPDF2
-                reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-                text = "\n".join(page.extract_text() or "" for page in reader.pages)
-            except ImportError:
-                logger.error("pypdf not installed")
-                return {"text": "", "error": "pypdf not installed. Run: pip install pypdf --break-system-packages"}
-        text = text.strip()[:8000]
-        logger.info("Extracted %d chars from %s", len(text), payload.filename)
-        return {"text": text, "chars": len(text)}
-    except Exception as e:
-        logger.error("PDF extraction error: %s", e)
-        return {"text": "", "error": str(e)}
 
 
 class OnboardingChatRequest(BaseModel):
@@ -303,8 +282,33 @@ async def save_profile(payload: ProfileSaveRequest, request: Request, db: Sessio
 
 
 @router.get("/me")
-def get_my_profile(request: Request, db: Session = Depends(get_db)):
-    emp = get_current_employee(request, db)
+def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """
+    Returns profile for the logged-in employee.
+    HR/admin can pass ?employee_id=N to read any employee's profile.
+    """
+    from backend.core.security import require_role as _require_role
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Missing token")
+    from backend.core.security import verify_token as _vt
+    payload = _vt(auth.split(" ")[1])
+    if not payload:
+        raise HTTPException(401, "Invalid token")
+
+    # If employee_id provided, caller must be hr or admin
+    if employee_id:
+        caller_role = payload.get("role", "employee")
+        if caller_role not in ("hr", "admin"):
+            raise HTTPException(403, "Only HR or admin can view other employees' profiles")
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if not emp:
+            raise HTTPException(404, "Employee not found")
+    else:
+        emp = db.query(Employee).filter(Employee.id == int(payload["sub"])).first()
+        if not emp:
+            raise HTTPException(404, "Employee not found")
+
     profile = get_profile_columns(emp)
     return {
         "id": emp.id, "name": emp.name, "email": emp.email, "phone": emp.phone,

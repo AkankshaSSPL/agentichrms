@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import LeaveRequests from './LeaveRequests'
 import DashboardMetricsSimple from './DashboardMetricsSimple'
+import OnboardingChat from './OnboardingChat'
 
 const API = '/api'
 
@@ -133,6 +134,91 @@ function EmailSettingsTab({ token }) {
 }
 
 /* ── Main AdminPanel ────────────────────────────────────────────────────────── */
+/* ── HR Onboarding Tab ───────────────────────────────────────────────────────── */
+function HROnboardingTab({ token }) {
+    const [employees, setEmployees] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [selected, setSelected] = useState(null) // employee being onboarded
+
+    const fetchPending = useCallback(async () => {
+        setLoading(true)
+        try {
+            const res = await fetch(`${API}/onboarding-profile/employees-pending`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            if (res.ok) setEmployees(await res.json())
+        } catch { } finally { setLoading(false) }
+    }, [token])
+
+    useEffect(() => { fetchPending() }, [fetchPending])
+
+    if (selected) {
+        return (
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '12px 24px', borderBottom: '1px solid rgba(79,142,247,0.1)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                    <button onClick={() => { setSelected(null); fetchPending() }} style={{ background: 'rgba(79,142,247,0.1)', border: '1px solid rgba(79,142,247,0.25)', borderRadius: 7, padding: '5px 14px', color: '#60a5fa', fontSize: 12, cursor: 'pointer' }}>← Back</button>
+                    <span style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 600 }}>Filling profile for: <span style={{ color: '#60a5fa' }}>{selected.name}</span></span>
+                    <span style={{ fontSize: 11, color: '#475569' }}>{selected.email}</span>
+                </div>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <OnboardingChat
+                        employee={selected}
+                        token={token}
+                        isHRMode={true}
+                        onComplete={() => { setSelected(null); fetchPending() }}
+                    />
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div style={{ padding: '24px 28px' }}>
+            <div style={{ marginBottom: 20 }}>
+                <h3 style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Employee Onboarding</h3>
+                <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>Employees with incomplete profiles. Click to fill their details via chat.</p>
+            </div>
+
+            {loading ? (
+                <div style={{ color: '#475569', fontSize: 13, padding: 24 }}>Loading…</div>
+            ) : employees.length === 0 ? (
+                <div style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 32, marginBottom: 10 }}></div>
+                    <div style={{ color: '#34d399', fontSize: 14, fontWeight: 600 }}>All employee profiles are complete!</div>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {employees.map(emp => (
+                        <div key={emp.id} style={{
+                            background: 'rgba(15,18,25,0.8)', border: '1px solid rgba(79,142,247,0.1)',
+                            borderRadius: 12, padding: '16px 20px',
+                            display: 'flex', alignItems: 'center', gap: 16,
+                            cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                            onClick={() => setSelected(emp)}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(79,142,247,0.4)'; e.currentTarget.style.background = 'rgba(79,142,247,0.05)' }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(79,142,247,0.1)'; e.currentTarget.style.background = 'rgba(15,18,25,0.8)' }}
+                        >
+                            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,#4f8ef7,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                                {emp.name?.[0]?.toUpperCase()}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{emp.name}</div>
+                                <div style={{ fontSize: 12, color: '#475569' }}>{emp.email}</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                                {!emp.department && <span style={{ fontSize: 10, background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10, padding: '2px 8px' }}>No dept</span>}
+                                {!emp.designation && <span style={{ fontSize: 10, background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 10, padding: '2px 8px' }}>No title</span>}
+                                <span style={{ fontSize: 10, background: 'rgba(79,142,247,0.1)', color: '#60a5fa', border: '1px solid rgba(79,142,247,0.2)', borderRadius: 10, padding: '2px 8px' }}>Fill via chat →</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 export default function AdminPanel({ token: tokenProp }) {
     const token = tokenProp || localStorage.getItem('hrms_token') || ''
     const [activeTab, setActiveTab] = useState('dashboard')
@@ -199,6 +285,7 @@ export default function AdminPanel({ token: tokenProp }) {
         { id: 'dashboard', label: 'Dashboard' },
         { id: 'roles', label: 'Role Management' },
         { id: 'leaves', label: 'Leave Approvals' },
+        { id: 'onboarding', label: 'Onboarding' },
         { id: 'email', label: 'Email Settings' },
     ]
 
@@ -319,6 +406,9 @@ export default function AdminPanel({ token: tokenProp }) {
                         <LeaveRequests token={token} onAlert={addAlert} />
                     </div>
                 )}
+
+                {/* Onboarding */}
+                {activeTab === 'onboarding' && <HROnboardingTab token={token} />}
 
                 {/* Email Settings */}
                 {activeTab === 'email' && <EmailSettingsTab token={token} />}

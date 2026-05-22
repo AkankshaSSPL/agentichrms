@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard'
 import NotificationBell from './components/NotificationBell'
 import LeaveRequests from './components/LeaveRequests'
 import AdminPanel from './components/AdminPanel'
+import HRPanel from './components/HRPanel'
 import OnboardingChat from './components/OnboardingChat'
 import ProfileView from './components/ProfileView'
 
@@ -285,7 +286,7 @@ export default function App() {
             })
             if (res.ok) {
                 const fresh = await res.json()
-                const merged = { ...emp, ...fresh, role: emp.role }
+                const merged = { ...emp, ...fresh, role: fresh.role || emp.role }  // use DB role so changes reflect immediately
                 localStorage.setItem('hrms_employee', JSON.stringify(merged))
                 setEmployee(merged)
             } else {
@@ -316,38 +317,6 @@ export default function App() {
     if (!authed) {
         if (showRegister) return <Register onBackToLogin={() => setShowRegister(false)} />
         return <Login onSuccess={handleLoginSuccess} onRegisterClick={() => setShowRegister(true)} />
-    }
-
-    const isAdminOrHr = employee?.role === 'admin' || employee?.role === 'hr'
-    if (employee && !employee.onboarding_completed && !isAdminOrHr) {
-        return (
-            <OnboardingChat
-                employee={employee}
-                token={localStorage.getItem('hrms_token')}
-                onComplete={async () => {
-                    const token = localStorage.getItem('hrms_token')
-                    try {
-                        await fetch(`${API}/onboarding-profile/save`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({}),
-                        })
-                    } catch { }
-                    try {
-                        const res = await fetch(`${API}/onboarding-profile/me`, {
-                            headers: { Authorization: `Bearer ${token}` }
-                        })
-                        if (res.ok) {
-                            const fresh = await res.json()
-                            const merged = { ...employee, ...fresh, role: employee.role }
-                            localStorage.setItem('hrms_employee', JSON.stringify(merged))
-                            setEmployee(merged)
-                        }
-                    } catch { }
-                    setView('chat')
-                }}
-            />
-        )
     }
 
     const regenerate = async () => {
@@ -683,7 +652,12 @@ export default function App() {
                         <NotificationBell token={localStorage.getItem('hrms_token')} />
                     </div>
                     <div style={{ flex: 1, overflow: 'auto' }}>
-                        {view === 'leaveRequests' ? <LeaveRequests token={localStorage.getItem('hrms_token')} /> : <AdminPanel token={localStorage.getItem('hrms_token')} />}
+                        {view === 'leaveRequests'
+                            ? <LeaveRequests token={localStorage.getItem('hrms_token')} />
+                            : employee?.role === 'hr'
+                                ? <HRPanel token={localStorage.getItem('hrms_token')} />
+                                : <AdminPanel token={localStorage.getItem('hrms_token')} />
+                        }
                     </div>
                 </main>
             ) : view === 'chat' ? (
@@ -693,8 +667,7 @@ export default function App() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             {employee && (employee.role === 'admin' || employee.role === 'hr') && (
                                 <div style={{ display: 'flex', gap: 6 }}>
-                                    {employee.role === 'admin' && <button onClick={() => setView('admin')} style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, padding: '5px 13px', color: 'var(--accent)', fontSize: 12, cursor: 'pointer' }}>Admin Dashboard</button>}
-                                    {employee.role === 'hr' && <button onClick={() => setView('leaveRequests')} style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 7, padding: '5px 13px', color: 'var(--green)', fontSize: 12, cursor: 'pointer' }}>Leaves</button>}
+                                    {(employee.role === 'admin' || employee.role === 'hr') && <button onClick={() => setView('admin')} style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, padding: '5px 13px', color: 'var(--accent)', fontSize: 12, cursor: 'pointer' }}>{employee.role === 'hr' ? 'HR Dashboard' : 'Admin Dashboard'}</button>}
                                 </div>
                             )}
                             <button className="theme-toggle-icon" onClick={toggleTheme} title="Toggle theme">

@@ -38,7 +38,7 @@ class EmployeeRoleResponse(BaseModel):
 
 @router.get("/employees", response_model=List[EmployeeRoleResponse])
 def list_employees(
-    payload: dict = Depends(require_role(["admin"])),
+    payload: dict = Depends(require_role(["admin", "hr"])),   # HR can read, not modify
     db: Session = Depends(get_db),
 ):
     employees = db.query(Employee).all()

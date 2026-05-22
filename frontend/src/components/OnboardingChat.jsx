@@ -88,7 +88,7 @@ function buildResumeMessage(found, filename) {
     return lines.join('\n')
 }
 
-export default function OnboardingChat({ employee, token, onComplete }) {
+export default function OnboardingChat({ employee, token, onComplete, isHRMode = false }) {
     const [messages, setMessages]     = useState([])
     const [input, setInput]           = useState('')
     const [loading, setLoading]       = useState(false)
@@ -116,7 +116,9 @@ export default function OnboardingChat({ employee, token, onComplete }) {
     useEffect(() => {
         setMessages([{
             role: 'assistant',
-            content: `Welcome ${employee.name}!\n\nI'll help set up your profile in about 2 minutes.\n\nYou can upload your resume (PDF) and I'll fill in what I can, or just answer a few quick questions.\n\nFirst — which department and job title?`,
+            content: isHRMode
+                ? `Hi! Let's fill in the profile for **${employee.name}** (${employee.email}).\n\nYou can upload their resume (PDF) and I'll extract what I can, or just answer the questions.\n\nFirst — what department are they joining and what's their job title?`
+                : `Welcome ${employee.name}!\n\nI'll help set up your profile in about 2 minutes.\n\nYou can upload your resume (PDF) and I'll fill in what I can, or just answer a few quick questions.\n\nFirst — which department and job title?`,
         }])
     }, [])
 
@@ -203,10 +205,11 @@ export default function OnboardingChat({ employee, token, onComplete }) {
         if (!text) setMessages(prev => [...prev, { role: 'user', content: userMsg }])
         setLoading(true)
         try {
-            const res = await fetch(`${API}/onboarding-profile/chat`, {
+            const res = await fetch(`${API}/onboarding-profile/${isHRMode ? 'chat-for' : 'chat'}`, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body:    JSON.stringify({
+                    ...(isHRMode ? { employee_id: employee.id } : {}),
                     message:     userMsg,
                     history:     messages.filter(m => !m.content.startsWith('📎')),
                     resume_text: resumeTextOverride !== undefined ? resumeTextOverride : resumeText,

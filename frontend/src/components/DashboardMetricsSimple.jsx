@@ -131,11 +131,11 @@ export default function DashboardMetricsSimple({ employees, token, onNavigate })
             <div style={styles.chartsRow}>
                 <div style={styles.chartCard}>
                     <h3 style={styles.chartTitle}>Department Distribution</h3>
-                    <div style={styles.emptyChart}><span>📊</span><p>Chart will appear once data is available</p></div>
+                    <div style={styles.emptyChart}><span></span><p>Chart will appear once data is available</p></div>
                 </div>
                 <div style={styles.chartCard}>
                     <h3 style={styles.chartTitle}>Hiring Trend (6 Months)</h3>
-                    <div style={styles.emptyChart}><span>📈</span><p>Chart will appear once data is available</p></div>
+                    <div style={styles.emptyChart}><span></span><p>Chart will appear once data is available</p></div>
                 </div>
             </div>
         </div>
