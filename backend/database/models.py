@@ -246,6 +246,27 @@ class EmailLog(Base):
     triggered_by = Column(String(100), nullable=True) # "leave_approve" | "role_change" | "test" etc.
 
 
+class NameChangeRequest(BaseModel):
+    """Employee name change requests with optional document upload"""
+    __tablename__ = "name_change_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey('employees.id', ondelete="CASCADE"), nullable=False)
+    old_name = Column(String(255), nullable=False)
+    new_name = Column(String(255), nullable=False)
+    reason = Column(Text, nullable=True)                     # e.g. "Got married"
+    status = Column(String(30), default="pending")           # pending | approved | rejected | awaiting_document
+    document_provided = Column(Boolean, default=False)
+    document_path = Column(String(500), nullable=True)
+    document_filename = Column(String(255), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    reviewer = relationship("Employee", foreign_keys=[reviewed_by])
+
+
 class Notification(BaseModel):
     __tablename__ = "notifications"
     __table_args__ = {'extend_existing': True}

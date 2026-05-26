@@ -116,7 +116,7 @@ def approve_leave_post(
         if emp:
             send_email(
                 to=emp.email,
-                subject=f"✅ Leave Approved — {leave.leave_type} ({date_str})",
+                subject=f"Leave Approved — {leave.leave_type} ({date_str})",
                 body=(
                     f"Hi {emp.name},\n\n"
                     f"Your {leave.leave_type} leave request for {date_str} has been approved by HR.\n\n"

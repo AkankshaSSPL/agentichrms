@@ -16,7 +16,7 @@ from typing import Optional, List, Any
 import httpx
 
 from backend.database.session import SessionLocal
-from backend.database.models import Employee
+from backend.database.models import Employee, NameChangeRequest, Notification, Role
 from backend.core.security import verify_token
 from backend.core.config import settings
 
@@ -58,6 +58,13 @@ COLUMN_LABELS = {
 }
 
 OPTIONAL_COLUMNS = {"address_line2", "base_salary"}
+
+# Keywords for name change detection
+NAME_CHANGE_KEYWORDS = [
+    "change my name", "update my name", "new name", "got married",
+    "i got married", "after marriage", "legal name", "name change",
+    "married name", "changed my name", "my name is now", "rename me"
+]
 
 
 def get_db():
@@ -120,6 +127,15 @@ REQUIRED FIELDS STILL NEEDED:
 OPTIONAL FIELDS (ask casually, accept if they skip):
 {optional_lines}
 
+NAME CHANGE HANDLING (CRITICAL):
+- If the user mentions getting married, changing their name, or a legal name update:
+  1. Ask for their new full name in a natural way (e.g. "What would you like your new name to be?")
+  2. Ask for the reason if not already stated (marriage / legal / correction)
+  3. Confirm: "I've submitted your name-change request to HR for approval. You can upload a marriage certificate later."
+  4. Then continue with remaining profile fields.
+  5. NEVER skip to profile fields without acknowledging the name change first.
+  6. The system will automatically create the request record — you don't need to do anything special.
+
 PERSONALITY & TONE RULES:
 - Talk like a helpful colleague, not a form. Be casual, warm, encouraging.
 - Use {first_name}'s name occasionally but not every message.
@@ -147,6 +163,71 @@ CONVERSATION RULES:
 """
 
 
+def _detect_and_create_name_change(employee: Employee, new_name: str, reason: str, db) -> str | None:
+    """
+    Creates a NameChangeRequest record and notifies HR.
+    Returns a confirmation string if created, else None.
+    """
+    if not new_name or new_name.strip() == employee.name:
+        return None
+
+    # Create the request using the correct field names (old_name, new_name)
+    ncr = NameChangeRequest(
+        employee_id=employee.id,
+        old_name=employee.name,
+        new_name=new_name.strip(),
+        reason=reason or "marriage",
+        document_provided=False,
+        status="pending",
+    )
+    db.add(ncr)
+    db.flush()
+
+    # Notify HR via database notifications
+    try:
+        hr_roles = db.query(Role).filter(Role.name.in_(["hr", "admin"])).all()
+        hr_ids = [r.id for r in hr_roles]
+        hr_emps = db.query(Employee).filter(Employee.role_id.in_(hr_ids)).all()
+        for hr in hr_emps:
+            db.add(Notification(
+                employee_id=hr.id,
+                title=" Name Change Request",
+                message=f"{employee.name} has requested a name change to '{new_name}'. No document provided yet.",
+                is_read=False,
+            ))
+    except Exception as e:
+        logger.warning("HR notify failed: %s", e)
+
+    db.commit()
+
+    # Optional: send email to HR
+    try:
+        from backend.core.email import send_email
+        import os
+        hr_email = os.getenv("HR_EMAIL", "")
+        if hr_email:
+            send_email(
+                to=hr_email,
+                subject=f"Name Change Request — {employee.name}",
+                body=(
+                    f"Employee: {employee.name} ({employee.email})\n"
+                    f"Requested name: {new_name}\n"
+                    f"Reason: {reason or 'marriage'}\n"
+                    f"Document: NOT provided yet.\n\n"
+                    f"Review in HR Dashboard → Name Change Requests tab."
+                ),
+                triggered_by="name_change_request",
+            )
+    except Exception as e:
+        logger.warning("HR email failed: %s", e)
+
+    return (
+        f"Your name-change request to '{new_name}' has been submitted to HR for approval. "
+        f"You'll be notified once they review it. "
+        f"You can also upload a supporting document (e.g. marriage certificate) later from your profile."
+    )
+
+
 def apply_fields_to_employee(employee: Employee, fields: dict, db: Session):
     date_fields = {"join_date", "date_of_birth"}
     for key, val in fields.items():
@@ -163,7 +244,6 @@ def apply_fields_to_employee(employee: Employee, fields: dict, db: Session):
                 except ValueError:
                     continue
             else:
-                # fallback: just try the first 10 chars as YYYY-MM-DD
                 try:
                     setattr(employee, key, datetime.strptime(str(val).strip()[:10], "%Y-%m-%d"))
                 except Exception:
@@ -228,6 +308,61 @@ async def onboarding_chat(
             logger.warning("Partial save failed: %s", e)
     answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
 
+    # ── Name change detection (after AI reply, but before final response) ──
+    try:
+        # Only act when AI reply confirms submission
+        ai_confirms = any(phrase in answer.lower() for phrase in [
+            "submitted your name-change", "submitted your name change",
+            "name-change request to hr", "name change request to hr",
+            "submitted to hr for approval"
+        ])
+        if ai_confirms:
+            # Collect all user messages from history + current message
+            all_user_msgs = [h["content"] for h in (payload.history or []) if h.get("role") == "user"]
+            all_user_msgs.append(payload.message)
+
+            # Find reason
+            reason = "marriage"
+            for msg in all_user_msgs:
+                rm = re.search(r"(marriage|married|legal|correction|divorce)", msg, re.IGNORECASE)
+                if rm:
+                    reason = rm.group(1).lower()
+                    break
+
+            # Find new name
+            new_name_candidate = None
+            for msg in reversed(all_user_msgs):
+                msg_stripped = msg.strip()
+                # Pattern: standalone "Firstname Lastname"
+                if re.match(r"^[A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+$", msg_stripped):
+                    new_name_candidate = msg_stripped
+                    break
+                # Pattern: "my name is X" / "new name is X"
+                m = re.search(
+                    r"(?:name(?:\s+is|\s+to\s+be|\s+will\s+be)?|call\s+me|rename\s+(?:me\s+)?to)\s+([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+)",
+                    msg_stripped, re.IGNORECASE
+                )
+                if m:
+                    new_name_candidate = m.group(1).strip()
+                    break
+
+            if new_name_candidate and new_name_candidate.lower() != employee.name.lower():
+                # Check no duplicate pending request exists
+                existing = db.query(NameChangeRequest).filter(
+                    NameChangeRequest.employee_id == employee.id,
+                    NameChangeRequest.new_name == new_name_candidate,
+                    NameChangeRequest.status.in_(["pending", "awaiting_document"]),
+                ).first()
+                if not existing:
+                    confirm_msg = _detect_and_create_name_change(employee, new_name_candidate, reason, db)
+                    if confirm_msg:
+                        # Append confirmation to answer if not already present
+                        if confirm_msg not in answer:
+                            answer = answer + "\n\n" + confirm_msg
+                    logger.info("Name change request created: %s → %s", employee.name, new_name_candidate)
+    except Exception as e:
+        logger.warning("Name change detection error: %s", e)
+
     # Full profile complete
     profile_data = None
     profile_complete = False
@@ -242,6 +377,92 @@ async def onboarding_chat(
                 apply_fields_to_employee(employee, profile_data, db)
             employee.onboarding_completed = True
             employee.profile_completed = True
+            db.commit()
+        except Exception as e:
+            logger.error("Profile parse failed: %s", e)
+
+    return {"reply": answer, "extracted_profile": profile_data, "profile_complete": profile_complete}
+
+
+# ── NEW: HR can fill profile on behalf of employee ─────────────────────────
+class OnboardingChatForRequest(BaseModel):
+    employee_id: int
+    message: str
+    history: Optional[List[dict]] = []
+    resume_text: Optional[str] = None
+
+
+@router.post("/chat-for")
+async def onboarding_chat_for_hr(
+    payload: OnboardingChatForRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """HR endpoint to fill profile for another employee."""
+    # Verify caller is HR or admin
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Missing token")
+    caller_payload = verify_token(auth.split(" ")[1])
+    if not caller_payload or caller_payload.get("role") not in ("hr", "admin"):
+        raise HTTPException(403, "Only HR or admin can fill profiles for other employees")
+
+    # Get target employee
+    target_employee = db.query(Employee).filter(Employee.id == payload.employee_id).first()
+    if not target_employee:
+        raise HTTPException(404, "Employee not found")
+
+    system_prompt = build_dynamic_system_prompt(target_employee)
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in payload.history:
+        if msg.get("role") in ("user", "assistant"):
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+    user_content = payload.message
+    if payload.resume_text:
+        user_content = f"[Resume uploaded]\n\nResume:\n{payload.resume_text}\n\nMessage: {payload.message}"
+    messages.append({"role": "user", "content": user_content})
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.AI_KEY}", "Content-Type": "application/json"},
+                json={"model": settings.AI_MODEL, "temperature": 0.3, "max_tokens": 1024, "messages": messages},
+            )
+            data = response.json()
+    except Exception as e:
+        logger.error("OpenAI error: %s", e)
+        raise HTTPException(500, f"AI service error: {e}")
+
+    if "error" in data:
+        raise HTTPException(500, data["error"].get("message", "AI error"))
+
+    answer = data["choices"][0]["message"]["content"]
+
+    # Partial save
+    for m in re.finditer(r"<PARTIAL_SAVE>(.*?)</PARTIAL_SAVE>", answer, re.DOTALL):
+        try:
+            apply_fields_to_employee(target_employee, json.loads(m.group(1).strip()), db)
+        except Exception as e:
+            logger.warning("Partial save failed: %s", e)
+    answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
+
+    # Full profile complete
+    profile_data = None
+    profile_complete = False
+    pm = re.search(r"<PROFILE_DATA>(.*?)</PROFILE_DATA>", answer, re.DOTALL)
+    if pm:
+        try:
+            raw = pm.group(1).strip()
+            profile_data = json.loads(raw) if raw and raw != "{}" else {}
+            profile_complete = True
+            answer = re.sub(r"<PROFILE_DATA>.*?</PROFILE_DATA>", "", answer, flags=re.DOTALL).strip()
+            if profile_data:
+                apply_fields_to_employee(target_employee, profile_data, db)
+            target_employee.onboarding_completed = True
+            target_employee.profile_completed = True
             db.commit()
         except Exception as e:
             logger.error("Profile parse failed: %s", e)
@@ -287,7 +508,6 @@ def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Sess
     Returns profile for the logged-in employee.
     HR/admin can pass ?employee_id=N to read any employee's profile.
     """
-    from backend.core.security import require_role as _require_role
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "Missing token")
@@ -317,3 +537,35 @@ def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Sess
         "profile_completed": emp.profile_completed,
         **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in profile.items()},
     }
+
+
+# ── Endpoint for HR to get pending name change requests ──────────────────────
+@router.get("/name-change-requests")
+def get_name_change_requests(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Return all name change requests (for HR/admin panel)"""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Missing token")
+    payload = verify_token(auth.split(" ")[1])
+    if not payload or payload.get("role") not in ("admin", "hr"):
+        raise HTTPException(403, "Only HR or admin can view name change requests")
+    requests = db.query(NameChangeRequest).order_by(NameChangeRequest.created_at.desc()).all()
+    result = []
+    for req in requests:
+        emp = db.query(Employee).filter(Employee.id == req.employee_id).first()
+        result.append({
+            "id": req.id,
+            "employee_id": req.employee_id,
+            "employee_name": emp.name if emp else "",
+            "employee_email": emp.email if emp else "",
+            "current_name": req.old_name,
+            "requested_name": req.new_name,
+            "reason": req.reason,
+            "status": req.status,
+            "document_provided": req.document_provided,
+            "created_at": req.created_at.isoformat() if req.created_at else None,
+        })
+    return result

@@ -53,7 +53,13 @@ export default function App() {
         try { return JSON.parse(localStorage.getItem('hrms_employee') || 'null') } catch { return null }
     })
     const [showRegister, setShowRegister] = useState(false)
-    const [view, setView] = useState('chat')
+    const [view, setView] = useState(() => {
+        try {
+            const emp = JSON.parse(localStorage.getItem('hrms_employee') || '{}')
+            const role = (emp.role || '').toLowerCase()
+            return (role === 'hr' || role === 'admin') ? 'admin' : 'chat'
+        } catch { return 'chat' }
+    })
     const [isListening, setIsListening] = useState(false)
     const [isSpeaking, setIsSpeaking] = useState(false)
     const [voiceCooldown, setVoiceCooldown] = useState(false)
@@ -93,6 +99,9 @@ export default function App() {
     const [dislikedMsgs, setDislikedMsgs] = useState({})
 
     const [conflictPopup, setConflictPopup] = useState(null)
+    const [nameChangePopup, setNameChangePopup] = useState(null) // { id, old_name, new_name, reason }
+    const [ncUploadFile, setNcUploadFile] = useState(null)
+    const [ncUploading, setNcUploading] = useState(false)
 
     let activeRecognition = null
 
@@ -279,27 +288,30 @@ export default function App() {
     }, [authed, fetchSessions])
 
     async function handleLoginSuccess(token, emp) {
-        localStorage.setItem('hrms_token', token)
-        try {
-            const res = await fetch(`${API}/onboarding-profile/me`, {
-                headers: { Authorization: `Bearer ${token}` }
-            })
-            if (res.ok) {
-                const fresh = await res.json()
-                const merged = { ...emp, ...fresh, role: fresh.role || emp.role }  // use DB role so changes reflect immediately
-                localStorage.setItem('hrms_employee', JSON.stringify(merged))
-                setEmployee(merged)
-            } else {
-                localStorage.setItem('hrms_employee', JSON.stringify(emp))
-                setEmployee(emp)
-            }
-        } catch {
+    localStorage.setItem('hrms_token', token)
+    // Fetch fresh employee data from server to get latest onboarding_completed status
+    try {
+        const res = await fetch(`${API}/onboarding-profile/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+        let fresh = {};  // ← define fresh here
+        if (res.ok) {
+            fresh = await res.json()
+            // Merge server data with JWT data (server has profile fields, JWT has role)
+            const merged = { ...emp, ...fresh, role: emp.role }
+            localStorage.setItem('hrms_employee', JSON.stringify(merged))
+            setEmployee(merged)
+        } else {
             localStorage.setItem('hrms_employee', JSON.stringify(emp))
             setEmployee(emp)
         }
-        setAuthed(true)
-        setView('chat')
+    } catch {
+        localStorage.setItem('hrms_employee', JSON.stringify(emp))
+        setEmployee(emp)
     }
+    setAuthed(true)
+    setView('chat')
+}
 
     function handleLogout() {
         localStorage.removeItem('hrms_token'); localStorage.removeItem('hrms_employee')
@@ -357,6 +369,10 @@ export default function App() {
                 })
                 setLoading(false)
                 return
+            }
+
+            if (data.name_change_request) {
+                setNameChangePopup(data.name_change_request)
             }
 
             if (!data.answer || !data.answer.trim()) {
@@ -525,6 +541,69 @@ export default function App() {
                             <button onClick={handleConflictProceed} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Proceed</button>
                             <button onClick={handleConflictReschedule} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: '1px solid var(--yellow)', background: 'transparent', color: 'var(--yellow)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Reschedule</button>
                             <button onClick={handleConflictCancel} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: '1px solid var(--red)', background: 'transparent', color: 'var(--red)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel leave</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Name Change Upload Popup ── */}
+            {nameChangePopup && (
+                <div style={{ position:'fixed', inset:0, zIndex:99999, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(6px)' }}>
+                    <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:16, padding:'28px 28px 24px', maxWidth:440, width:'90%', boxShadow:'0 8px 32px rgba(0,0,0,0.6)', position:'relative' }}>
+                        <button onClick={() => { setNameChangePopup(null); setNcUploadFile(null) }} style={{ position:'absolute', top:12, right:14, background:'transparent', border:'none', color:'var(--text-muted)', fontSize:20, cursor:'pointer' }}>✕</button>
+
+                        <div style={{ fontSize:20, marginBottom:6 }}></div>
+                        <div style={{ fontSize:15, fontWeight:600, color:'var(--text-primary)', marginBottom:4 }}>Name Change Submitted</div>
+                        <div style={{ fontSize:13, color:'var(--text-secondary)', marginBottom:16, lineHeight:1.5 }}>
+                            Your request to change your name from <strong>{nameChangePopup.old_name}</strong> to <strong style={{ color:'var(--accent)' }}>{nameChangePopup.new_name}</strong> has been sent to HR for approval.
+                        </div>
+
+                        <div style={{ background:'var(--bg-secondary)', borderRadius:10, padding:'12px 14px', marginBottom:16, fontSize:12, color:'var(--text-muted)', lineHeight:1.6 }}>
+                            <strong style={{ color:'var(--text-secondary)' }}>Optional:</strong> Upload a supporting document (e.g. marriage certificate) to speed up approval. You can also do this later.
+                        </div>
+
+                        {ncUploadFile && (
+                            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, padding:'6px 10px', background:'rgba(79,142,247,0.08)', borderRadius:8, border:'1px solid rgba(79,142,247,0.2)' }}>
+                                <span style={{ fontSize:13 }}>📎</span>
+                                <span style={{ fontSize:12, color:'var(--accent)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ncUploadFile.name}</span>
+                                <button onClick={() => setNcUploadFile(null)} style={{ background:'none', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:14 }}>✕</button>
+                            </div>
+                        )}
+
+                        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                            <label style={{ flex:1, padding:'9px 14px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--text-secondary)', fontSize:13, cursor:'pointer', textAlign:'center', fontFamily:'inherit' }}>
+                                 {ncUploadFile ? 'Change file' : 'Upload document'}
+                                <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style={{ display:'none' }} onChange={e => setNcUploadFile(e.target.files?.[0] || null)} />
+                            </label>
+
+                            {ncUploadFile && (
+                                <button
+                                    disabled={ncUploading}
+                                    onClick={async () => {
+                                        setNcUploading(true)
+                                        try {
+                                            const form = new FormData()
+                                            form.append('file', ncUploadFile)
+                                            const res = await fetch(`/api/name-change/${nameChangePopup.id}/upload`, {
+                                                method: 'POST',
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('hrms_token')}` },
+                                                body: form,
+                                            })
+                                            if (!res.ok) throw new Error(`Server ${res.status}`)
+                                            setNameChangePopup(null)
+                                            setNcUploadFile(null)
+                                        } catch (e) {
+                                            alert('Upload failed: ' + e.message)
+                                        } finally { setNcUploading(false) }
+                                    }}
+                                    style={{ flex:1, padding:'9px 14px', borderRadius:8, border:'none', background:'var(--accent)', color:'#fff', fontSize:13, fontWeight:600, cursor: ncUploading ? 'not-allowed' : 'pointer', opacity: ncUploading ? 0.6 : 1 }}
+                                >{ncUploading ? 'Uploading…' : 'Submit document'}</button>
+                            )}
+
+                            <button
+                                onClick={() => { setNameChangePopup(null); setNcUploadFile(null) }}
+                                style={{ flex:1, padding:'9px 14px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--text-muted)', fontSize:13, cursor:'pointer' }}
+                            >Skip for now</button>
                         </div>
                     </div>
                 </div>

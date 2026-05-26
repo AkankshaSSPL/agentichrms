@@ -23,6 +23,7 @@ from backend.api.leaves_admin import router as leaves_admin_router
 from backend.api.notifications import router as notifications_router
 from backend.api.admin import router as admin_router
 from backend.api.email_settings import router as email_settings_router
+from backend.api.name_change import router as name_change_router
 
 
 
@@ -89,6 +90,7 @@ app.include_router(leaves_admin_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(email_settings_router, prefix=API_PREFIX)
+app.include_router(name_change_router, prefix=API_PREFIX)
 
 
 @app.get("/")

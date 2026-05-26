@@ -228,7 +228,7 @@ export default function LeaveRequests({ token: tokenProp, onAlert }) {
                                     marginBottom: '12px',
                                     fontWeight: 500,
                                 }}>
-                                    📅 {l.start_date} → {l.end_date}
+                                     {l.start_date} → {l.end_date}
                                 </div>
 
                                 {/* Reason */}

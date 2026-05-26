@@ -56,37 +56,37 @@ function OnboardingChatModal({ employee, token, onClose, onDone, nameChange = fa
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [history, setHistory] = useState([])
+    const [pendingNameChange, setPendingNameChange] = useState(null) // {new_name, reason}
     const endRef = useRef(null)
 
     useEffect(() => {
-        const greet = async () => {
-            setLoading(true)
-            const greetMsg = nameChange
-                ? `I am HR and I need to update the name for employee ${employee.name} (ID: ${employee.id}). The employee may have changed their name due to marriage or a legal name change. Please confirm the current name on record, ask for the new legal name and reason for the change (marriage / legal name change / correction / other). Also check and flag if any other employee already has the same name as the new name being requested.`
-                : `I am HR and I want to fill the onboarding profile for ${employee.name}. Please guide me through the missing fields.`
-            try {
-                const res = await fetch(`${API}/onboarding-profile/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({
-                        message: greetMsg,
-                        history: [],
-                        target_employee_id: employee.id,
-                    }),
-                })
-                const data = await res.json()
-                const bot = { role: 'assistant', content: data.reply }
-                setMessages([bot])
-                setHistory([bot])
-                if (data.profile_complete) { onDone?.(); onClose() }
-            } catch {
-                const fallback = nameChange
-                    ? `I'll help update the name for ${employee.name}. Please confirm:\n1. The new legal name\n2. Reason for change (marriage / legal / correction / other)\n\nI'll also flag if any other employee already shares the new name.`
-                    : `Let's fill in ${employee.name}'s profile. What department and job title should I record?`
-                setMessages([{ role: 'assistant', content: fallback }])
-            } finally { setLoading(false) }
+        if (nameChange) {
+            // For name change, start with a direct prompt — no API needed
+            const greet = `I need to update the name for **${employee.name}**.\n\nWhat is the new legal name?`
+            setMessages([{ role: 'assistant', content: greet }])
+            setHistory([{ role: 'assistant', content: greet }])
+        } else {
+            // For profile fill — use onboarding chat API
+            const greetAsync = async () => {
+                setLoading(true)
+                const greetMsg = `I am HR and I want to fill the onboarding profile for ${employee.name}. Please guide me through the missing fields.`
+                try {
+                    const res = await fetch(`${API}/onboarding-profile/chat-for`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ employee_id: employee.id, message: greetMsg, history: [] }),
+                    })
+                    const data = await res.json()
+                    const bot = { role: 'assistant', content: data.reply }
+                    setMessages([bot])
+                    setHistory([bot])
+                    if (data.profile_complete) { onDone?.(); onClose() }
+                } catch {
+                    setMessages([{ role: 'assistant', content: `Let's fill in ${employee.name}'s profile. What department and job title should I record?` }])
+                } finally { setLoading(false) }
+            }
+            greetAsync()
         }
-        greet()
     }, [])
 
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -99,12 +99,57 @@ function OnboardingChatModal({ employee, token, onClose, onDone, nameChange = fa
         const newHist = [...history, userMsg]
         setMessages(p => [...p, userMsg])
         setHistory(newHist)
+
+        if (nameChange) {
+            // Simple state machine for name change
+            const lastBot = [...history].reverse().find(m => m.role === 'assistant')?.content || ''
+            
+            if (!pendingNameChange) {
+                // Collecting new name
+                const newName = text.trim()
+                setPendingNameChange({ new_name: newName })
+                const ask = { role: 'assistant', content: `Got it — changing to **${newName}**.\n\nWhat's the reason? (e.g. marriage, legal name change, correction)` }
+                setMessages(p => [...p, ask])
+                setHistory(h => [...h, ask])
+            } else if (!pendingNameChange.reason) {
+                // Collecting reason — now submit
+                const finalData = { ...pendingNameChange, reason: text.trim() }
+                setPendingNameChange(finalData)
+                setLoading(true)
+                try {
+                    const res = await fetch(`${API}/name-change/request-for`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                            employee_id: employee.id,
+                            new_name: finalData.new_name,
+                            reason: finalData.reason,
+                        }),
+                    })
+                    const data = await res.json()
+                    if (res.ok) {
+                        const confirm = { role: 'assistant', content: ` Name change request submitted!\n\n**${employee.name}** → **${finalData.new_name}**\nReason: ${finalData.reason}\n\nThis is now visible in the Name Change Requests tab for HR to approve.` }
+                        setMessages(p => [...p, confirm])
+                        setHistory(h => [...h, confirm])
+                        setTimeout(() => { onDone?.(); onClose() }, 2000)
+                    } else {
+                        const err = { role: 'assistant', content: `❌ Failed: ${data.detail || 'Could not submit request.'}` }
+                        setMessages(p => [...p, err])
+                    }
+                } catch (e) {
+                    setMessages(p => [...p, { role: 'assistant', content: `❌ Error: ${e.message}` }])
+                } finally { setLoading(false) }
+            }
+            return
+        }
+
+        // Profile fill — use onboarding chat API
         setLoading(true)
         try {
-            const res = await fetch(`${API}/onboarding-profile/chat`, {
+            const res = await fetch(`${API}/onboarding-profile/chat-for`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ message: text, history: newHist, target_employee_id: employee.id }),
+                body: JSON.stringify({ employee_id: employee.id, message: text, history: newHist }),
             })
             const data = await res.json()
             const bot = { role: 'assistant', content: data.reply }
@@ -288,6 +333,211 @@ function EmployeeDirectory({ token, onFillProfile, onAlert }) {
     )
 }
 
+/* ── Name Change Requests Tab ────────────────────────────────────────────── */
+function NameChangeRequests({ token, onAlert }) {
+    const [requests, setRequests] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [filter, setFilter] = useState('pending') // pending | awaiting_document | all
+    const [actionLoading, setActionLoading] = useState(null)
+    const [noteModal, setNoteModal] = useState(null) // { id, action }
+    const [noteText, setNoteText] = useState('')
+    const [uploadModal, setUploadModal] = useState(null) // request id for doc preview
+
+    const fetchRequests = useCallback(async () => {
+        try {
+            const t = token || localStorage.getItem('hrms_token') || ''
+            const res = await fetch(`/api/name-change/requests`, {
+                headers: { Authorization: `Bearer ${t}` }
+            })
+            const text = await res.text()
+            console.log('[NameChange] status:', res.status, 'body:', text)
+            if (!res.ok) throw new Error(`Server ${res.status}: ${text}`)
+            const data = JSON.parse(text)
+            console.log('[NameChange] rows:', data.length)
+            setRequests(data)
+        } catch (e) {
+            console.error('[NameChange] fetch error:', e)
+            onAlert?.('Failed to load name change requests: ' + e.message, 'error')
+        } finally { setLoading(false) }
+    }, [token])
+
+    useEffect(() => { fetchRequests() }, [fetchRequests])
+
+    const doAction = async (id, action, note = '') => {
+        setActionLoading(id + action)
+        try {
+            const res = await fetch(`/api/name-change/${id}/action`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action, hr_note: note || null }),
+            })
+            if (!res.ok) throw new Error(`Server ${res.status}`)
+            const labels = { approve: 'approved', reject: 'rejected', request_document: 'document requested' }
+            onAlert?.(`Request ${labels[action] || action} successfully`, 'success')
+            await fetchRequests()
+        } catch (e) {
+            onAlert?.('Action failed: ' + e.message, 'error')
+        } finally {
+            setActionLoading(null)
+            setNoteModal(null)
+            setNoteText('')
+        }
+    }
+
+    const openNote = (id, action) => { setNoteModal({ id, action }); setNoteText('') }
+
+    const filtered = requests.filter(r => {
+        if (filter === 'all') return true
+        if (filter === 'pending') return r.status === 'pending'
+        if (filter === 'awaiting_document') return r.status === 'awaiting_document'
+        return true
+    })
+
+    const statusBadge = (status) => {
+        const map = {
+            pending:            { bg: 'rgba(79,142,247,0.15)',  color: '#60a5fa', label: 'Pending' },
+            awaiting_document:  { bg: 'rgba(245,158,11,0.15)', color: '#fbbf24', label: 'Awaiting Doc' },
+            approved:           { bg: 'rgba(16,185,129,0.15)', color: '#34d399', label: 'Approved' },
+            rejected:           { bg: 'rgba(239,68,68,0.15)',  color: '#f87171', label: 'Rejected' },
+        }
+        const s = map[status] || { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', label: status }
+        return <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}40`, padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600, letterSpacing: '0.04em' }}>{s.label}</span>
+    }
+
+    const actionBtn = (label, color, onClick, disabled) => (
+        <button
+            onClick={onClick} disabled={disabled}
+            style={{ padding: '5px 12px', borderRadius: 7, border: `1px solid ${color}50`, background: `${color}15`, color, fontSize: 11, fontWeight: 500, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, fontFamily: 'inherit', transition: 'all 0.15s' }}
+            onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = `${color}28` }}
+            onMouseLeave={e => { e.currentTarget.style.background = `${color}15` }}
+        >{label}</button>
+    )
+
+    const pendingCount = requests.filter(r => r.status === 'pending').length
+    const awaitingCount = requests.filter(r => r.status === 'awaiting_document').length
+
+    return (
+        <div>
+            {/* Note/Action modal */}
+            {noteModal && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, maxWidth: 400, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                            {noteModal.action === 'approve' ? ' Approve Request' : noteModal.action === 'reject' ? ' Reject Request' : ' Request Document'}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>Add an optional note for the employee (optional)</div>
+                        <textarea
+                            value={noteText}
+                            onChange={e => setNoteText(e.target.value)}
+                            placeholder="e.g. Please also submit updated ID proof…"
+                            rows={3}
+                            style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text-primary)', fontSize: 12, resize: 'none', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                        />
+                        <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+                            <button onClick={() => { setNoteModal(null); setNoteText('') }} style={{ padding: '7px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                            <button
+                                onClick={() => doAction(noteModal.id, noteModal.action, noteText)}
+                                disabled={!!actionLoading}
+                                style={{ padding: '7px 18px', borderRadius: 7, border: 'none', background: noteModal.action === 'approve' ? '#059669' : noteModal.action === 'reject' ? '#dc2626' : 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                            >{actionLoading ? '…' : 'Confirm'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                <div>
+                    <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>Name Change Requests</h2>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Review, approve or request documents for employee name changes.</p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {/* Filter pills */}
+                    {[
+                        { id: 'pending', label: `Pending${pendingCount ? ` (${pendingCount})` : ''}` },
+                        { id: 'awaiting_document', label: `Awaiting Doc${awaitingCount ? ` (${awaitingCount})` : ''}` },
+                        { id: 'all', label: 'Show All' },
+                    ].map(f => (
+                        <button key={f.id} onClick={() => setFilter(f.id)} style={{
+                            padding: '5px 14px', borderRadius: 20, border: `1px solid ${filter === f.id ? 'rgba(79,142,247,0.5)' : 'var(--border)'}`,
+                            background: filter === f.id ? 'var(--accent-dim)' : 'transparent',
+                            color: filter === f.id ? 'var(--accent)' : 'var(--text-muted)',
+                            fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                        }}>{f.label}</button>
+                    ))}
+                    <button onClick={fetchRequests} style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>↻ Refresh</button>
+                </div>
+            </div>
+
+            {/* Content */}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 13 }}>⏳ Loading…</div>
+            ) : filtered.length === 0 ? (
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '48px 24px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 28, marginBottom: 10 }}>📭</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No {filter === 'all' ? '' : filter.replace('_', ' ')} requests</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Name change requests from employees will appear here.</div>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {filtered.map(r => (
+                        <div key={r.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                                {/* Left: employee info */}
+                                <div style={{ flex: 1, minWidth: 200 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--accent-dim)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                                            {(r.employee_name || '?')[0].toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.employee_name}</div>
+                                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.employee_email}</div>
+                                        </div>
+                                        {statusBadge(r.status)}
+                                        {!r.document_provided && r.status !== 'approved' && r.status !== 'rejected' && (
+                                            <span style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)', padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>No Document</span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+                                        <span><span style={{ color: 'var(--text-muted)' }}>From:</span> <strong style={{ color: 'var(--text-primary)' }}>{r.current_name}</strong></span>
+                                        <span>→</span>
+                                        <span><span style={{ color: 'var(--text-muted)' }}>To:</span> <strong style={{ color: 'var(--accent)' }}>{r.requested_name}</strong></span>
+                                        <span><span style={{ color: 'var(--text-muted)' }}>Reason:</span> {r.reason}</span>
+                                        <span style={{ color: 'var(--text-muted)' }}>{new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                    </div>
+                                    {r.hr_note && (
+                                        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '5px 10px', borderRadius: 6, borderLeft: '3px solid var(--border)' }}>
+                                            Note: {r.hr_note}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Right: actions */}
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                                    {r.document_provided && (
+                                        <a href={`/api/name-change/${r.id}/document`} target="_blank" rel="noopener noreferrer"
+                                            style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid rgba(79,142,247,0.3)', background: 'rgba(79,142,247,0.08)', color: 'var(--accent)', fontSize: 11, fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                            📎 View Doc
+                                        </a>
+                                    )}
+                                    {(r.status === 'pending' || r.status === 'awaiting_document') && (<>
+                                        {actionBtn('Approve', '#10b981', () => openNote(r.id, 'approve'), !!actionLoading)}
+                                        {actionBtn('Reject',  '#ef4444', () => openNote(r.id, 'reject'),  !!actionLoading)}
+                                        {!r.document_provided && actionBtn('Request Doc', '#f59e0b', () => openNote(r.id, 'request_document'), !!actionLoading)}
+                                    </>)}
+                                    {r.status === 'approved' && <span style={{ fontSize: 12, color: '#34d399', fontWeight: 500 }}> Name updated</span>}
+                                    {r.status === 'rejected' && <span style={{ fontSize: 12, color: '#f87171', fontWeight: 500 }}> Rejected</span>}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+
 /* ── Main HRPanel ────────────────────────────────────────────────────────── */
 export default function HRPanel({ token: tokenProp }) {
     const token = tokenProp || localStorage.getItem('hrms_token') || ''
@@ -304,8 +554,9 @@ export default function HRPanel({ token: tokenProp }) {
     const removeAlert = useCallback(id => setAlerts(p => p.filter(a => a.id !== id)), [])
 
     const TABS = [
-        { id: 'directory', label: ' Employee Directory' },
-        { id: 'leaves',    label: ' Leave Approvals' },
+        { id: 'directory',   label: ' Employee Directory' },
+        { id: 'leaves',      label: ' Leave Approvals' },
+        { id: 'namechanges', label: ' Name Change Requests' },
     ]
 
     return (
@@ -366,6 +617,9 @@ export default function HRPanel({ token: tokenProp }) {
                     )}
                     {activeTab === 'leaves' && (
                         <LeaveRequests token={token} onAlert={addAlert} />
+                    )}
+                    {activeTab === 'namechanges' && (
+                        <NameChangeRequests token={token} onAlert={addAlert} />
                     )}
                 </div>
             </div>

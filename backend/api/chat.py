@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from datetime import datetime
 from backend.database.session import SessionLocal
-from backend.database.models import ChatSession, ChatMessage, Employee, User
+from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification, NameChangeRequest
 from backend.core.security import verify_token
 from agent.agent import build_agent
-import json
+import json, re
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -99,7 +101,6 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                     break
 
         if conflict_payload:
-            from fastapi.responses import JSONResponse
             return JSONResponse(content={
                 "answer": "",
                 "conflict": True,
@@ -108,6 +109,82 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 "sources": [],
                 "steps": [],
             })
+
+        # ── NAME CHANGE INTENT detection ─────────────────────────────────────
+        nc_match = re.search(r'NAME_CHANGE_INTENT:\s*(\{.*?\})', answer, re.DOTALL)
+        if nc_match:
+            try:
+                nc_data = json.loads(nc_match.group(1))
+                new_name = nc_data.get("new_name", "").strip()
+                reason   = nc_data.get("reason", "other").strip()
+
+                if new_name:
+                    # Create the NameChangeRequest record directly
+                    ncr = NameChangeRequest(
+                        employee_id=employee.id,
+                        old_name=employee.name,
+                        new_name=new_name,
+                        reason=reason,
+                        document_provided=False,
+                        status="pending",
+                    )
+                    db.add(ncr)
+                    db.commit()
+                    db.refresh(ncr)
+
+                    # Notify all HR/admin
+                    from backend.database.models import Role
+                    try:
+                        hr_emps = db.query(Employee).join(Role).filter(
+                            Role.name.in_(["hr", "admin"])
+                        ).all()
+                        for hr in hr_emps:
+                            db.add(Notification(
+                                employee_id=hr.id,
+                                title=" Name Change Request",
+                                message=f"{employee.name} has requested a name change to '{new_name}' ({reason}). No document yet.",
+                                is_read=False,
+                                created_at=datetime.utcnow(),
+                            ))
+                        db.commit()
+                    except Exception as ne:
+                        print(f"⚠️ HR notify failed: {ne}")
+                        db.rollback()
+
+                    # Notify employee
+                    try:
+                        db.add(Notification(
+                            employee_id=employee.id,
+                            title=" Name Change Request Submitted",
+                            message=f"Your request to change your name to '{new_name}' has been submitted to HR for review.",
+                            is_read=False,
+                            created_at=datetime.utcnow(),
+                        ))
+                        db.commit()
+                    except Exception as ne:
+                        print(f" Employee notify failed: {ne}")
+                        db.rollback()
+
+                    # Strip the tag from the visible answer
+                    clean_answer = re.sub(r'NAME_CHANGE_INTENT:\s*\{.*?\}', '', answer, flags=re.DOTALL).strip()
+                    if not clean_answer:
+                        clean_answer = f"I've submitted your name change request from **{employee.name}** to **{new_name}** to HR for approval. You'll be notified once HR reviews it."
+
+                    return JSONResponse(content={
+                        "answer": clean_answer,
+                        "name_change_request": {
+                            "id": ncr.id,
+                            "old_name": employee.name,
+                            "new_name": new_name,
+                            "reason": reason,
+                            "status": "pending",
+                        },
+                        "sources": [],
+                        "steps": [],
+                    })
+            except Exception as e:
+                print(f" Name change processing error: {e}")
+                # Fall through to normal answer
 
         # Fallback if agent returns empty (unlikely now)
         if not answer or answer.strip() == "":
@@ -118,7 +195,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Chat error: {e}")
+        print(f" Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ── Session endpoints (unchanged) ─────────────────────────────────────────────
