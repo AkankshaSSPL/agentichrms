@@ -64,15 +64,13 @@ def extract_name_change_info(user_message: str, current_name: str) -> tuple:
 
     # Extract new name: look for "my name is X", "new name X", or standalone capitalized name
     new_name = None
-    # Pattern 1: "my name is X"
-    m = re.search(r"(?:my name is|new name is|call me|rename me to)\s+([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+)", user_message, re.IGNORECASE)
+    # Only extract name if explicitly stated with a clear pattern
+    m = re.search(
+        r"(?:my name is|new name is?|change.*?to|update.*?to|call me|rename me to|name.*?(?:is|to|be))\s+([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+)",
+        user_message, re.IGNORECASE
+    )
     if m:
         new_name = m.group(1).strip()
-    else:
-        # Pattern 2: standalone "Firstname Lastname" (at least two capitalized words)
-        words = user_message.split()
-        if len(words) >= 2 and words[0][0].isupper() and words[1][0].isupper():
-            new_name = " ".join(words[:2])
     if not new_name or new_name.lower() == current_name.lower():
         return None, None
 
@@ -135,18 +133,25 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         new_name, reason = extract_name_change_info(payload.message, employee.name)
         if new_name:
             ncr = create_name_change_request(employee, new_name, reason, db)
+            reply_name = str(new_name).replace('{', '(').replace('}', ')')
+            old_name = str(employee.name).replace('{', '(').replace('}', ')')
             if ncr:
-                # Return a clean answer that explains the submission
-                answer = f"✅ Your request to change your name from **{employee.name}** to **{new_name}** has been submitted to HR for approval. They will review it and notify you. You can upload a supporting document later from your profile if needed."
+                answer = f"Your request to change your name from {old_name} to {reply_name} has been submitted to HR for approval. They will review it and notify you."
                 return JSONResponse(content={
                     "answer": answer,
                     "name_change_request": {
                         "id": ncr.id,
-                        "old_name": employee.name,
-                        "new_name": new_name,
+                        "old_name": old_name,
+                        "new_name": reply_name,
                         "reason": reason,
                         "status": "pending",
                     },
+                    "sources": [],
+                    "steps": [],
+                })
+            else:
+                return JSONResponse(content={
+                    "answer": "You already have a pending name change request. HR will review it shortly.",
                     "sources": [],
                     "steps": [],
                 })
@@ -163,14 +168,27 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 elif msg.role == "assistant":
                     chat_history.append({"role": "assistant", "content": msg.content})
 
+        # Sanitize to prevent LangChain template injection from any DB value
+        safe_name = str(employee.name).replace('{', '(').replace('}', ')')
+
+        # Sanitize chat history — escape any { } in message content so
+        # LangChain's ChatPromptTemplate doesn't treat them as variables
+        def sanitize(text: str) -> str:
+            return text.replace('{', '{{').replace('}', '}}')
+
+        safe_history = [
+            {"role": m["role"], "content": sanitize(m["content"])}
+            for m in chat_history
+        ]
+
         executor = build_agent(
             employee_email=employee.email,
-            employee_name=employee.name,
+            employee_name=safe_name,
         )
 
         result = executor.invoke({
             "input": payload.message,
-            "chat_history": chat_history,
+            "chat_history": safe_history,
         })
 
         answer = result.get("output", "")

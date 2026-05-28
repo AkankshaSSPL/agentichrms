@@ -15,10 +15,18 @@ from agent.tools_registry import get_all_tools
 
 def build_agent(employee_email: str, employee_name: str) -> AgentExecutor:
     from datetime import date
-    today = date.today().strftime("%A, %d %B %Y")
+    today = date.today().strftime("%A, %d %B %Y")  # e.g. Wednesday, 06 May 2026
+    """
+    Build an agent executor scoped to the currently logged-in employee.
 
-    # The employee's name comes from the database via the login session.
-    # No hardcoded names here.
+    Args:
+        employee_email: Email pulled from the active auth session.
+        employee_name: Display name pulled from the active auth session.
+
+    The system prompt embeds these so the LLM always passes them to tools that
+    accept `employee_email`, avoiding any need to ask the user who they are.
+    """
+
     system_prompt = f"""You are an intelligent HR Assistant for the HRMS platform.
 
 TODAY'S DATE: {today}
@@ -57,11 +65,9 @@ RULE 7 — NEVER RE-EXECUTE: Only act on the CURRENT message. Never repeat or re
 RULE 8 — NAME CHANGE: If the user mentions changing their name (e.g. "I got married", 
   "please change my name", "update my name to X"), respond with:
   "I can process your name change request. What would you like your new name to be?"
-  After the user provides the new name, confirm: "Got it! Shall I submit a name change request from {employee_name} to [new name]? 
-  You can also upload a supporting document (like a marriage certificate) — would you like to do that now or skip?"
-  Then output the special tag exactly like this: NAME_CHANGE_INTENT:{{"new_name": "the new name provided by the user", "reason": "the reason given (marriage/legal/correction/other)"}}
-  The special tag tells the frontend to show a popup that will send the request to HR. The user will NOT change their name directly – HR will approve/decline.
-  Replace {employee_name} with the actual name from the system prompt (which is already known: {employee_name}).
+  Then confirm the new name and reason, then output the special tag:
+  NAME_CHANGE_INTENT with the new name and reason as plain text (no JSON braces).
+  The frontend will handle the actual submission flow with document upload option.
 """
 
     llm = ChatOpenAI(
