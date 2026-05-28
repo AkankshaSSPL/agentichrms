@@ -1,7 +1,6 @@
 /**
  * ProfileView.jsx — Read-only profile display + AI chat editing
- * No manual forms. All edits go through the onboarding chat agent.
- * Fully theme‑aware with polished modal styling.
+ * Now includes resume upload in the edit chat modal.
  */
 import { useState, useEffect, useRef } from 'react'
 
@@ -101,13 +100,76 @@ function Card({ title, children }) {
     )
 }
 
-// ── Profile Edit Chat Modal (improved styling) ────────────────────────────────
+// ── Helper: extract fields from resume text (same as OnboardingChat) ──────────
+function extractFieldsFromText(text) {
+    const t = text || ''
+    const found = {}
+
+    const emailM = t.match(/[\w.+-]+@[\w.-]+\.\w{2,}/)
+    if (emailM) found.email = emailM[0].trim()
+
+    const phoneM = t.match(/(?:\+?\d[\s\-.]?){9,14}\d/)
+    if (phoneM) found.phone = phoneM[0].replace(/[\s\-.]/g, '')
+
+    const titleM = t.match(/(?:designation|job title|position|role)[:\s]+([^\n]{3,60})/i)
+    if (titleM) found.designation = titleM[1].trim()
+
+    const deptM = t.match(/(?:department|division|team)[:\s]+([^\n]{3,60})/i)
+    if (deptM) found.department = deptM[1].trim()
+
+    const joinM = t.match(/(?:joining date|date of joining|start date|joined)[:\s]+([^\n]{4,30})/i)
+    if (joinM) found.join_date = joinM[1].trim()
+
+    const nameM = t.match(/(?:name)[:\s]+([^\n]{2,50})/i)
+    if (nameM) found.name = nameM[1].trim()
+
+    const genderM = t.match(/\b(male|female|non[\s-]binary|other)\b/i)
+    if (genderM) found.gender = genderM[1].charAt(0).toUpperCase() + genderM[1].slice(1).toLowerCase()
+
+    const dobM = t.match(/(?:dob|date of birth|born)[:\s]+(\d{1,2}[\s/\-]\w{2,9}[\s/\-]\d{2,4}|\w+ \d{1,2},? \d{4})/i)
+    if (dobM) found.date_of_birth = dobM[1].trim()
+
+    return found
+}
+
+// ── Build resume message for AI ──────────────────────────────────────────────
+function buildResumeMessage(found, filename) {
+    const lines = [`I uploaded my resume (${filename}).`]
+    if (Object.keys(found).length > 0) {
+        lines.push('\nI found the following details in the resume:')
+        const labels = {
+            name: 'Name', email: 'Email', phone: 'Phone',
+            designation: 'Job title', department: 'Department',
+            join_date: 'Date of joining', gender: 'Gender',
+            date_of_birth: 'Date of birth',
+        }
+        Object.entries(found).forEach(([k, v]) => {
+            lines.push(`- ${labels[k] || k}: ${v}`)
+        })
+        lines.push('\nPlease use these to pre-fill my profile and only ask for the fields that are still missing.')
+    } else {
+        lines.push('The text could be extracted but no specific fields were found. Please ask me the questions to fill in my profile.')
+    }
+    return lines.join('\n')
+}
+
+// ── Profile Edit Chat Modal (fixed resume upload) ─────────────────────────────
 function ProfileEditChat({ token, onClose, onSaved }) {
     const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [history, setHistory] = useState([])
+    const [resumeFile, setResumeFile] = useState(null)
+    const [resumeText, setResumeText] = useState(null)
+    const [toast, setToast] = useState(null)
     const endRef = useRef(null)
+    const fileRef = useRef(null)
+    const inputRef = useRef(null)
+
+    const showToast = (type, message) => {
+        setToast({ type, message })
+        setTimeout(() => setToast(null), 4000)
+    }
 
     // Greet on open
     useEffect(() => {
@@ -132,20 +194,26 @@ function ProfileEditChat({ token, onClose, onSaved }) {
 
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-    const send = async () => {
-        const text = input.trim()
+    // Main send function
+    const send = async (textOverride, resumeOverride = null) => {
+        const text = textOverride !== undefined ? textOverride : input.trim()
         if (!text || loading) return
         setInput('')
         const userMsg = { role: 'user', content: text }
-        const newHistory = [...history, { role: 'user', content: text }]
-        setMessages(prev => [...prev, userMsg])
+        const newHistory = [...history, userMsg]
+        if (!textOverride) setMessages(prev => [...prev, userMsg])
         setHistory(newHistory)
         setLoading(true)
+
         try {
             const res = await fetch(`${API}/api/onboarding-profile/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ message: text, history: newHistory }),
+                body: JSON.stringify({
+                    message: text,
+                    history: newHistory,
+                    resume_text: resumeOverride !== null ? resumeOverride : resumeText,
+                }),
             })
             const data = await res.json()
             const botMsg = { role: 'assistant', content: data.reply }
@@ -156,7 +224,80 @@ function ProfileEditChat({ token, onClose, onSaved }) {
             }
         } catch {
             setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.' }])
-        } finally { setLoading(false) }
+        } finally {
+            setLoading(false)
+            inputRef.current?.focus()
+        }
+    }
+
+    // Resume upload handler (now calls 'send' correctly)
+    const handleResumeUpload = async (file) => {
+        if (!file) return
+        setResumeFile(file)
+        setMessages(prev => [...prev, { role: 'user', content: `📎 Uploaded: ${file.name}` }])
+
+        const readFile = (asText = false) => new Promise((res, rej) => {
+            const reader = new FileReader()
+            reader.onload  = e => res(e.target.result)
+            reader.onerror = rej
+            asText ? reader.readAsText(file) : reader.readAsDataURL(file)
+        })
+
+        const isPdf = file.name.toLowerCase().endsWith('.pdf')
+
+        try {
+            let rawText = ''
+            if (isPdf) {
+                const dataUrl = await readFile(false)
+                const base64  = dataUrl.split(',')[1]
+                const res = await fetch(`${API}/api/onboarding-profile/extract-resume`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body:    JSON.stringify({ pdf_base64: base64, filename: file.name }),
+                })
+                const data = await res.json()
+                rawText = data.text || ''
+            } else {
+                const full = await readFile(true)
+                rawText = (typeof full === 'string' ? full : '').slice(0, 8000)
+            }
+
+            setResumeText(rawText)
+
+            if (!rawText.trim()) {
+                showToast('error', 'Could not read file text. Please type your details.')
+                send("I uploaded my resume but couldn't extract text. Please ask me the questions.", null)
+                return
+            }
+
+            const found = extractFieldsFromText(rawText)
+            const message = buildResumeMessage(found, file.name)
+
+            const foundCount = Object.keys(found).length
+            if (foundCount > 0) {
+                const summary = Object.entries(found)
+                    .map(([k, v]) => `• ${k.replace(/_/g,' ')}: ${v}`)
+                    .join('\n')
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: `I found ${foundCount} field${foundCount > 1 ? 's' : ''} in your resume:\n${summary}\n\nLet me ask for the rest…`,
+                }])
+            }
+
+            send(message, rawText)
+        } catch (err) {
+            console.error('Resume upload error:', err)
+            showToast('error', 'Upload failed. Please type your details.')
+            send("My resume upload failed. Please ask me the questions.", null)
+        }
+    }
+
+    const handleSend = () => send()
+    const handleKey = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            handleSend()
+        }
     }
 
     return (
@@ -279,17 +420,45 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                     <div ref={endRef} />
                 </div>
 
-                {/* Input */}
+                {/* Input area with attach button */}
                 <div style={{
                     padding: '16px 20px',
                     borderTop: '1px solid var(--border)',
                     background: 'var(--bg-card)',
                 }}>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+                        <button
+                            onClick={() => fileRef.current?.click()}
+                            style={{
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                borderRadius: 12,
+                                width: 40,
+                                height: 40,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                fontSize: 18,
+                                color: 'var(--text-muted)',
+                                transition: 'all 0.2s',
+                            }}
+                            title="Upload resume (PDF or TXT)"
+                        >
+                            📎
+                        </button>
+                        <input
+                            ref={fileRef}
+                            type="file"
+                            accept=".pdf,.txt"
+                            style={{ display: 'none' }}
+                            onChange={e => handleResumeUpload(e.target.files?.[0])}
+                        />
                         <textarea
+                            ref={inputRef}
                             value={input}
                             onChange={e => setInput(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                            onKeyDown={handleKey}
                             placeholder="Type your update… (Enter to send)"
                             rows={1}
                             style={{
@@ -312,7 +481,7 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                             onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
                         />
                         <button
-                            onClick={send}
+                            onClick={handleSend}
                             disabled={loading || !input.trim()}
                             style={{
                                 background: 'linear-gradient(135deg, var(--accent), #7c3aed)',
@@ -331,8 +500,27 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                             Send
                         </button>
                     </div>
+                    {resumeFile && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                            📄 {resumeFile.name} · <span style={{ color: 'var(--green)' }}>ready</span>
+                        </div>
+                    )}
                 </div>
             </div>
+
+            {toast && (
+                <div style={{
+                    position: 'fixed', bottom: 24, right: 24, zIndex: 10000,
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    background: toast.type === 'success' ? 'var(--green)' : 'var(--red)',
+                    color: '#fff', padding: '12px 20px', borderRadius: 40,
+                    fontSize: 13, fontWeight: 500, boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
+                    animation: 'toastSlide 0.3s ease', backdropFilter: 'blur(8px)',
+                }}>
+                    <span>{toast.type === 'success' ? '✓' : '⚠'}</span>
+                    <span>{toast.message}</span>
+                </div>
+            )}
 
             <style>{`
                 @keyframes fadeIn {
@@ -351,12 +539,16 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                     0%, 100% { transform: translateY(0); }
                     50% { transform: translateY(-4px); }
                 }
+                @keyframes toastSlide {
+                    from { opacity: 0; transform: translateX(30px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
             `}</style>
         </div>
     )
 }
 
-// ── Main ProfileView ──────────────────────────────────────────────────────────
+// ── Main ProfileView (unchanged) ──────────────────────────────────────────
 export default function ProfileView({ employee, token, onBack, onSaved }) {
     const [form, setForm] = useState({})
     const [loading, setLoading] = useState(true)
@@ -427,54 +619,26 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
             )}
 
             <div style={{ width: '100%', height: '100%', overflowY: 'auto', overflowX: 'hidden', background: 'var(--bg-primary)', fontFamily: "'Sora',sans-serif", position: 'relative' }}>
-                {/* Background glow */}
                 <div style={{ position: 'fixed', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle,var(--accent-glow) 0%,transparent 65%)', top: -200, left: -150, pointerEvents: 'none', zIndex: 0 }} />
                 <div style={{ position: 'fixed', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle,rgba(124,58,237,.05) 0%,transparent 65%)', bottom: -100, right: -100, pointerEvents: 'none', zIndex: 0 }} />
 
                 <div style={{ position: 'relative', zIndex: 1, width: '100%', padding: '20px 20px 80px' }} className="pv-inner">
-
-                    {/* Header */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-                        <button
-                            onClick={onBack}
-                            style={{ background: 'var(--accent-dim)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 18px', color: 'var(--accent)', fontSize: 13, cursor: 'pointer', transition: 'all .2s', fontFamily: 'inherit' }}
+                        <button onClick={onBack} style={{ background: 'var(--accent-dim)', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 18px', color: 'var(--accent)', fontSize: 13, cursor: 'pointer', transition: 'all .2s', fontFamily: 'inherit' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-dim)' }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent-dim)' }}
-                        >← Back</button>
-
+                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent-dim)' }}>← Back</button>
                         <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-.5px' }}>My Profile</h1>
-
-                        <button
-                            onClick={() => setShowChat(true)}
-                            style={{
-                                background: 'linear-gradient(135deg,var(--accent-dim),rgba(124,58,237,.15))',
-                                border: '1px solid rgba(79,142,247,.3)',
-                                borderRadius: 10,
-                                padding: '9px 20px',
-                                color: 'var(--accent)',
-                                fontSize: 13,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                transition: 'all .2s',
-                                fontFamily: 'inherit',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(135deg,var(--accent-dim),rgba(124,58,237,.25))'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg,var(--accent-dim),rgba(124,58,237,.15))'; e.currentTarget.style.transform = 'none' }}
-                        >
-                            Edit via Chat
-                        </button>
+                        <button onClick={() => setShowChat(true)} style={{
+                            background: 'linear-gradient(135deg,var(--accent-dim),rgba(124,58,237,.15))',
+                            border: '1px solid rgba(79,142,247,.3)', borderRadius: 10, padding: '9px 20px',
+                            color: 'var(--accent)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .2s',
+                            fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8,
+                        }}>Edit via Chat</button>
                     </div>
 
-                    {/* Hero card */}
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
                         background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 20, padding: '20px 24px',
-                        marginBottom: 28, backdropFilter: 'blur(20px)',
-                        boxShadow: '0 8px 40px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)',
-                    }}>
+                        marginBottom: 28, backdropFilter: 'blur(20px)', boxShadow: '0 8px 40px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 20, flex: 1, minWidth: 0 }}>
                             <div style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0, background: 'conic-gradient(var(--accent),#7c3aed,var(--green),var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 2.5 }}>
                                 <div style={{ width: 67, height: 67, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent),#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, fontWeight: 800, color: '#fff' }}>
@@ -484,9 +648,7 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{form.name || employee?.name}</div>
                                 <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>{form.designation || form.department || ''}</div>
-                                <div style={{ marginTop: 8 }}>
-                                    <span style={{ background: roleBg, color: roleColor, border: `1px solid ${roleColor}40`, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{roleLabel}</span>
-                                </div>
+                                <div style={{ marginTop: 8 }}><span style={{ background: roleBg, color: roleColor, border: `1px solid ${roleColor}40`, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{roleLabel}</span></div>
                             </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -495,9 +657,7 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
                         </div>
                     </div>
 
-                    {/* Cards grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, width: '100%' }} className="pv-grid">
-
                         <Card title="Basic Information">
                             <Field label="Full Name" value={form.name} />
                             <Field label="Email" value={form.email} />
@@ -505,14 +665,12 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
                             <Field label="Gender" value={form.gender} />
                             <Field label="Date of Birth" value={form.date_of_birth} isDate />
                         </Card>
-
                         <Card title="Employment Details">
                             <Field label="Department" value={form.department} />
                             <Field label="Designation" value={form.designation} />
                             <Field label="Employment Type" value={form.employment_type} />
                             <Field label="Date of Joining" value={form.join_date} isDate />
                         </Card>
-
                         <Card title="Address">
                             <Field label="Address Line 1" value={form.address_line1} />
                             <Field label="Address Line 2" value={form.address_line2} />
@@ -520,13 +678,11 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
                             <Field label="State / Province" value={form.state} />
                             <Field label="Country" value={form.country} />
                         </Card>
-
                         <Card title="Emergency Contact">
                             <Field label="Contact Name" value={form.emergency_contact_name} />
                             <Field label="Phone Number" value={form.emergency_contact_phone} />
                             <Field label="Relation" value={form.emergency_contact_relation} />
                         </Card>
-
                         <Card title="Banking Information">
                             <Field label="Bank Name" value={form.bank_name} />
                             <Field label="Account Holder" value={form.account_holder_name} />
@@ -534,7 +690,6 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
                             <Field label="Branch" value={form.bank_branch} />
                             <Field label="Base Salary (₹)" value={form.base_salary} />
                         </Card>
-
                     </div>
                 </div>
             </div>

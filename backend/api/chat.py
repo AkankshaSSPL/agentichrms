@@ -5,12 +5,19 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 from backend.database.session import SessionLocal
-from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification, NameChangeRequest
+from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification, NameChangeRequest, Role
 from backend.core.security import verify_token
 from agent.agent import build_agent
 import json, re
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+# ── Keywords for name change detection ──
+NAME_CHANGE_KEYWORDS = [
+    "change my name", "update my name", "new name", "got married",
+    "i got married", "after marriage", "legal name", "name change",
+    "married name", "changed my name", "my name is now", "rename me"
+]
 
 def get_db():
     db = SessionLocal()
@@ -33,7 +40,6 @@ def get_current_employee(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(404, "Employee not found")
     return employee
 
-# ── Chat endpoint ─────────────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[int] = None
@@ -49,12 +55,103 @@ class ChatResponse(BaseModel):
     sources: List[Source] = []
     steps: List[dict] = []
 
+# ── Helper: extract new name and reason from user message ──
+def extract_name_change_info(user_message: str, current_name: str) -> tuple:
+    """Returns (new_name, reason) or (None, None) if not found."""
+    msg_lower = user_message.lower()
+    if not any(kw in msg_lower for kw in NAME_CHANGE_KEYWORDS):
+        return None, None
+
+    # Extract new name: look for "my name is X", "new name X", or standalone capitalized name
+    new_name = None
+    # Pattern 1: "my name is X"
+    m = re.search(r"(?:my name is|new name is|call me|rename me to)\s+([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+)", user_message, re.IGNORECASE)
+    if m:
+        new_name = m.group(1).strip()
+    else:
+        # Pattern 2: standalone "Firstname Lastname" (at least two capitalized words)
+        words = user_message.split()
+        if len(words) >= 2 and words[0][0].isupper() and words[1][0].isupper():
+            new_name = " ".join(words[:2])
+    if not new_name or new_name.lower() == current_name.lower():
+        return None, None
+
+    # Extract reason
+    reason = "marriage"
+    for kw in ["marriage", "married", "legal", "correction", "divorce"]:
+        if kw in msg_lower:
+            reason = kw
+            break
+    return new_name, reason
+
+# ── Helper: create name change request ──
+def create_name_change_request(employee: Employee, new_name: str, reason: str, db: Session):
+    # Check for duplicate pending
+    existing = db.query(NameChangeRequest).filter(
+        NameChangeRequest.employee_id == employee.id,
+        NameChangeRequest.status.in_(["pending", "awaiting_document"])
+    ).first()
+    if existing:
+        return None
+
+    ncr = NameChangeRequest(
+        employee_id=employee.id,
+        old_name=employee.name,
+        new_name=new_name,
+        reason=reason,
+        document_provided=False,
+        status="pending",
+    )
+    db.add(ncr)
+    db.commit()
+    db.refresh(ncr)
+
+    # Notify all HR/admins
+    try:
+        hr_roles = db.query(Role).filter(Role.name.in_(["hr", "admin"])).all()
+        hr_ids = [r.id for r in hr_roles]
+        hr_employees = db.query(Employee).filter(Employee.role_id.in_(hr_ids)).all()
+        for hr in hr_employees:
+            db.add(Notification(
+                employee_id=hr.id,
+                title="📝 Name Change Request",
+                message=f"{employee.name} has requested a name change to '{new_name}'. Reason: {reason}. No document yet.",
+                is_read=False,
+                created_at=datetime.utcnow(),
+            ))
+        db.commit()
+    except Exception as e:
+        print(f"HR notification failed: {e}")
+        db.rollback()
+
+    return ncr
+
 @router.post("/", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = Depends(get_db)):
     try:
         employee = get_current_employee(request, db)
 
-        # Load conversation history from database
+        # ── NAME CHANGE DETECTION (from user message, before agent) ──
+        new_name, reason = extract_name_change_info(payload.message, employee.name)
+        if new_name:
+            ncr = create_name_change_request(employee, new_name, reason, db)
+            if ncr:
+                # Return a clean answer that explains the submission
+                answer = f"✅ Your request to change your name from **{employee.name}** to **{new_name}** has been submitted to HR for approval. They will review it and notify you. You can upload a supporting document later from your profile if needed."
+                return JSONResponse(content={
+                    "answer": answer,
+                    "name_change_request": {
+                        "id": ncr.id,
+                        "old_name": employee.name,
+                        "new_name": new_name,
+                        "reason": reason,
+                        "status": "pending",
+                    },
+                    "sources": [],
+                    "steps": [],
+                })
+
+        # Normal chat flow with agent
         chat_history = []
         if payload.session_id:
             db_messages = db.query(ChatMessage).filter(
@@ -80,8 +177,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         sources = result.get("sources", [])
         steps = result.get("steps", [])
 
-        # ── CONFLICT DETECTION – structured data only ──
-        # We ignore the answer string and rely solely on intermediate_steps.
+        # Conflict detection (leave request)
         conflict_payload = None
         intermediate = result.get("intermediate_steps", [])
         for action, observation in intermediate:
@@ -110,83 +206,6 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 "steps": [],
             })
 
-        # ── NAME CHANGE INTENT detection ─────────────────────────────────────
-        nc_match = re.search(r'NAME_CHANGE_INTENT:\s*(\{.*?\})', answer, re.DOTALL)
-        if nc_match:
-            try:
-                nc_data = json.loads(nc_match.group(1))
-                new_name = nc_data.get("new_name", "").strip()
-                reason   = nc_data.get("reason", "other").strip()
-
-                if new_name:
-                    # Create the NameChangeRequest record directly
-                    ncr = NameChangeRequest(
-                        employee_id=employee.id,
-                        old_name=employee.name,
-                        new_name=new_name,
-                        reason=reason,
-                        document_provided=False,
-                        status="pending",
-                    )
-                    db.add(ncr)
-                    db.commit()
-                    db.refresh(ncr)
-
-                    # Notify all HR/admin
-                    from backend.database.models import Role
-                    try:
-                        hr_emps = db.query(Employee).join(Role).filter(
-                            Role.name.in_(["hr", "admin"])
-                        ).all()
-                        for hr in hr_emps:
-                            db.add(Notification(
-                                employee_id=hr.id,
-                                title=" Name Change Request",
-                                message=f"{employee.name} has requested a name change to '{new_name}' ({reason}). No document yet.",
-                                is_read=False,
-                                created_at=datetime.utcnow(),
-                            ))
-                        db.commit()
-                    except Exception as ne:
-                        print(f"⚠️ HR notify failed: {ne}")
-                        db.rollback()
-
-                    # Notify employee
-                    try:
-                        db.add(Notification(
-                            employee_id=employee.id,
-                            title=" Name Change Request Submitted",
-                            message=f"Your request to change your name to '{new_name}' has been submitted to HR for review.",
-                            is_read=False,
-                            created_at=datetime.utcnow(),
-                        ))
-                        db.commit()
-                    except Exception as ne:
-                        print(f" Employee notify failed: {ne}")
-                        db.rollback()
-
-                    # Strip the tag from the visible answer
-                    clean_answer = re.sub(r'NAME_CHANGE_INTENT:\s*\{.*?\}', '', answer, flags=re.DOTALL).strip()
-                    if not clean_answer:
-                        clean_answer = f"I've submitted your name change request from **{employee.name}** to **{new_name}** to HR for approval. You'll be notified once HR reviews it."
-
-                    return JSONResponse(content={
-                        "answer": clean_answer,
-                        "name_change_request": {
-                            "id": ncr.id,
-                            "old_name": employee.name,
-                            "new_name": new_name,
-                            "reason": reason,
-                            "status": "pending",
-                        },
-                        "sources": [],
-                        "steps": [],
-                    })
-            except Exception as e:
-                print(f" Name change processing error: {e}")
-                # Fall through to normal answer
-
-        # Fallback if agent returns empty (unlikely now)
         if not answer or answer.strip() == "":
             answer = "I'm sorry, I cannot answer that right now. Please try again."
 
@@ -195,8 +214,8 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
     except HTTPException:
         raise
     except Exception as e:
-        print(f" Chat error: {e}")
+        print(f"❌ Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── Session endpoints (unchanged) ─────────────────────────────────────────────
-# ... (keep all your existing session endpoints exactly as they are) ...
+# ── Session endpoints (keep your existing ones unchanged) ──
+# ... (copy your existing session endpoints here)

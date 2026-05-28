@@ -7,6 +7,8 @@ for this employee. It decides what to ask and saves field-by-field as it goes.
 import logging
 import json
 import re
+import base64
+import io
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -14,6 +16,7 @@ from sqlalchemy import inspect as sa_inspect
 from pydantic import BaseModel
 from typing import Optional, List, Any
 import httpx
+from pypdf import PdfReader
 
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, NameChangeRequest, Notification, Role
@@ -59,7 +62,7 @@ COLUMN_LABELS = {
 
 OPTIONAL_COLUMNS = {"address_line2", "base_salary"}
 
-# Keywords for name change detection
+# Keywords for name change detection (kept for fallback)
 NAME_CHANGE_KEYWORDS = [
     "change my name", "update my name", "new name", "got married",
     "i got married", "after marriage", "legal name", "name change",
@@ -191,7 +194,7 @@ def _detect_and_create_name_change(employee: Employee, new_name: str, reason: st
         for hr in hr_emps:
             db.add(Notification(
                 employee_id=hr.id,
-                title=" Name Change Request",
+                title="📝 Name Change Request",
                 message=f"{employee.name} has requested a name change to '{new_name}'. No document provided yet.",
                 is_read=False,
             ))
@@ -308,58 +311,59 @@ async def onboarding_chat(
             logger.warning("Partial save failed: %s", e)
     answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
 
-    # ── Name change detection (after AI reply, but before final response) ──
+    # ── Name change detection (reliable extraction from AI's confirmation) ──
     try:
-        # Only act when AI reply confirms submission
-        ai_confirms = any(phrase in answer.lower() for phrase in [
-            "submitted your name-change", "submitted your name change",
-            "name-change request to hr", "name change request to hr",
+        # Look for phrases that indicate a name change request was submitted
+        confirmation_phrases = [
+            "submitted your name-change request",
+            "submitted your name change request",
+            "name-change request to hr",
+            "name change request to hr",
             "submitted to hr for approval"
-        ])
-        if ai_confirms:
-            # Collect all user messages from history + current message
-            all_user_msgs = [h["content"] for h in (payload.history or []) if h.get("role") == "user"]
-            all_user_msgs.append(payload.message)
-
-            # Find reason
-            reason = "marriage"
-            for msg in all_user_msgs:
-                rm = re.search(r"(marriage|married|legal|correction|divorce)", msg, re.IGNORECASE)
-                if rm:
-                    reason = rm.group(1).lower()
-                    break
-
-            # Find new name
-            new_name_candidate = None
-            for msg in reversed(all_user_msgs):
-                msg_stripped = msg.strip()
-                # Pattern: standalone "Firstname Lastname"
-                if re.match(r"^[A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+$", msg_stripped):
-                    new_name_candidate = msg_stripped
-                    break
-                # Pattern: "my name is X" / "new name is X"
-                m = re.search(
-                    r"(?:name(?:\s+is|\s+to\s+be|\s+will\s+be)?|call\s+me|rename\s+(?:me\s+)?to)\s+([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+)",
-                    msg_stripped, re.IGNORECASE
-                )
+        ]
+        if any(phrase in answer.lower() for phrase in confirmation_phrases):
+            # Try to extract the new name from the AI's answer
+            # Patterns: "to 'Nikita'", "to Nikita", "to 'Nikita'", "to Nikita"
+            patterns = [
+                r"to ['\"]?([A-Za-z]+(?:\s+[A-Za-z]+)*)['\"]?",
+                r"name-change request to (['\"]?)([A-Za-z]+(?:\s+[A-Za-z]+)*)\1",
+                r"change your name to (['\"]?)([A-Za-z]+(?:\s+[A-Za-z]+)*)\1",
+            ]
+            new_name = None
+            for pat in patterns:
+                m = re.search(pat, answer, re.IGNORECASE)
                 if m:
-                    new_name_candidate = m.group(1).strip()
-                    break
-
-            if new_name_candidate and new_name_candidate.lower() != employee.name.lower():
-                # Check no duplicate pending request exists
+                    # The name may be in group 1 or group 2 depending on pattern
+                    candidate = m.group(1) if len(m.groups()) == 1 else m.group(2)
+                    candidate = candidate.strip()
+                    # Remove any stray quotes
+                    candidate = candidate.strip("'\"")
+                    if candidate and candidate.lower() != employee.name.lower():
+                        new_name = candidate
+                        break
+            
+            if new_name:
+                # Check for duplicate pending request
                 existing = db.query(NameChangeRequest).filter(
                     NameChangeRequest.employee_id == employee.id,
-                    NameChangeRequest.new_name == new_name_candidate,
-                    NameChangeRequest.status.in_(["pending", "awaiting_document"]),
+                    NameChangeRequest.status.in_(["pending", "awaiting_document"])
                 ).first()
                 if not existing:
-                    confirm_msg = _detect_and_create_name_change(employee, new_name_candidate, reason, db)
-                    if confirm_msg:
-                        # Append confirmation to answer if not already present
-                        if confirm_msg not in answer:
-                            answer = answer + "\n\n" + confirm_msg
-                    logger.info("Name change request created: %s → %s", employee.name, new_name_candidate)
+                    # Extract reason from user messages
+                    all_user_msgs = [h["content"] for h in (payload.history or []) if h.get("role") == "user"]
+                    all_user_msgs.append(payload.message)
+                    reason = "marriage"
+                    for msg in all_user_msgs:
+                        for kw in ["marriage", "married", "legal", "correction", "divorce"]:
+                            if kw in msg.lower():
+                                reason = kw
+                                break
+                        if reason != "marriage":
+                            break
+                    confirm_msg = _detect_and_create_name_change(employee, new_name, reason, db)
+                    if confirm_msg and confirm_msg not in answer:
+                        answer = answer + "\n\n" + confirm_msg
+                    logger.info("Name change request created from AI confirmation: %s → %s", employee.name, new_name)
     except Exception as e:
         logger.warning("Name change detection error: %s", e)
 
@@ -384,7 +388,28 @@ async def onboarding_chat(
     return {"reply": answer, "extracted_profile": profile_data, "profile_complete": profile_complete}
 
 
-# ── NEW: HR can fill profile on behalf of employee ─────────────────────────
+# ── Resume text extraction endpoint ─────────────────────────────────────────
+@router.post("/extract-resume")
+async def extract_resume_text(request: Request):
+    try:
+        data = await request.json()
+        pdf_base64 = data.get("pdf_base64")
+        if not pdf_base64:
+            return {"text": ""}
+        pdf_bytes = base64.b64decode(pdf_base64)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        return {"text": text[:8000]}
+    except Exception as e:
+        logger.error(f"PDF extraction failed: {e}")
+        return {"text": ""}
+
+
+# ── HR can fill profile on behalf of employee ─────────────────────────────
 class OnboardingChatForRequest(BaseModel):
     employee_id: int
     message: str
