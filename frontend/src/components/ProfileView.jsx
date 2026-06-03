@@ -176,17 +176,17 @@ function ProfileEditChat({ token, onClose, onSaved }) {
         const greet = async () => {
             setLoading(true)
             try {
-                const res = await fetch(`${API}/api/onboarding-profile/chat`, {
+                const res = await fetch(`${API}/api/onboarding-profile/chat-self`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({ message: 'Hello, I want to update my profile.', history: [] }),
+                    body: JSON.stringify({ message: 'Hello, I want to update my personal details.', history: [] }),
                 })
                 const data = await res.json()
                 const botMsg = { role: 'assistant', content: data.reply }
                 setMessages([botMsg])
                 setHistory([{ role: 'assistant', content: data.reply }])
                 if (data.profile_complete) { if (onSaved) onSaved(); onClose() }
-            } catch { setMessages([{ role: 'assistant', content: "Hi! I'm here to help you update your profile. What would you like to change?" }]) }
+            } catch { setMessages([{ role: 'assistant', content: "What would you like to update? I can help with your address, emergency contact, gender, or date of birth. Work details like department or designation require HR approval." }]) }
             finally { setLoading(false) }
         }
         greet()
@@ -206,7 +206,7 @@ function ProfileEditChat({ token, onClose, onSaved }) {
         setLoading(true)
 
         try {
-            const res = await fetch(`${API}/api/onboarding-profile/chat`, {
+            const res = await fetch(`${API}/api/onboarding-profile/chat-self`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -331,9 +331,9 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                     background: 'var(--bg-card)',
                 }}>
                     <div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Profile</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Update Profile</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                            Chat with AI assistant to update your details
+                            Tell me what you want to update
                         </div>
                     </div>
                     <button
@@ -633,7 +633,7 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
                             border: '1px solid rgba(79,142,247,.3)', borderRadius: 10, padding: '9px 20px',
                             color: 'var(--accent)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .2s',
                             fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8,
-                        }}>Edit via Chat</button>
+                        }}>✏&nbsp;Update</button>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,

@@ -5,19 +5,16 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
 from backend.database.session import SessionLocal
-from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification, NameChangeRequest, Role
+from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification
 from backend.core.security import verify_token
 from agent.agent import build_agent
 import json, re
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
-# ── Keywords for name change detection ──
-NAME_CHANGE_KEYWORDS = [
-    "change my name", "update my name", "new name", "got married",
-    "i got married", "after marriage", "legal name", "name change",
-    "married name", "changed my name", "my name is now", "rename me"
-]
+@router.get("/ping")
+async def ping():
+    return {"message": "pong"}
 
 def get_db():
     db = SessionLocal()
@@ -55,108 +52,12 @@ class ChatResponse(BaseModel):
     sources: List[Source] = []
     steps: List[dict] = []
 
-# ── Helper: extract new name and reason from user message ──
-def extract_name_change_info(user_message: str, current_name: str) -> tuple:
-    """Returns (new_name, reason) or (None, None) if not found."""
-    msg_lower = user_message.lower()
-    if not any(kw in msg_lower for kw in NAME_CHANGE_KEYWORDS):
-        return None, None
-
-    # Extract new name: look for "my name is X", "new name X", or standalone capitalized name
-    new_name = None
-    # Only extract name if explicitly stated with a clear pattern
-    m = re.search(
-        r"(?:my name is|new name is?|change.*?to|update.*?to|call me|rename me to|name.*?(?:is|to|be))\s+([A-Z][a-zA-Z]+(?: [A-Z][a-zA-Z]+)+)",
-        user_message, re.IGNORECASE
-    )
-    if m:
-        new_name = m.group(1).strip()
-    if not new_name or new_name.lower() == current_name.lower():
-        return None, None
-
-    # Extract reason
-    reason = "marriage"
-    for kw in ["marriage", "married", "legal", "correction", "divorce"]:
-        if kw in msg_lower:
-            reason = kw
-            break
-    return new_name, reason
-
-# ── Helper: create name change request ──
-def create_name_change_request(employee: Employee, new_name: str, reason: str, db: Session):
-    # Check for duplicate pending
-    existing = db.query(NameChangeRequest).filter(
-        NameChangeRequest.employee_id == employee.id,
-        NameChangeRequest.status.in_(["pending", "awaiting_document"])
-    ).first()
-    if existing:
-        return None
-
-    ncr = NameChangeRequest(
-        employee_id=employee.id,
-        old_name=employee.name,
-        new_name=new_name,
-        reason=reason,
-        document_provided=False,
-        status="pending",
-    )
-    db.add(ncr)
-    db.commit()
-    db.refresh(ncr)
-
-    # Notify all HR/admins
-    try:
-        hr_roles = db.query(Role).filter(Role.name.in_(["hr", "admin"])).all()
-        hr_ids = [r.id for r in hr_roles]
-        hr_employees = db.query(Employee).filter(Employee.role_id.in_(hr_ids)).all()
-        for hr in hr_employees:
-            db.add(Notification(
-                employee_id=hr.id,
-                title="📝 Name Change Request",
-                message=f"{employee.name} has requested a name change to '{new_name}'. Reason: {reason}. No document yet.",
-                is_read=False,
-                created_at=datetime.utcnow(),
-            ))
-        db.commit()
-    except Exception as e:
-        print(f"HR notification failed: {e}")
-        db.rollback()
-
-    return ncr
-
+# ── Chat endpoint ─────────────────────────────────────────────────────────────
 @router.post("/", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = Depends(get_db)):
     try:
         employee = get_current_employee(request, db)
 
-        # ── NAME CHANGE DETECTION (from user message, before agent) ──
-        new_name, reason = extract_name_change_info(payload.message, employee.name)
-        if new_name:
-            ncr = create_name_change_request(employee, new_name, reason, db)
-            reply_name = str(new_name).replace('{', '(').replace('}', ')')
-            old_name = str(employee.name).replace('{', '(').replace('}', ')')
-            if ncr:
-                answer = f"Your request to change your name from {old_name} to {reply_name} has been submitted to HR for approval. They will review it and notify you."
-                return JSONResponse(content={
-                    "answer": answer,
-                    "name_change_request": {
-                        "id": ncr.id,
-                        "old_name": old_name,
-                        "new_name": reply_name,
-                        "reason": reason,
-                        "status": "pending",
-                    },
-                    "sources": [],
-                    "steps": [],
-                })
-            else:
-                return JSONResponse(content={
-                    "answer": "You already have a pending name change request. HR will review it shortly.",
-                    "sources": [],
-                    "steps": [],
-                })
-
-        # Normal chat flow with agent
         chat_history = []
         if payload.session_id:
             db_messages = db.query(ChatMessage).filter(
@@ -168,11 +69,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 elif msg.role == "assistant":
                     chat_history.append({"role": "assistant", "content": msg.content})
 
-        # Sanitize to prevent LangChain template injection from any DB value
         safe_name = str(employee.name).replace('{', '(').replace('}', ')')
-
-        # Sanitize chat history — escape any { } in message content so
-        # LangChain's ChatPromptTemplate doesn't treat them as variables
         def sanitize(text: str) -> str:
             return text.replace('{', '{{').replace('}', '}}')
 
@@ -195,7 +92,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         sources = result.get("sources", [])
         steps = result.get("steps", [])
 
-        # Conflict detection (leave request)
+        # Conflict detection
         conflict_payload = None
         intermediate = result.get("intermediate_steps", [])
         for action, observation in intermediate:
@@ -227,6 +124,14 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         if not answer or answer.strip() == "":
             answer = "I'm sorry, I cannot answer that right now. Please try again."
 
+        # Save messages if session exists
+        if payload.session_id:
+            user_msg = ChatMessage(session_id=payload.session_id, role="user", content=payload.message)
+            db.add(user_msg)
+            assistant_msg = ChatMessage(session_id=payload.session_id, role="assistant", content=answer)
+            db.add(assistant_msg)
+            db.commit()
+
         return ChatResponse(answer=answer, sources=sources, steps=steps)
 
     except HTTPException:
@@ -235,5 +140,121 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         print(f"❌ Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── Session endpoints (keep your existing ones unchanged) ──
-# ... (copy your existing session endpoints here)
+# ── Session management endpoints (matching your model) ──────────────────────
+@router.get("/sessions")
+def list_sessions(request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    user = db.query(User).filter(User.employee_id == employee.id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    sessions = db.query(ChatSession).filter(
+        ChatSession.user_id == user.id,
+        ChatSession.deleted_at.is_(None)  # soft delete filter
+    ).order_by(ChatSession.is_pinned.desc(), ChatSession.created_at.desc()).all()
+    return [
+        {
+            "id": s.id,
+            "title": s.session_title,       # use session_title, not title
+            "is_pinned": s.is_pinned,
+            "created_at": s.created_at,
+        }
+        for s in sessions
+    ]
+
+@router.post("/sessions")
+def create_session(request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    user = db.query(User).filter(User.employee_id == employee.id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    new_session = ChatSession(
+        user_id=user.id,
+        session_title="New Chat",
+        is_active=True,
+        is_pinned=False,
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+    return {
+        "id": new_session.id,
+        "title": new_session.session_title,
+        "is_pinned": new_session.is_pinned,
+        "created_at": new_session.created_at,
+    }
+
+@router.get("/sessions/{session_id}/messages")
+def get_session_messages(session_id: int, request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    user = db.query(User).filter(User.employee_id == employee.id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id,
+        ChatSession.user_id == user.id,
+        ChatSession.deleted_at.is_(None)
+    ).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session_id
+    ).order_by(ChatMessage.created_at).all()
+    return [
+        {"role": m.role, "content": m.content, "created_at": m.created_at}
+        for m in messages
+    ]
+
+@router.patch("/sessions/{session_id}/title")
+def update_session_title(session_id: int, payload: dict, request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    user = db.query(User).filter(User.employee_id == employee.id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id,
+        ChatSession.user_id == user.id,
+        ChatSession.deleted_at.is_(None)
+    ).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+    new_title = payload.get("title")
+    if new_title:
+        session.session_title = new_title[:60]
+        db.commit()
+    return {"title": session.session_title}
+
+@router.patch("/sessions/{session_id}/pin")
+def toggle_pin_session(session_id: int, payload: dict, request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    user = db.query(User).filter(User.employee_id == employee.id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id,
+        ChatSession.user_id == user.id,
+        ChatSession.deleted_at.is_(None)
+    ).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+    is_pinned = payload.get("is_pinned", False)
+    session.is_pinned = is_pinned
+    db.commit()
+    return {"is_pinned": session.is_pinned}
+
+@router.delete("/sessions/{session_id}")
+def delete_session(session_id: int, request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    user = db.query(User).filter(User.employee_id == employee.id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id,
+        ChatSession.user_id == user.id,
+        ChatSession.deleted_at.is_(None)
+    ).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+    # Soft delete
+    session.deleted_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Session deleted"}

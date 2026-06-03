@@ -22,6 +22,9 @@ const Login = ({ onSuccess, onRegisterClick }) => {
     const [newPin, setNewPin] = useState('')
     const [confirmNewPin, setConfirmNewPin] = useState('')
     const [showChangePin, setShowChangePin] = useState(false)
+    const [showCurrentPin, setShowCurrentPin] = useState(false)
+    const [showNewPin, setShowNewPin] = useState(false)
+    const [showConfirmPin, setShowConfirmPin] = useState(false)
 
     // Theme state (local)
     const [theme, setTheme] = useState(() => localStorage.getItem('hrms_theme') || 'dark')
@@ -53,6 +56,9 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         setNewPin('')
         setConfirmNewPin('')
         setShowChangePin(false)
+        setShowCurrentPin(false)
+        setShowNewPin(false)
+        setShowConfirmPin(false)
         if (animationRef.current) cancelAnimationFrame(animationRef.current)
         if (stabilityTimerRef.current) clearTimeout(stabilityTimerRef.current)
     }
@@ -378,9 +384,18 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                                 </div>
                                 <div className="form-group">
                                     <label>Current PIN (6 digits)</label>
-                                    <input type="password" value={currentPin}
-                                        onChange={e => setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                        placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                    <div className="pin-input-wrap">
+                                        <input type={showCurrentPin ? "text" : "password"} value={currentPin}
+                                            onChange={e => setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                            placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                        <button type="button" className="pin-eye-btn" onClick={() => setShowCurrentPin(v => !v)} tabIndex={-1} aria-label={showCurrentPin ? "Hide PIN" : "Show PIN"}>
+                                            {showCurrentPin ? (
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                            ) : (
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                                 {!showChangePin && (
                                     <div className="change-pin-toggle">
@@ -391,15 +406,33 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                                     <>
                                         <div className="form-group">
                                             <label>New PIN (6 digits)</label>
-                                            <input type="password" value={newPin}
-                                                onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                                placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                            <div className="pin-input-wrap">
+                                                <input type={showNewPin ? "text" : "password"} value={newPin}
+                                                    onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                    placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                                <button type="button" className="pin-eye-btn" onClick={() => setShowNewPin(v => !v)} tabIndex={-1} aria-label={showNewPin ? "Hide PIN" : "Show PIN"}>
+                                                    {showNewPin ? (
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                                    ) : (
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="form-group">
                                             <label>Confirm New PIN</label>
-                                            <input type="password" value={confirmNewPin}
-                                                onChange={e => setConfirmNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                                placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                            <div className="pin-input-wrap">
+                                                <input type={showConfirmPin ? "text" : "password"} value={confirmNewPin}
+                                                    onChange={e => setConfirmNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                    placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                                <button type="button" className="pin-eye-btn" onClick={() => setShowConfirmPin(v => !v)} tabIndex={-1} aria-label={showConfirmPin ? "Hide PIN" : "Show PIN"}>
+                                                    {showConfirmPin ? (
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                                    ) : (
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="change-pin-toggle">
                                             <button type="button" className="link-button" onClick={() => { setShowChangePin(false); setNewPin(''); setConfirmNewPin(''); }}>Cancel PIN change</button>

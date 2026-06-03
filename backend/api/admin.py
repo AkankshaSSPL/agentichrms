@@ -29,11 +29,30 @@ class RoleUpdateRequest(BaseModel):
     role_name: str
 
 
+# Must match COMPLETION_FIELDS in HRPanel.jsx exactly
+COMPLETION_FIELDS = [
+    'gender', 'date_of_birth', 'department', 'designation', 'employment_type',
+    'join_date', 'address_line1', 'city', 'state', 'country',
+    'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation',
+    'bank_name', 'bank_account_number', 'bank_branch',
+]
+
+
+def calc_completion(emp: Employee) -> int:
+    """Return 0-100 profile completion percentage based on COMPLETION_FIELDS."""
+    filled = sum(
+        1 for f in COMPLETION_FIELDS
+        if getattr(emp, f, None) not in (None, '', 'None')
+    )
+    return round((filled / len(COMPLETION_FIELDS)) * 100)
+
+
 class EmployeeRoleResponse(BaseModel):
     id: int
     name: str
     email: str
     role: str
+    profile_completion: int = 0
 
 
 @router.get("/employees", response_model=List[EmployeeRoleResponse])
@@ -50,6 +69,7 @@ def list_employees(
             "name": emp.name,
             "email": emp.email,
             "role": role_name,
+            "profile_completion": calc_completion(emp),
         })
     return result
 

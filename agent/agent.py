@@ -46,10 +46,10 @@ RULE 2 — DATES: Always derive dates from TODAY'S DATE shown above.
   - Call `apply_leave` EXACTLY ONCE per request with the correct date.
   - NEVER call apply_leave more than once for the same request.
 
-RULE 3 — CONFLICT RESPONSE:
-  - If `apply_leave` returns conflict=True → your ONLY output must be the single word: CONFLICT_DETECTED
-  - If `apply_leave` returns conflict=False → NEVER output "CONFLICT_DETECTED". Instead, say "Your leave request has been submitted successfully." or a similar confirmation.
-  - Never mention conflicts or meetings unless the tool explicitly returned conflict=True.
+RULE 3 — CONFLICT RESPONSE: If `apply_leave` returns conflict=True:
+  - Your ONLY output must be the single word: CONFLICT_DETECTED
+  - Do not write anything else before or after it. No punctuation. No explanation.
+  - Do not describe meetings. Do not ask the user anything. Just: CONFLICT_DETECTED
 
 RULE 4 — CANCEL: To cancel leave without a leave_id, call `cancel_latest_pending_leave`.
 
@@ -57,17 +57,28 @@ RULE 5 — POLICY: For policy questions, call `search_policies`.
 
 RULE 6 — TONE: Be concise, friendly, and professional for non-leave responses.
 
-RULE 7 — NEVER RE-EXECUTE: Only act on the CURRENT message. Never repeat or re-execute
+RULE 7 — PROFILE UPDATES: When the employee asks to update any profile detail:
+  - Call `request_profile_update` with:
+      employee_email = "{employee_email}"
+      field = the exact DB column name (e.g. "phone", "name", "department")
+      new_value = the value they want to set
+  - The tool will automatically:
+      • Update directly if the field is employee-updatable (phone, address, emergency contact, etc.)
+      • Notify HR and send an email if the field needs HR approval (name, email, department, salary, etc.)
+  - NEVER update the employees table yourself — always use this tool.
+  - If unsure of the field name, map from natural language:
+      "phone number" → phone
+      "home address" → address_line1
+      "job title" / "designation" → designation
+      "department" → department
+      "date of birth" / "DOB" → date_of_birth
+      "bank account" → bank_account_number
+      "emergency contact" → emergency_contact_name
+
+RULE 8 — NEVER RE-EXECUTE: Only act on the CURRENT message. Never repeat or re-execute
   actions from previous messages in chat history. If the user says "hello", "ok", "thanks",
   or anything unrelated to a task, just respond conversationally. Do NOT call any tool
   unless the current message explicitly requests an action.
-
-RULE 8 — NAME CHANGE: If the user mentions changing their name (e.g. "I got married", 
-  "please change my name", "update my name to X"), respond with:
-  "I can process your name change request. What would you like your new name to be?"
-  Then confirm the new name and reason, then output the special tag:
-  NAME_CHANGE_INTENT with the new name and reason as plain text (no JSON braces).
-  The frontend will handle the actual submission flow with document upload option.
 """
 
     llm = ChatOpenAI(
@@ -87,3 +98,18 @@ RULE 8 — NAME CHANGE: If the user mentions changing their name (e.g. "I got ma
 
     agent = create_openai_tools_agent(llm, get_all_tools(), prompt)
     return AgentExecutor(agent=agent, tools=get_all_tools(), verbose=True, return_intermediate_steps=True)
+
+
+# ── Example: how to call from your FastAPI route ───────────────────────────────
+#
+# @router.post("/chat")
+# async def chat(request: ChatRequest, current_user: Employee = Depends(get_current_user)):
+#     executor = build_agent(
+#         employee_email=current_user.email,
+#         employee_name=current_user.name,
+#     )
+#     result = executor.invoke({
+#         "input": request.message,
+#         "chat_history": request.history,
+#     })
+#     return {"answer": result["output"]}

@@ -260,6 +260,12 @@ export default function AdminPanel({ token: tokenProp }) {
         if (activeTab === 'roles' || activeTab === 'dashboard') fetchEmployees()
     }, [activeTab, fetchEmployees])
 
+    // Re-fetch employees when HR approves a name change
+    useEffect(() => {
+        window.addEventListener('hrms:name-changed', fetchEmployees)
+        return () => window.removeEventListener('hrms:name-changed', fetchEmployees)
+    }, [fetchEmployees])
+
     const updateRole = async (employeeId, newRole, employeeName) => {
         const emp = employees.find(e => e.id === employeeId)
         try {

@@ -19,7 +19,7 @@ import httpx
 from pypdf import PdfReader
 
 from backend.database.session import SessionLocal
-from backend.database.models import Employee, NameChangeRequest, Notification, Role
+from backend.database.models import Employee, Notification, Role, ApprovalRequest
 from backend.core.security import verify_token
 from backend.core.config import settings
 
@@ -62,13 +62,29 @@ COLUMN_LABELS = {
 
 OPTIONAL_COLUMNS = {"address_line2", "base_salary"}
 
-# Keywords for name change detection (kept for fallback)
-NAME_CHANGE_KEYWORDS = [
-    "change my name", "update my name", "new name", "got married",
-    "i got married", "after marriage", "legal name", "name change",
-    "married name", "changed my name", "my name is now", "rename me"
-]
+# ── Fields an employee can edit themselves
+EMPLOYEE_EDITABLE_FIELDS = {
+    "gender", "date_of_birth",
+    "address_line1", "address_line2", "city", "state", "country",
+    "emergency_contact_name", "emergency_contact_phone", "emergency_contact_relation",
+}
 
+# Fields requiring HR approval (from tools_registry, duplicated here to avoid circular import)
+HR_APPROVAL_REQUIRED = {
+    "name": "Full name",
+    "email": "Email address",
+    "department": "Department",
+    "designation": "Designation / Job title",
+    "manager_id": "Reporting manager",
+    "employment_type": "Employment type",
+    "bank_account_number": "Bank account number",
+    "base_salary": "Base salary",
+    "status": "Employment status",
+    "role_id": "Role / Access level",
+    "phone_verified": "Phone verification",
+    "email_verified": "Email verification",
+    "profile_completed": "Profile completion flag",
+}
 
 def get_db():
     db = SessionLocal()
@@ -76,7 +92,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
 
 def get_current_employee(request: Request, db: Session = Depends(get_db)):
     auth = request.headers.get("Authorization", "")
@@ -90,7 +105,6 @@ def get_current_employee(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(404, "Employee not found")
     return emp
 
-
 def get_profile_columns(employee: Employee) -> dict:
     mapper = sa_inspect(Employee)
     result = {}
@@ -101,7 +115,6 @@ def get_profile_columns(employee: Employee) -> dict:
         val = getattr(employee, name, None)
         result[name] = val
     return result
-
 
 def build_dynamic_system_prompt(employee: Employee) -> str:
     profile = get_profile_columns(employee)
@@ -130,15 +143,6 @@ REQUIRED FIELDS STILL NEEDED:
 OPTIONAL FIELDS (ask casually, accept if they skip):
 {optional_lines}
 
-NAME CHANGE HANDLING (CRITICAL):
-- If the user mentions getting married, changing their name, or a legal name update:
-  1. Ask for their new full name in a natural way (e.g. "What would you like your new name to be?")
-  2. Ask for the reason if not already stated (marriage / legal / correction)
-  3. Confirm: "I've submitted your name-change request to HR for approval. You can upload a marriage certificate later."
-  4. Then continue with remaining profile fields.
-  5. NEVER skip to profile fields without acknowledging the name change first.
-  6. The system will automatically create the request record — you don't need to do anything special.
-
 PERSONALITY & TONE RULES:
 - Talk like a helpful colleague, not a form. Be casual, warm, encouraging.
 - Use {first_name}'s name occasionally but not every message.
@@ -153,6 +157,13 @@ RESUME HANDLING (CRITICAL):
 - Then ask ONLY about the 1-2 most important missing fields, naturally in conversation.
 - Never show a bullet-point summary of extracted data to the user. Ever.
 
+HR AUTHORITY (CRITICAL):
+- You are assisting HR, not the employee. HR has FULL authority over ALL fields including name, department, salary, and designation.
+- If HR says "update the name", "change the name", or "rename" WITHOUT providing the new name — you MUST ask: "What should the new name be?"
+- Only confirm and proceed once HR has explicitly given the NEW name (e.g. "change name to Riya" or you asked and they replied with the name).
+- Never say "I'll update the name to [current name]" — that makes no sense. Only update when a DIFFERENT new name is clearly provided.
+- HR can change any field at any time. Never refuse or redirect HR away from any field.
+
 CONVERSATION RULES:
 1. Ask for MISSING fields only. Never re-ask filled ones.
 2. Ask 1-2 related things at a time — never dump everything at once.
@@ -164,72 +175,6 @@ CONVERSATION RULES:
    Only include newly collected values (leave others as empty string "").
 6. If all required fields were already filled, say so warmly and output <PROFILE_DATA>{{}}</PROFILE_DATA>.
 """
-
-
-def _detect_and_create_name_change(employee: Employee, new_name: str, reason: str, db) -> str | None:
-    """
-    Creates a NameChangeRequest record and notifies HR.
-    Returns a confirmation string if created, else None.
-    """
-    if not new_name or new_name.strip() == employee.name:
-        return None
-
-    # Create the request using the correct field names (old_name, new_name)
-    ncr = NameChangeRequest(
-        employee_id=employee.id,
-        old_name=employee.name,
-        new_name=new_name.strip(),
-        reason=reason or "marriage",
-        document_provided=False,
-        status="pending",
-    )
-    db.add(ncr)
-    db.flush()
-
-    # Notify HR via database notifications
-    try:
-        hr_roles = db.query(Role).filter(Role.name.in_(["hr", "admin"])).all()
-        hr_ids = [r.id for r in hr_roles]
-        hr_emps = db.query(Employee).filter(Employee.role_id.in_(hr_ids)).all()
-        for hr in hr_emps:
-            db.add(Notification(
-                employee_id=hr.id,
-                title="📝 Name Change Request",
-                message=f"{employee.name} has requested a name change to '{new_name}'. No document provided yet.",
-                is_read=False,
-            ))
-    except Exception as e:
-        logger.warning("HR notify failed: %s", e)
-
-    db.commit()
-
-    # Optional: send email to HR
-    try:
-        from backend.core.email import send_email
-        import os
-        hr_email = os.getenv("HR_EMAIL", "")
-        if hr_email:
-            send_email(
-                to=hr_email,
-                subject=f"Name Change Request — {employee.name}",
-                body=(
-                    f"Employee: {employee.name} ({employee.email})\n"
-                    f"Requested name: {new_name}\n"
-                    f"Reason: {reason or 'marriage'}\n"
-                    f"Document: NOT provided yet.\n\n"
-                    f"Review in HR Dashboard → Name Change Requests tab."
-                ),
-                triggered_by="name_change_request",
-            )
-    except Exception as e:
-        logger.warning("HR email failed: %s", e)
-
-    return (
-        f"Your name-change request to '{new_name}' has been submitted to HR for approval. "
-        f"You'll be notified once they review it. "
-        f"You can also upload a supporting document (e.g. marriage certificate) later from your profile."
-    )
-
 
 def apply_fields_to_employee(employee: Employee, fields: dict, db: Session):
     date_fields = {"join_date", "date_of_birth"}
@@ -260,12 +205,10 @@ def apply_fields_to_employee(employee: Employee, fields: dict, db: Session):
             setattr(employee, key, str(val).strip())
     db.commit()
 
-
 class OnboardingChatRequest(BaseModel):
     message: str
     history: Optional[List[dict]] = []
     resume_text: Optional[str] = None
-
 
 @router.post("/chat")
 async def onboarding_chat(
@@ -311,62 +254,6 @@ async def onboarding_chat(
             logger.warning("Partial save failed: %s", e)
     answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
 
-    # ── Name change detection (reliable extraction from AI's confirmation) ──
-    try:
-        # Look for phrases that indicate a name change request was submitted
-        confirmation_phrases = [
-            "submitted your name-change request",
-            "submitted your name change request",
-            "name-change request to hr",
-            "name change request to hr",
-            "submitted to hr for approval"
-        ]
-        if any(phrase in answer.lower() for phrase in confirmation_phrases):
-            # Try to extract the new name from the AI's answer
-            # Patterns: "to 'Nikita'", "to Nikita", "to 'Nikita'", "to Nikita"
-            patterns = [
-                r"to ['\"]?([A-Za-z]+(?:\s+[A-Za-z]+)*)['\"]?",
-                r"name-change request to (['\"]?)([A-Za-z]+(?:\s+[A-Za-z]+)*)\1",
-                r"change your name to (['\"]?)([A-Za-z]+(?:\s+[A-Za-z]+)*)\1",
-            ]
-            new_name = None
-            for pat in patterns:
-                m = re.search(pat, answer, re.IGNORECASE)
-                if m:
-                    # The name may be in group 1 or group 2 depending on pattern
-                    candidate = m.group(1) if len(m.groups()) == 1 else m.group(2)
-                    candidate = candidate.strip()
-                    # Remove any stray quotes
-                    candidate = candidate.strip("'\"")
-                    if candidate and candidate.lower() != employee.name.lower():
-                        new_name = candidate
-                        break
-            
-            if new_name:
-                # Check for duplicate pending request
-                existing = db.query(NameChangeRequest).filter(
-                    NameChangeRequest.employee_id == employee.id,
-                    NameChangeRequest.status.in_(["pending", "awaiting_document"])
-                ).first()
-                if not existing:
-                    # Extract reason from user messages
-                    all_user_msgs = [h["content"] for h in (payload.history or []) if h.get("role") == "user"]
-                    all_user_msgs.append(payload.message)
-                    reason = "marriage"
-                    for msg in all_user_msgs:
-                        for kw in ["marriage", "married", "legal", "correction", "divorce"]:
-                            if kw in msg.lower():
-                                reason = kw
-                                break
-                        if reason != "marriage":
-                            break
-                    confirm_msg = _detect_and_create_name_change(employee, new_name, reason, db)
-                    if confirm_msg and confirm_msg not in answer:
-                        answer = answer + "\n\n" + confirm_msg
-                    logger.info("Name change request created from AI confirmation: %s → %s", employee.name, new_name)
-    except Exception as e:
-        logger.warning("Name change detection error: %s", e)
-
     # Full profile complete
     profile_data = None
     profile_complete = False
@@ -385,8 +272,71 @@ async def onboarding_chat(
         except Exception as e:
             logger.error("Profile parse failed: %s", e)
 
-    return {"reply": answer, "extracted_profile": profile_data, "profile_complete": profile_complete}
+    # ── Name change: HR can directly update employee name ────────────────────
+    name_changed = False
+    new_name = None
 
+    # Pattern 1: "change/update/rename name to X" in the message
+    m1 = re.search(
+        r"(?:change|update|rename|set)\s+(?:the\s+)?name\s+(?:to|as)\s+([A-Z][a-zA-Z ]{1,40}?)(?:\.|,|$|\n)",
+        payload.message, re.IGNORECASE
+    )
+    if m1:
+        candidate = m1.group(1).strip().rstrip(".,;")
+        if 2 <= len(candidate) <= 50:
+            new_name = candidate
+
+    # Pattern 2: "new name: X" or "new name is X"
+    if not new_name:
+        m2 = re.search(
+            r"new\s+name\s*[:\s]+([A-Z][a-zA-Z ]{1,40}?)(?:\.|,|$|\n)",
+            payload.message, re.IGNORECASE
+        )
+        if m2:
+            candidate = m2.group(1).strip().rstrip(".,;")
+            if 2 <= len(candidate) <= 50:
+                new_name = candidate
+
+    # Pattern 3: plain name reply after bot asked for the new name
+    if not new_name and payload.history:
+        last_bot = next(
+            (h["content"] for h in reversed(payload.history) if h.get("role") == "assistant"), ""
+        )
+        if any(kw in last_bot.lower() for kw in ["new name", "what name", "change to", "rename to"]):
+            candidate = payload.message.strip().rstrip(".,;")
+            if re.match(r"^[A-Z][a-zA-Z ]{1,40}$", candidate):
+                new_name = candidate
+
+    # Reject if new_name is the same as current name or a stop word
+    stop_words = {"name", "the", "their", "her", "his", "to", "please", "update", "change"}
+    if (new_name
+            and new_name.lower() not in stop_words
+            and new_name.strip().lower() != employee.name.strip().lower()):
+        old_name = employee.name
+        employee.name = new_name
+        db.commit()
+        name_changed = True
+        logger.info("HR updated name: %s -> %s (emp %s)", old_name, new_name, employee.id)
+        try:
+            db.add(Notification(
+                employee_id=employee.id,
+                title="Name Updated by HR",
+                message=f"Your name has been updated from {old_name} to {new_name} by HR.",
+                is_read=False,
+                created_at=datetime.utcnow(),
+            ))
+            db.commit()
+        except Exception as ne:
+            logger.warning("Name change notify failed: %s", ne)
+            db.rollback()
+
+    return {
+        "reply": answer,
+        "extracted_profile": profile_data,
+        "profile_complete": profile_complete,
+        "name_changed": name_changed,
+        "new_name": new_name,
+    }
 
 # ── Resume text extraction endpoint ─────────────────────────────────────────
 @router.post("/extract-resume")
@@ -408,14 +358,12 @@ async def extract_resume_text(request: Request):
         logger.error(f"PDF extraction failed: {e}")
         return {"text": ""}
 
-
 # ── HR can fill profile on behalf of employee ─────────────────────────────
 class OnboardingChatForRequest(BaseModel):
     employee_id: int
     message: str
     history: Optional[List[dict]] = []
     resume_text: Optional[str] = None
-
 
 @router.post("/chat-for")
 async def onboarding_chat_for_hr(
@@ -494,7 +442,6 @@ async def onboarding_chat_for_hr(
 
     return {"reply": answer, "extracted_profile": profile_data, "profile_complete": profile_complete}
 
-
 class ProfileSaveRequest(BaseModel):
     department: Optional[str] = None
     designation: Optional[str] = None
@@ -516,16 +463,119 @@ class ProfileSaveRequest(BaseModel):
     bank_branch: Optional[str] = None
     base_salary: Optional[float] = None
 
-
 @router.post("/save")
 async def save_profile(payload: ProfileSaveRequest, request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
-    apply_fields_to_employee(employee, {k: v for k, v in payload.dict().items() if v is not None}, db)
+    # Only allow employee-editable fields — reject anything else silently
+    raw = {k: v for k, v in payload.dict().items() if v is not None}
+    allowed = {k: v for k, v in raw.items() if k in EMPLOYEE_EDITABLE_FIELDS}
+    if not allowed:
+        return {"message": "No editable fields provided", "onboarding_completed": employee.onboarding_completed}
+    apply_fields_to_employee(employee, allowed, db)
     employee.onboarding_completed = True
     employee.profile_completed = True
     db.commit()
     return {"message": "Profile saved", "onboarding_completed": True}
 
+# ── Employee self-service chat ────────────────────────────────────
+class SelfChatRequest(BaseModel):
+    message: str
+    history: Optional[List[dict]] = []
+    resume_text: Optional[str] = None
+
+def build_self_edit_prompt(employee: Employee) -> str:
+    """System prompt scoped strictly to employee-editable fields."""
+    profile = get_profile_columns(employee)
+    editable = {k: profile.get(k) for k in EMPLOYEE_EDITABLE_FIELDS}
+    filled = {k: v for k, v in editable.items() if v is not None and str(v).strip() not in ("", "None")}
+    missing = [k for k in EMPLOYEE_EDITABLE_FIELDS if k not in filled]
+
+    filled_lines = "\n".join(f"  - {COLUMN_LABELS.get(k,k)}: {v}" for k, v in filled.items()) or "  (none yet)"
+    missing_lines = "\n".join(f"  - {COLUMN_LABELS.get(k,k)}" for k in missing) or "  (all filled)"
+
+    all_fields = list(EMPLOYEE_EDITABLE_FIELDS)
+    json_template = "{" + ", ".join(f'"{k}": ""' for k in all_fields) + "}"
+
+    return f"""You are a friendly assistant helping {employee.name} update their personal profile.
+
+IMPORTANT: You can ONLY update personal details. You cannot change name, email, department, designation, salary, or any work-related fields — those require HR approval.
+
+ALREADY FILLED (do not ask again):
+{filled_lines}
+
+FIELDS YOU CAN HELP UPDATE:
+{missing_lines}
+
+RULES:
+1. Only discuss the allowed fields above. If asked to change name, department, designation, salary or any work field, politely say "That requires HR approval — please contact your HR team."
+2. Ask 1-2 questions at a time conversationally.
+3. After collecting answers, save with: <PARTIAL_SAVE>{{"field": "value"}}</PARTIAL_SAVE>
+4. When done, output: <PROFILE_DATA>{json_template}</PROFILE_DATA>
+5. Be warm and concise.
+"""
+
+@router.post("/chat-self")
+async def employee_self_chat(
+    payload: SelfChatRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Employee updates only their own personal/contact fields — no work fields."""
+    employee = get_current_employee(request, db)
+    system_prompt = build_self_edit_prompt(employee)
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in payload.history:
+        if msg.get("role") in ("user", "assistant"):
+            messages.append({"role": msg["role"], "content": msg["content"]})
+
+    user_content = payload.message
+    if payload.resume_text:
+        user_content = f"[Resume text]\n{payload.resume_text}\n\nMessage: {payload.message}"
+    messages.append({"role": "user", "content": user_content})
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.AI_KEY}", "Content-Type": "application/json"},
+                json={"model": settings.AI_MODEL, "temperature": 0.3, "max_tokens": 800, "messages": messages},
+            )
+            data = response.json()
+    except Exception as e:
+        raise HTTPException(500, f"AI error: {e}")
+
+    if "error" in data:
+        raise HTTPException(500, data["error"].get("message", "AI error"))
+
+    answer = data["choices"][0]["message"]["content"]
+
+    # Partial save — enforce whitelist
+    for m in re.finditer(r"<PARTIAL_SAVE>(.*?)</PARTIAL_SAVE>", answer, re.DOTALL):
+        try:
+            raw = json.loads(m.group(1).strip())
+            allowed = {k: v for k, v in raw.items() if k in EMPLOYEE_EDITABLE_FIELDS}
+            apply_fields_to_employee(employee, allowed, db)
+        except Exception as e:
+            logger.warning("Self partial save failed: %s", e)
+    answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
+
+    profile_data = None
+    profile_complete = False
+    pm = re.search(r"<PROFILE_DATA>(.*?)</PROFILE_DATA>", answer, re.DOTALL)
+    if pm:
+        try:
+            raw = pm.group(1).strip()
+            profile_data = json.loads(raw) if raw and raw != "{}" else {}
+            profile_complete = True
+            answer = re.sub(r"<PROFILE_DATA>.*?</PROFILE_DATA>", "", answer, flags=re.DOTALL).strip()
+            if profile_data:
+                allowed = {k: v for k, v in profile_data.items() if k in EMPLOYEE_EDITABLE_FIELDS}
+                apply_fields_to_employee(employee, allowed, db)
+        except Exception as e:
+            logger.error("Self profile parse failed: %s", e)
+
+    return {"reply": answer, "profile_complete": profile_complete}
 
 @router.get("/me")
 def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Session = Depends(get_db)):
@@ -563,34 +613,178 @@ def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Sess
         **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in profile.items()},
     }
 
+# ── Approval Request endpoints (HR only) ──────────────────────────────────────
+class ApproveRejectPayload(BaseModel):
+    notes: Optional[str] = None
 
-# ── Endpoint for HR to get pending name change requests ──────────────────────
-@router.get("/name-change-requests")
-def get_name_change_requests(
+@router.get("/approval-requests/pending")
+def get_pending_approval_requests(request: Request, db: Session = Depends(get_db)):
+    """HR/admin: get all pending profile change requests."""
+    employee = get_current_employee(request, db)
+    if employee.role.name not in ["hr", "admin"]:
+        raise HTTPException(403, "Only HR/Admin can view pending requests")
+
+    requests = db.query(ApprovalRequest).filter(ApprovalRequest.status == "pending").order_by(ApprovalRequest.created_at.desc()).all()
+    result = []
+    for req in requests:
+        emp = db.query(Employee).get(req.employee_id)
+        if not emp:
+            continue
+        result.append({
+            "id": req.id,
+            "employee_name": emp.name,
+            "employee_email": emp.email,
+            "field_name": req.field_name,
+            "field_label": HR_APPROVAL_REQUIRED.get(req.field_name, req.field_name),
+            "old_value": req.old_value,
+            "new_value": req.new_value,
+            "created_at": req.created_at.isoformat(),
+        })
+    return result
+
+@router.post("/approval-requests/{request_id}/approve")
+def approve_approval_request(
+    request_id: int,
+    payload: ApproveRejectPayload,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    employee = get_current_employee(request, db)
+    if employee.role.name not in ["hr", "admin"]:
+        raise HTTPException(403, "Only HR/Admin can approve requests")
+
+    approval_req = db.query(ApprovalRequest).filter(ApprovalRequest.id == request_id).first()
+    if not approval_req:
+        raise HTTPException(404, "Request not found")
+    if approval_req.status != "pending":
+        raise HTTPException(400, f"Request already {approval_req.status}")
+
+    target_emp = db.query(Employee).get(approval_req.employee_id)
+    if not target_emp:
+        raise HTTPException(404, "Employee not found")
+
+    # Apply the change
+    field = approval_req.field_name
+    new_val = approval_req.new_value
+    if hasattr(target_emp, field):
+        # Date fields
+        if field in ("join_date", "date_of_birth"):
+            from datetime import datetime as dt
+            for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d %B %Y"):
+                try:
+                    parsed = dt.strptime(new_val, fmt)
+                    if field == "date_of_birth":
+                        setattr(target_emp, field, parsed.date())
+                    else:
+                        setattr(target_emp, field, parsed)
+                    break
+                except ValueError:
+                    continue
+        elif field == "base_salary":
+            try:
+                setattr(target_emp, field, float(new_val))
+            except ValueError:
+                pass
+        else:
+            setattr(target_emp, field, new_val)
+
+    approval_req.status = "approved"
+    approval_req.resolved_at = datetime.utcnow()
+    approval_req.resolved_by_employee_id = employee.id
+    approval_req.reason = payload.notes
+    db.commit()
+
+    # Notify employee
+    db.add(Notification(
+        employee_id=target_emp.id,
+        title="Profile change approved",
+        message=f"Your request to change {HR_APPROVAL_REQUIRED.get(field, field)} to '{new_val}' has been approved by {employee.name}.",
+        is_read=False,
+    ))
+    db.commit()
+
+    return {"message": "Request approved and changes applied"}
+
+@router.post("/approval-requests/{request_id}/reject")
+def reject_approval_request(
+    request_id: int,
+    payload: ApproveRejectPayload,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    employee = get_current_employee(request, db)
+    if employee.role.name not in ["hr", "admin"]:
+        raise HTTPException(403, "Only HR/Admin can reject requests")
+
+    approval_req = db.query(ApprovalRequest).filter(ApprovalRequest.id == request_id).first()
+    if not approval_req:
+        raise HTTPException(404, "Request not found")
+    if approval_req.status != "pending":
+        raise HTTPException(400, f"Request already {approval_req.status}")
+
+    approval_req.status = "rejected"
+    approval_req.resolved_at = datetime.utcnow()
+    approval_req.resolved_by_employee_id = employee.id
+    approval_req.reason = payload.notes
+    db.commit()
+
+    db.add(Notification(
+        employee_id=approval_req.employee_id,
+        title="Profile change rejected",
+        message=f"Your request to change {HR_APPROVAL_REQUIRED.get(approval_req.field_name, approval_req.field_name)} was rejected by {employee.name}. Reason: {payload.notes or 'No reason provided'}",
+        is_read=False,
+    ))
+    db.commit()
+
+    return {"message": "Request rejected"}
+
+# ── HR direct update endpoint (no approval) ───────────────────────────────────
+class HRDirectUpdateRequest(BaseModel):
+    fields: dict
+
+@router.patch("/employee/{employee_id}/profile")
+def hr_direct_update(
+    employee_id: int,
+    payload: HRDirectUpdateRequest,
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Return all name change requests (for HR/admin panel)"""
+    """HR/admin can directly update any profile field of any employee."""
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "Missing token")
-    payload = verify_token(auth.split(" ")[1])
-    if not payload or payload.get("role") not in ("admin", "hr"):
-        raise HTTPException(403, "Only HR or admin can view name change requests")
-    requests = db.query(NameChangeRequest).order_by(NameChangeRequest.created_at.desc()).all()
-    result = []
-    for req in requests:
-        emp = db.query(Employee).filter(Employee.id == req.employee_id).first()
-        result.append({
-            "id": req.id,
-            "employee_id": req.employee_id,
-            "employee_name": emp.name if emp else "",
-            "employee_email": emp.email if emp else "",
-            "current_name": req.old_name,
-            "requested_name": req.new_name,
-            "reason": req.reason,
-            "status": req.status,
-            "document_provided": req.document_provided,
-            "created_at": req.created_at.isoformat() if req.created_at else None,
-        })
-    return result
+    caller_payload = verify_token(auth.split(" ")[1])
+    if not caller_payload or caller_payload.get("role") not in ("hr", "admin"):
+        raise HTTPException(403, "Only HR or admin can update profiles")
+
+    target = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not target:
+        raise HTTPException(404, "Employee not found")
+
+    date_fields = {"join_date", "date_of_birth"}
+    for key, val in payload.fields.items():
+        if not hasattr(target, key):
+            continue
+        if key in date_fields and val:
+            try:
+                parsed = datetime.strptime(val, "%Y-%m-%d").date()
+                setattr(target, key, parsed)
+            except Exception:
+                pass
+        elif key == "base_salary" and val:
+            try:
+                setattr(target, key, float(val))
+            except Exception:
+                pass
+        else:
+            setattr(target, key, val)
+
+    # Notify employee
+    db.add(Notification(
+        employee_id=target.id,
+        title="Profile Updated by HR",
+        message=f"HR has updated: {', '.join(payload.fields.keys())}. Please review your profile.",
+        is_read=False,
+    ))
+    db.commit()
+    return {"message": "Profile updated", "updated_fields": list(payload.fields.keys())}

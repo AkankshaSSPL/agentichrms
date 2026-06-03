@@ -19,7 +19,7 @@ from sentence_transformers import SentenceTransformer
 from langchain.tools import tool
 from backend.core.config import settings
 from backend.database.session import SessionLocal
-from backend.database.models import Employee, Leave, LeaveBalance
+from backend.database.models import Employee, Leave, LeaveBalance, Notification, Role, ApprovalRequest
 import os
 from backend.services.email_service import send_email as _send_email
 import requests
@@ -558,6 +558,176 @@ def get_department_summary(department: str = None) -> dict:
     return {"answer": f"{department or 'All'} departments: 120 employees, 8 managers."}
 
 
+# ── Field policy ───────────────────────────────────────────────────────────────
+# Fields the employee can update themselves
+EMPLOYEE_UPDATABLE = {
+    "phone":                      "Phone number",
+    "phone_country_code":         "Phone country code",
+    "address_line1":              "Address line 1",
+    "address_line2":              "Address line 2",
+    "city":                       "City",
+    "state":                      "State / Province",
+    "country":                    "Country",
+    "emergency_contact_name":     "Emergency contact name",
+    "emergency_contact_phone":    "Emergency contact phone",
+    "emergency_contact_relation": "Emergency contact relation",
+    "bank_name":                  "Bank name",
+    "bank_branch":                "Bank branch",
+    "account_holder_name":        "Account holder name",
+    "date_of_birth":              "Date of birth",
+    "gender":                     "Gender",
+}
+
+# Fields that require HR approval to change
+HR_APPROVAL_REQUIRED = {
+    "name":            "Full name",
+    "email":           "Email address",
+    "department":      "Department",
+    "designation":     "Designation / Job title",
+    "manager_id":      "Reporting manager",
+    "employment_type": "Employment type",
+    "bank_account_number": "Bank account number",
+    "base_salary":     "Base salary",
+    "status":          "Employment status",
+    "role_id":         "Role / Access level",
+    "phone_verified":  "Phone verification",
+    "email_verified":  "Email verification",
+    "profile_completed": "Profile completion flag",
+}
+
+
+@tool
+def request_profile_update(employee_email: str, field: str, new_value: str) -> dict:
+    """
+    Update an employee profile field.
+    - If caller is HR/admin → updates DB directly (no approval).
+    - If caller is employee and field is employee‑updatable → updates directly.
+    - If caller is employee and field requires HR approval → creates ApprovalRequest.
+    """
+    db = SessionLocal()
+    try:
+        from backend.database.models import ApprovalRequest
+        emp = _get_employee_by_email(db, employee_email)
+        if not emp:
+            return {"answer": f"Employee not found for email '{employee_email}'."}
+
+        # Determine caller's role (use the token from the request? Not available here.
+        # We'll use the employee making the request – but the tool only knows the target employee.
+        # Actually we need the logged‑in user, not the target. This tool is called with the
+        # logged‑in employee's email (passed from agent). So emp is the caller.
+        # So we can get role from emp.role.
+        is_hr = emp.role.name in ["hr", "admin"] if emp.role else False
+
+        field = field.strip().lower()
+        if field == "account_number":
+            field = "bank_account_number"
+
+        # Case 1: HR/admin can update any field directly
+        if is_hr:
+            if not hasattr(emp, field):
+                return {"answer": f"Field '{field}' does not exist."}
+            # Date handling
+            if field == "date_of_birth":
+                from datetime import datetime as _dt
+                for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d %B %Y"):
+                    try:
+                        new_value = _dt.strptime(new_value.strip(), fmt).date()
+                        break
+                    except ValueError:
+                        continue
+            elif field in ("join_date", "date_of_birth"):
+                # handled above
+                pass
+            elif field == "base_salary":
+                try:
+                    new_value = float(new_value)
+                except:
+                    pass
+            setattr(emp, field, new_value)
+            db.commit()
+            field_label = HR_APPROVAL_REQUIRED.get(field, field)
+            return {"answer": f"Updated {field_label} to '{new_value}'."}
+
+        # Case 2: Employee updates directly (allowed fields)
+        if field in EMPLOYEE_UPDATABLE:
+            if not hasattr(emp, field):
+                return {"answer": f"Field '{field}' does not exist."}
+            old_value = getattr(emp, field)
+            if field == "date_of_birth":
+                from datetime import datetime as _dt
+                for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d %B %Y"):
+                    try:
+                        new_value = _dt.strptime(new_value.strip(), fmt).date()
+                        break
+                    except ValueError:
+                        continue
+            setattr(emp, field, new_value)
+            db.commit()
+            field_label = EMPLOYEE_UPDATABLE[field]
+            return {"answer": f"Done! Your {field_label} has been updated to '{new_value}'."}
+
+        # Case 3: Employee requests HR‑approved field – create ApprovalRequest
+        elif field in HR_APPROVAL_REQUIRED:
+            existing = db.query(ApprovalRequest).filter(
+                ApprovalRequest.employee_id == emp.id,
+                ApprovalRequest.field_name == field,
+                ApprovalRequest.status == "pending"
+            ).first()
+            if existing:
+                return {"answer": f"You already have a pending request to change your {HR_APPROVAL_REQUIRED[field]}. Please wait for HR to review it."}
+
+            old_value = getattr(emp, field)
+            old_value_str = str(old_value) if old_value is not None else ""
+
+            req = ApprovalRequest(
+                employee_id=emp.id,
+                requested_by_employee_id=emp.id,
+                field_name=field,
+                old_value=old_value_str,
+                new_value=str(new_value),
+                status="pending",
+            )
+            db.add(req)
+            db.commit()
+
+            field_label = HR_APPROVAL_REQUIRED[field]
+            # Notify HR
+            hr_roles = db.query(Role).filter(Role.name.in_(["hr", "admin"])).all()
+            hr_role_ids = [r.id for r in hr_roles]
+            hr_emps = db.query(Employee).filter(
+                Employee.role_id.in_(hr_role_ids),
+                Employee.status == "active",
+            ).all()
+            for hr in hr_emps:
+                db.add(Notification(
+                    employee_id=hr.id,
+                    title=f"📋 Profile Change Request – {emp.name}",
+                    message=f"{emp.name} requested to change {field_label} from '{old_value_str}' to '{new_value}'. Please review.",
+                    is_read=False,
+                ))
+            db.commit()
+            hr_email = os.getenv("HR_EMAIL", "")
+            if hr_email:
+                try:
+                    _send_email(hr_email, f"Profile Change Request – {emp.name}",
+                                f"Employee: {emp.name} ({emp.email})\nField: {field_label}\nCurrent: {old_value_str}\nRequested: {new_value}")
+                except Exception as e:
+                    logger.warning(f"HR email failed: {e}")
+            return {
+                "answer": f"Your request to change your {field_label} to '{new_value}' has been sent to HR for approval. You'll be notified once it's reviewed."
+            }
+
+        else:
+            updatable = ", ".join(EMPLOYEE_UPDATABLE.keys())
+            hr_fields = ", ".join(HR_APPROVAL_REQUIRED.keys())
+            return {
+                "answer": f"I don't recognise '{field}' as a profile field. Fields you can update directly: {updatable}. Fields requiring HR approval: {hr_fields}."
+            }
+
+    finally:
+        db.close()
+
+
 def get_all_tools():
     return [
         search_policies,
@@ -569,6 +739,7 @@ def get_all_tools():
         reject_leave,
         cancel_leave_request,
         cancel_latest_pending_leave,
+        request_profile_update,
         send_notification_email,
         get_onboarding_checklist,
         mark_task_complete,

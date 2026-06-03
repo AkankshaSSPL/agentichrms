@@ -117,12 +117,16 @@ class Employee(BaseModel):
     leaves = relationship("Leave", back_populates="employee")
     balances = relationship("LeaveBalance", back_populates="employee")
     notifications = relationship("Notification", back_populates="employee", cascade="all, delete-orphan")
+    
+    # Approval requests where this employee is the target
+    approval_requests = relationship("ApprovalRequest", foreign_keys="ApprovalRequest.employee_id", back_populates="employee")
+    # Approval requests made by this employee (as requester)
+    approval_requests_made = relationship("ApprovalRequest", foreign_keys="ApprovalRequest.requested_by_employee_id", back_populates="requested_by")
+    # Approval requests resolved by this employee
+    approval_requests_resolved = relationship("ApprovalRequest", foreign_keys="ApprovalRequest.resolved_by_employee_id", back_populates="resolved_by")
 
 
 # ── All other models (Leave, LeaveBalance, User, ChatSession, etc.) remain unchanged ──
-# They are exactly as you had them – no changes needed to those tables.
-# I include them below for completeness, but you can keep your existing versions.
-
 class Leave(BaseModel):
     __tablename__ = "leaves"
     id = Column(Integer, primary_key=True, index=True)
@@ -155,7 +159,6 @@ class User(BaseModel):
     role = Column(String, default='employee')
     is_active = Column(Boolean, default=True)
 
-    # Add these three lines ↓↓↓
     is_verified = Column(Boolean, default=False)
     face_registered = Column(Boolean, default=False)
     face_login_enabled = Column(Boolean, default=False)
@@ -239,32 +242,11 @@ class EmailLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     recipient = Column(String(255), nullable=False)
     subject = Column(String(500), nullable=False)
-    body_preview = Column(Text, nullable=True)       # first 300 chars of body
-    status = Column(String(20), default="sent")       # "sent" | "failed"
-    error = Column(Text, nullable=True)               # error message if failed
+    body_preview = Column(Text, nullable=True)
+    status = Column(String(20), default="sent")
+    error = Column(Text, nullable=True)
     sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    triggered_by = Column(String(100), nullable=True) # "leave_approve" | "role_change" | "test" etc.
-
-
-class NameChangeRequest(BaseModel):
-    """Employee name change requests with optional document upload"""
-    __tablename__ = "name_change_requests"
-
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey('employees.id', ondelete="CASCADE"), nullable=False)
-    old_name = Column(String(255), nullable=False)
-    new_name = Column(String(255), nullable=False)
-    reason = Column(Text, nullable=True)                     # e.g. "Got married"
-    status = Column(String(30), default="pending")           # pending | approved | rejected | awaiting_document
-    document_provided = Column(Boolean, default=False)
-    document_path = Column(String(500), nullable=True)
-    document_filename = Column(String(255), nullable=True)
-    rejection_reason = Column(Text, nullable=True)
-    reviewed_by = Column(Integer, ForeignKey('employees.id'), nullable=True)
-    reviewed_at = Column(DateTime, nullable=True)
-
-    employee = relationship("Employee", foreign_keys=[employee_id])
-    reviewer = relationship("Employee", foreign_keys=[reviewed_by])
+    triggered_by = Column(String(100), nullable=True)
 
 
 class Notification(BaseModel):
@@ -276,3 +258,37 @@ class Notification(BaseModel):
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False, nullable=False)
     employee = relationship("Employee", back_populates="notifications")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Approval Workflow Models (No hardcoding)
+# ──────────────────────────────────────────────────────────────────────────────
+class ApprovalRequest(Base):
+    __tablename__ = "approval_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
+    requested_by_employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
+    field_name = Column(String(100), nullable=False)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=False)
+    status = Column(String(20), default='pending')  # pending, approved, rejected
+    reason = Column(Text, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by_employee_id = Column(Integer, ForeignKey('employees.id'), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    employee = relationship("Employee", foreign_keys=[employee_id], back_populates="approval_requests")
+    requested_by = relationship("Employee", foreign_keys=[requested_by_employee_id], back_populates="approval_requests_made")
+    resolved_by = relationship("Employee", foreign_keys=[resolved_by_employee_id], back_populates="approval_requests_resolved")
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key = Column(String(100), primary_key=True, index=True)
+    value = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

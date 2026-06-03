@@ -73,18 +73,46 @@ def require_role(allowed_roles: list):
         payload = verify_token(token)
         if not payload:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
-        role = payload.get("role")
-        if not role:
-            # Token was issued before RBAC — user must log out and log back in
+
+        employee_id = payload.get("sub")
+        if not employee_id:
+            raise HTTPException(status_code=401, detail="Invalid token: missing subject")
+
+        # ── Always read the role fresh from the DB ──────────────────────────
+        # This means a role change by admin takes effect immediately on the
+        # employee's next API call — no re-login required.
+        try:
+            from backend.database.session import SessionLocal
+            from backend.database.models import Employee
+            db = SessionLocal()
+            try:
+                emp = db.query(Employee).filter(Employee.id == int(employee_id)).first()
+                if not emp:
+                    raise HTTPException(status_code=401, detail="Employee not found")
+                # emp.role is a relationship → Role object with .name
+                db_role = emp.role.name if emp.role and hasattr(emp.role, "name") else None
+            finally:
+                db.close()
+        except HTTPException:
+            raise
+        except Exception:
+            # DB unavailable — fall back to JWT role rather than blocking the request
+            db_role = payload.get("role")
+
+        if not db_role:
             raise HTTPException(
                 status_code=401,
                 detail="Your session is outdated. Please log out and log in again to continue."
             )
-        if role not in allowed_roles:
+
+        if db_role not in allowed_roles:
             raise HTTPException(
                 status_code=403,
-                detail=f"Access denied. Required role: {allowed_roles}. Your role: {role}"
+                detail=f"Access denied. Required role: {allowed_roles}. Your role: {db_role}"
             )
+
+        # Inject the fresh DB role into the payload so endpoints can read it
+        payload["role"] = db_role
         return payload
 
     return _check

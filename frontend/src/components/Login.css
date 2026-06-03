@@ -374,3 +374,97 @@
     display: flex;
     /* ... your existing styles ... */
 }
+
+/* ── PIN eye toggle (show/hide password) ─────────────────────────────────── */
+
+.pin-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+/* Force correct theme colors on all PIN inputs — overrides browser password autofill */
+.pin-input-wrap .pin-input-field {
+    width: 100%;
+    padding-right: 48px;
+    background: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+}
+
+.pin-input-wrap .pin-input-field:focus {
+    border-color: var(--accent) !important;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(79, 142, 247, 0.15);
+}
+
+/* Override Chrome/Safari autofill dark injection */
+.pin-input-wrap .pin-input-field:-webkit-autofill,
+.pin-input-wrap .pin-input-field:-webkit-autofill:hover,
+.pin-input-wrap .pin-input-field:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-input) inset !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    caret-color: var(--text-primary);
+}
+
+/* Light theme — ensure white background explicitly */
+.theme-light .pin-input-wrap .pin-input-field {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    border-color: #d1d5db !important;
+}
+
+.theme-light .pin-input-wrap .pin-input-field:-webkit-autofill,
+.theme-light .pin-input-wrap .pin-input-field:-webkit-autofill:hover,
+.theme-light .pin-input-wrap .pin-input-field:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+    -webkit-text-fill-color: #0f172a !important;
+}
+
+.pin-eye-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    transition: color 0.15s, opacity 0.15s;
+    z-index: 2;
+    /* dark mode → white icon */
+    color: #ffffff;
+    opacity: 0.75;
+}
+
+.pin-eye-btn:hover {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    opacity: 1;
+}
+
+.pin-eye-btn:focus {
+    outline: none;
+}
+
+/* Light theme → black icon */
+.theme-light .pin-eye-btn {
+    background: transparent;
+    border: none;
+    color: #000000;
+    opacity: 0.6;
+}
+
+.theme-light .pin-eye-btn:hover {
+    background: transparent;
+    border: none;
+    color: #000000;
+    opacity: 1;
+}

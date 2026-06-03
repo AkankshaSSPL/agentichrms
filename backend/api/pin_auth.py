@@ -162,3 +162,102 @@ def request_pin(
         masked_phone=masked,
         message=f"A {settings.PIN_LENGTH}-digit PIN has been sent via SMS.",
     )
+
+
+# ── Login with permanent PIN ───────────────────────────────────────────────────
+class LoginWithPinRequest(BaseModel):
+    identifier: str   # email or phone
+    pin: str
+
+
+@router.post("/login-with-pin")
+def login_with_pin(payload: LoginWithPinRequest, db: Session = Depends(get_db)):
+    from backend.core.security import create_access_token, verify_password
+    from datetime import timedelta
+
+    # Find employee by email or phone
+    emp = db.query(Employee).filter(
+        ((Employee.email == payload.identifier.strip().lower()) |
+         (Employee.phone == payload.identifier.strip())),
+        Employee.status == "active",
+        Employee.deleted_at.is_(None),
+    ).first()
+    if not emp:
+        raise HTTPException(404, "No active employee found with the provided details.")
+
+    # Verify PIN
+    if not emp.permanent_pin_hash:
+        raise HTTPException(400, "No PIN set. Please use your default PIN or contact HR.")
+
+    if not verify_password(payload.pin, emp.permanent_pin_hash):
+        raise HTTPException(401, "Incorrect PIN.")
+
+    token = create_access_token({
+        "sub": str(emp.id),
+        "email": emp.email,
+        "role": emp.role.name if emp.role else "employee",
+    }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
+
+    return {
+        "access_token": token,
+        "employee": {
+            "id": emp.id, "name": emp.name, "email": emp.email,
+            "role": emp.role.name if emp.role else "employee",
+            "onboarding_completed": emp.onboarding_completed,
+        }
+    }
+
+
+# ── Verify current PIN and change to new PIN ──────────────────────────────────
+class VerifyAndChangePinRequest(BaseModel):
+    identifier: str   # email or phone
+    current_pin: str
+    new_pin: str
+
+
+@router.post("/verify-and-change-pin")
+def verify_and_change_pin(payload: VerifyAndChangePinRequest, db: Session = Depends(get_db)):
+    from backend.core.security import create_access_token, verify_password, get_password_hash
+    from datetime import timedelta
+
+    # Find employee
+    emp = db.query(Employee).filter(
+        ((Employee.email == payload.identifier.strip().lower()) |
+         (Employee.phone == payload.identifier.strip())),
+        Employee.status == "active",
+        Employee.deleted_at.is_(None),
+    ).first()
+    if not emp:
+        raise HTTPException(404, "No active employee found with the provided details.")
+
+    # Verify current PIN
+    if not emp.permanent_pin_hash:
+        raise HTTPException(400, "No PIN set on this account.")
+    if not verify_password(payload.current_pin, emp.permanent_pin_hash):
+        raise HTTPException(401, "Current PIN is incorrect.")
+
+    if len(payload.new_pin) != settings.PIN_LENGTH:
+        raise HTTPException(400, f"New PIN must be {settings.PIN_LENGTH} digits.")
+
+    # Set new PIN
+    emp.permanent_pin_hash = get_password_hash(payload.new_pin)
+    emp.permanent_pin = payload.new_pin  # store plain only if your schema has it
+    emp.pin_type = "custom"
+    emp.pin_set_at = datetime.utcnow()
+    db.commit()
+
+    token = create_access_token({
+        "sub": str(emp.id),
+        "email": emp.email,
+        "role": emp.role.name if emp.role else "employee",
+    }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
+
+    logger.info("PIN changed for employee %s", emp.id)
+    return {
+        "access_token": token,
+        "employee": {
+            "id": emp.id, "name": emp.name, "email": emp.email,
+            "role": emp.role.name if emp.role else "employee",
+            "onboarding_completed": emp.onboarding_completed,
+        }
+    }
