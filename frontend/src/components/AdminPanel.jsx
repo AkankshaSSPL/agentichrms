@@ -356,7 +356,7 @@ export default function AdminPanel({ token: tokenProp }) {
                     <div style={{ flex: 1 }}>
                         {loading ? (
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 13 }}>
-                                <span style={{ marginRight: 10 }}>⏳</span> Loading employees...
+                                <span style={{ marginRight: 10 }}></span> Loading employees...
                             </div>
                         ) : (
                             <div style={{ background: 'var(--bg-card)', borderRadius: 14, border: '1px solid var(--border)', overflow: 'hidden' }}>

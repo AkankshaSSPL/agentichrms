@@ -1,7 +1,7 @@
-# Root config.py – re‑export settings from backend.core.config
+# Root config.py – re-export settings from backend.core.config
 from backend.core.config import settings
 
-# Re‑export variables that tools, ingest script, and agent expect
+# Re-export variables that tools, ingest script, and agent expect
 DOCS_DIR = settings.DOCS_DIR
 CHROMA_DIR = settings.CHROMA_DIR
 CHROMA_COLLECTION_NAME = "hr_policies"
@@ -21,4 +21,5 @@ EMAIL_PORT = settings.EMAIL_PORT
 
 HR_EMAIL = getattr(settings, "HR_EMAIL", "akulkarni@sveltoz.com")
 
-SECRET_KEY = 'WvRVUUNfrXG1mBesBboQKylrFJnoRdcu9RI7aldfmdW'
+# SECRET_KEY is read from settings — never hardcode here
+SECRET_KEY = settings.SECRET_KEY

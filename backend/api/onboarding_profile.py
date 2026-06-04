@@ -21,6 +21,7 @@ from pypdf import PdfReader
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, Notification, Role, ApprovalRequest
 from backend.core.security import verify_token
+from backend.enums import RoleName, ApprovalStatus
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -377,7 +378,7 @@ async def onboarding_chat_for_hr(
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "Missing token")
     caller_payload = verify_token(auth.split(" ")[1])
-    if not caller_payload or caller_payload.get("role") not in ("hr", "admin"):
+    if not caller_payload or caller_payload.get("role") not in (RoleName.HR, RoleName.ADMIN):
         raise HTTPException(403, "Only HR or admin can fill profiles for other employees")
 
     # Get target employee
@@ -594,7 +595,7 @@ def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Sess
     # If employee_id provided, caller must be hr or admin
     if employee_id:
         caller_role = payload.get("role", "employee")
-        if caller_role not in ("hr", "admin"):
+        if caller_role not in (RoleName.HR, RoleName.ADMIN):
             raise HTTPException(403, "Only HR or admin can view other employees' profiles")
         emp = db.query(Employee).filter(Employee.id == employee_id).first()
         if not emp:
@@ -621,10 +622,10 @@ class ApproveRejectPayload(BaseModel):
 def get_pending_approval_requests(request: Request, db: Session = Depends(get_db)):
     """HR/admin: get all pending profile change requests."""
     employee = get_current_employee(request, db)
-    if employee.role.name not in ["hr", "admin"]:
+    if employee.role.name not in [RoleName.HR, RoleName.ADMIN]:
         raise HTTPException(403, "Only HR/Admin can view pending requests")
 
-    requests = db.query(ApprovalRequest).filter(ApprovalRequest.status == "pending").order_by(ApprovalRequest.created_at.desc()).all()
+    requests = db.query(ApprovalRequest).filter(ApprovalRequest.status == ApprovalStatus.PENDING).order_by(ApprovalRequest.created_at.desc()).all()
     result = []
     for req in requests:
         emp = db.query(Employee).get(req.employee_id)
@@ -650,7 +651,7 @@ def approve_approval_request(
     db: Session = Depends(get_db)
 ):
     employee = get_current_employee(request, db)
-    if employee.role.name not in ["hr", "admin"]:
+    if employee.role.name not in [RoleName.HR, RoleName.ADMIN]:
         raise HTTPException(403, "Only HR/Admin can approve requests")
 
     approval_req = db.query(ApprovalRequest).filter(ApprovalRequest.id == request_id).first()
@@ -688,7 +689,7 @@ def approve_approval_request(
         else:
             setattr(target_emp, field, new_val)
 
-    approval_req.status = "approved"
+    approval_req.status = ApprovalStatus.APPROVED
     approval_req.resolved_at = datetime.utcnow()
     approval_req.resolved_by_employee_id = employee.id
     approval_req.reason = payload.notes
@@ -713,7 +714,7 @@ def reject_approval_request(
     db: Session = Depends(get_db)
 ):
     employee = get_current_employee(request, db)
-    if employee.role.name not in ["hr", "admin"]:
+    if employee.role.name not in [RoleName.HR, RoleName.ADMIN]:
         raise HTTPException(403, "Only HR/Admin can reject requests")
 
     approval_req = db.query(ApprovalRequest).filter(ApprovalRequest.id == request_id).first()
@@ -722,7 +723,7 @@ def reject_approval_request(
     if approval_req.status != "pending":
         raise HTTPException(400, f"Request already {approval_req.status}")
 
-    approval_req.status = "rejected"
+    approval_req.status = ApprovalStatus.REJECTED
     approval_req.resolved_at = datetime.utcnow()
     approval_req.resolved_by_employee_id = employee.id
     approval_req.reason = payload.notes
@@ -754,7 +755,7 @@ def hr_direct_update(
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "Missing token")
     caller_payload = verify_token(auth.split(" ")[1])
-    if not caller_payload or caller_payload.get("role") not in ("hr", "admin"):
+    if not caller_payload or caller_payload.get("role") not in (RoleName.HR, RoleName.ADMIN):
         raise HTTPException(403, "Only HR or admin can update profiles")
 
     target = db.query(Employee).filter(Employee.id == employee_id).first()

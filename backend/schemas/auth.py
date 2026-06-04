@@ -1,7 +1,9 @@
 from pydantic import BaseModel
 from typing import Optional
 
-# Request models
+
+# ── Requests ──────────────────────────────────────────────────────────────────
+
 class FaceLoginRequest(BaseModel):
     image_base64: str
 
@@ -17,8 +19,17 @@ class VerifyAndChangePinRequest(BaseModel):
 class DetectFacesRequest(BaseModel):
     image_base64: str
 
-# Response model
+
+# ── Responses ─────────────────────────────────────────────────────────────────
+
 class TokenResponse(BaseModel):
+    """
+    Safe auth response — never include pin_hash, permanent_pin_hash,
+    password_hash, or any credential fields in the employee dict.
+    """
     access_token: str
-    token_type: str
-    employee: dict
+    token_type: str = "bearer"
+    employee_id: int
+    name: str
+    email: str
+    role: str

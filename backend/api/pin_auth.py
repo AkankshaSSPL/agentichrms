@@ -15,6 +15,8 @@ from backend.core.config import settings
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, PINVerification
 from backend.services.twilio_service import generate_pin, send_pin_sms
+from backend.core.security import get_password_hash
+from backend.enums import EmployeeStatus, PinType, RoleName
 from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest
 
 logger = logging.getLogger(__name__)
@@ -124,13 +126,13 @@ def request_pin(
 
     pin_record = PINVerification(
         employee_id=employee.id,
-        pin_code=pin,
+        pin_hash=get_password_hash(pin),
         phone_number=employee.phone,
         expires_at=expires_at,
         verified=False,
         attempts=0,
         max_attempts=settings.PIN_MAX_ATTEMPTS,
-        pin_type="login",
+        pin_type=PinType.LOGIN,
     )
     db.add(pin_record)
     db.commit()
@@ -195,14 +197,14 @@ def login_with_pin(payload: LoginWithPinRequest, db: Session = Depends(get_db)):
     token = create_access_token({
         "sub": str(emp.id),
         "email": emp.email,
-        "role": emp.role.name if emp.role else "employee",
+        "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
     }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
 
     return {
         "access_token": token,
         "employee": {
             "id": emp.id, "name": emp.name, "email": emp.email,
-            "role": emp.role.name if emp.role else "employee",
+            "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
             "onboarding_completed": emp.onboarding_completed,
         }
     }
@@ -239,17 +241,16 @@ def verify_and_change_pin(payload: VerifyAndChangePinRequest, db: Session = Depe
     if len(payload.new_pin) != settings.PIN_LENGTH:
         raise HTTPException(400, f"New PIN must be {settings.PIN_LENGTH} digits.")
 
-    # Set new PIN
+    # Set new PIN — hash only, never store plaintext
     emp.permanent_pin_hash = get_password_hash(payload.new_pin)
-    emp.permanent_pin = payload.new_pin  # store plain only if your schema has it
-    emp.pin_type = "custom"
+    emp.pin_type = PinType.CUSTOM
     emp.pin_set_at = datetime.utcnow()
     db.commit()
 
     token = create_access_token({
         "sub": str(emp.id),
         "email": emp.email,
-        "role": emp.role.name if emp.role else "employee",
+        "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
     }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
 
     logger.info("PIN changed for employee %s", emp.id)
@@ -257,7 +258,7 @@ def verify_and_change_pin(payload: VerifyAndChangePinRequest, db: Session = Depe
         "access_token": token,
         "employee": {
             "id": emp.id, "name": emp.name, "email": emp.email,
-            "role": emp.role.name if emp.role else "employee",
+            "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
             "onboarding_completed": emp.onboarding_completed,
         }
     }

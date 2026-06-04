@@ -23,6 +23,7 @@ from backend.database.models import Employee, FaceLoginAttempt, PINVerification
 from backend.services.face_service import face_service
 from backend.services.twilio_service import generate_pin, send_pin_sms
 from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest, DetectFacesRequest
+from backend.enums import EmployeeStatus, RoleName
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def face_login(
         db.query(Employee)
         .filter(
             Employee.email == username,
-            Employee.status == "active",
+            Employee.status == EmployeeStatus.ACTIVE,
             Employee.deleted_at.is_(None),
         )
         .first()
@@ -94,7 +95,7 @@ def face_login(
     logger.info("Face login: employee %s (%s) distance=%.3f", employee.id, employee.name, distance)
 
     # Get role name — fall back to 'employee' if role not set
-    role_name = employee.role.name if (employee.role_id and employee.role) else "employee"
+    role_name = employee.role.name if (employee.role_id and employee.role) else RoleName.EMPLOYEE
 
     token = create_access_token({
         "sub": str(employee.id),
@@ -107,18 +108,11 @@ def face_login(
     return TokenResponse(
         access_token=token,
         token_type="bearer",
-        employee={
-            "id": employee.id,
-            "name": employee.name,
-            "email": employee.email,
-            "department": employee.department,
-            "designation": employee.designation,
-            "role": role_name,
-        },
+        employee_id=employee.id,
+        name=employee.name,
+        email=employee.email,
+        role=role_name,
     )
-
-
-@router.post("/login-with-pin", response_model=TokenResponse)
 def login_with_permanent_pin(
     payload: PermanentPinLoginRequest,
     db: Session = Depends(get_db),
@@ -129,7 +123,7 @@ def login_with_permanent_pin(
     # Try email match (case‑insensitive)
     employee = db.query(Employee).filter(
         func.lower(Employee.email) == identifier,
-        Employee.status == "active",
+        Employee.status == EmployeeStatus.ACTIVE,
         Employee.deleted_at.is_(None)
     ).first()
 
@@ -138,7 +132,7 @@ def login_with_permanent_pin(
         phone_clean = ''.join(c for c in identifier if c.isdigit())
         employee = db.query(Employee).filter(
             Employee.phone.like(f"%{phone_clean[-10:]}"),
-            Employee.status == "active",
+            Employee.status == EmployeeStatus.ACTIVE,
             Employee.deleted_at.is_(None)
         ).first()
 
@@ -156,7 +150,7 @@ def login_with_permanent_pin(
         raise HTTPException(401, "Incorrect PIN.")
 
     # Safe role retrieval
-    role_name = employee.role.name if employee.role else "employee"
+    role_name = employee.role.name if employee.role else RoleName.EMPLOYEE
 
     token = create_access_token({
         "sub": str(employee.id),
@@ -171,14 +165,10 @@ def login_with_permanent_pin(
     return TokenResponse(
         access_token=token,
         token_type="bearer",
-        employee={
-            "id": employee.id,
-            "name": employee.name,
-            "email": employee.email,
-            "department": employee.department,
-            "designation": employee.designation,
-            "role": role_name,
-        },
+        employee_id=employee.id,
+        name=employee.name,
+        email=employee.email,
+        role=role_name,
     )
 
 # ── POST /api/auth/detect-faces (for registration validation) ─────────────────

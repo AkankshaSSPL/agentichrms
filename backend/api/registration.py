@@ -16,6 +16,7 @@ from typing import Optional, List
 
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, Role, PINVerification
+from backend.enums import RoleName, EmployeeStatus, PinType
 from backend.core.config import settings
 from backend.core.security import get_password_hash
 from backend.services.face_service import face_service
@@ -84,9 +85,9 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
         raise HTTPException(400, "This phone number is already registered. Please use a different phone number.")
 
     # 2. Default role
-    default_role = db.query(Role).filter(Role.name == "employee").first()
+    default_role = db.query(Role).filter(Role.name == RoleName.EMPLOYEE).first()
     if not default_role:
-        default_role = Role(name="employee", description="Basic employee access")
+        default_role = Role(name=RoleName.EMPLOYEE, description="Basic employee access")
         db.add(default_role)
         db.commit()
         db.refresh(default_role)
@@ -100,9 +101,9 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
         department=payload.department,
         designation=payload.designation,
         role_id=default_role.id,
-        status="active",
+        status=EmployeeStatus.ACTIVE,
         permanent_pin_hash=get_password_hash(pin),
-        pin_type="sms",
+        pin_type=PinType.SMS,
         created_at=datetime.utcnow(),
     )
     db.add(new_employee)
@@ -140,13 +141,13 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
     expires_at = datetime.utcnow() + timedelta(minutes=settings.PIN_EXPIRY_MINUTES)
     pin_record = PINVerification(
         employee_id=new_employee.id,
-        pin_code=pin,
+        pin_hash=get_password_hash(pin),
         phone_number=new_employee.phone,
         expires_at=expires_at,
         verified=False,
         attempts=0,
         max_attempts=settings.PIN_MAX_ATTEMPTS,
-        pin_type="registration",
+        pin_type=PinType.REGISTRATION,
     )
     db.add(pin_record)
     db.commit()
@@ -161,7 +162,7 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
         "message": "Registration successful!" if sms_result["success"] else "Registered! SMS could not be sent — use the PIN shown below to log in.",
         "employee_id": new_employee.id,
         "email": new_employee.email,
-        "role": "employee",
+        "role": RoleName.EMPLOYEE,
         "pin_record_id": pin_record.id,
         "masked_phone": _mask(new_employee.phone),
         "sms_sent": sms_result["success"],

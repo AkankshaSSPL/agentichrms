@@ -1,84 +1,69 @@
-import os
+"""
+DEPRECATED — email_service.py
+
+This module is kept for backward compatibility only.
+All new code should use:
+
+    from backend.core.email import send_email
+    from backend.core.render_template import render_template
+
+The functions below are thin shims that delegate to the canonical
+send_email() in backend.core.email. They will be removed in a future phase.
+"""
+
 import logging
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import smtplib
+from backend.core.render_template import render_template
+from backend.core.email import send_email as _send_email
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 def send_pin_email(to_email: str, employee_name: str, pin: str) -> dict:
     """
-    Send the 6-digit PIN via Gmail SMTP using app password.
+    Send onboarding PIN email using the onboarding.html template.
+
+    .. deprecated::
+        Call send_email() + render_template("onboarding.html", ...) directly.
     """
-    use_smtp = os.getenv("EMAIL_HOST") and os.getenv("EMAIL_PASS")
-
-    if not use_smtp:
-        logger.info(f"📧 [EMAIL SIMULATION] PIN for {to_email}: {pin}")
-        return {"success": True, "error": None}
-
+    logger.warning(
+        "send_pin_email() is deprecated. "
+        "Use send_email(html=render_template('onboarding.html', ...)) instead."
+    )
     try:
-        sender = os.getenv("EMAIL_USER")
-        password = os.getenv("EMAIL_PASS")
-        host = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-        port = int(os.getenv("EMAIL_PORT", 587))
-
-        subject = "Your HRMS Login PIN"
-        body = f"""
-Hello {employee_name},
-
-Your permanent HRMS login PIN is: {pin}
-
-You can use this PIN to log in, or change it to a custom PIN after first login.
-
-Keep this PIN safe. Do not share it.
-
-Regards,
-HRMS Team
-"""
-        msg = MIMEMultipart()
-        msg["From"] = sender
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-
-        with smtplib.SMTP(host, port) as server:
-            server.starttls()
-            server.login(sender, password)
-            server.sendmail(sender, to_email, msg.as_string())
-
-        logger.info(f"PIN email sent to {to_email}")
+        html = render_template(
+            "onboarding.html",
+            employee_name=employee_name,
+            employee_email=to_email,
+            pin=pin,
+            hr_email=getattr(settings, "HR_EMAIL", None),
+        )
+        _send_email(
+            to=to_email,
+            subject="Welcome to HRMS — Your Login Credentials",
+            html=html,
+            triggered_by="onboarding",
+        )
         return {"success": True, "error": None}
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        logger.error(f"send_pin_email failed: {e}")
         return {"success": False, "error": str(e)}
 
 
-# ✅ NEW: generic send_email for leave notifications and other purposes
 def send_email(to_email: str, subject: str, body: str) -> dict:
-    """Send a plain text email using the configured SMTP settings."""
-    use_smtp = os.getenv("EMAIL_HOST") and os.getenv("EMAIL_PASS")
-    if not use_smtp:
-        logger.info(f"[EMAIL SIMULATION] To: {to_email}, Subject: {subject}\nBody:\n{body}")
-        return {"success": True, "error": None}
+    """
+    Send a plain-text email.
+
+    .. deprecated::
+        Call backend.core.email.send_email() directly.
+    """
+    logger.warning(
+        "email_service.send_email() is deprecated. "
+        "Use backend.core.email.send_email() directly."
+    )
     try:
-        sender = os.getenv("EMAIL_USER")
-        password = os.getenv("EMAIL_PASS")
-        host = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-        port = int(os.getenv("EMAIL_PORT", 587))
-
-        msg = MIMEMultipart()
-        msg["From"] = sender
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-
-        with smtplib.SMTP(host, port) as server:
-            server.starttls()
-            server.login(sender, password)
-            server.sendmail(sender, to_email, msg.as_string())
-
-        logger.info(f"Email sent to {to_email}: {subject}")
+        _send_email(to=to_email, subject=subject, body=body)
         return {"success": True, "error": None}
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        logger.error(f"send_email failed: {e}")
         return {"success": False, "error": str(e)}

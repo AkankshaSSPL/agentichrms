@@ -17,9 +17,20 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://hrms_user:agentichrms@localhost/agentic_hrms"
 
     # ── Security & JWT ─────────────────────────────────────────────────────────
-    JWT_SECRET: str = "change-this-in-production"
+    # No default — app will refuse to start if JWT_SECRET is missing from .env
+    JWT_SECRET: str
     ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 24
+
+    @field_validator("JWT_SECRET")
+    @classmethod
+    def jwt_secret_must_be_set(cls, v: str) -> str:
+        if not v or len(v) < 32:
+            raise ValueError(
+                "JWT_SECRET must be set in your .env file and be at least 32 characters. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        return v
 
     @property
     def SECRET_KEY(self) -> str:
@@ -117,7 +128,7 @@ class Settings(BaseSettings):
         extra = "allow"
 
 
-# Singleton instance
+# Singleton instance — will raise ValidationError at startup if JWT_SECRET missing
 settings = Settings()
 
 

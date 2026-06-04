@@ -7,6 +7,7 @@ Normalised RBAC with roles, permissions, role_permissions
 from sqlalchemy import Column, Integer, String, DateTime, func, Boolean, ForeignKey, Text, Date, Float, LargeBinary
 from sqlalchemy.orm import relationship
 from backend.database.session import Base
+from backend.enums import LeaveStatus, ApprovalStatus, EmployeeStatus, EmailLogStatus, PinType, RoleName
 from datetime import datetime
 
 
@@ -62,13 +63,13 @@ class Employee(BaseModel):
     designation = Column(String)
     manager_id = Column(Integer, ForeignKey('employees.id'), nullable=True)
     join_date = Column(DateTime)
-    status = Column(String, default='active')
+    status = Column(String, default=EmployeeStatus.ACTIVE)
     employee_code = Column(String, unique=True, nullable=True)
 
     # PIN and Face columns
-    permanent_pin = Column(String(128), nullable=True)
+    # permanent_pin removed — never store plaintext PINs
     permanent_pin_hash = Column(String(128), nullable=True)
-    pin_type = Column(String(20), default='default')
+    pin_type = Column(String(20), default=PinType.DEFAULT)
     pin_set_at = Column(DateTime, nullable=True)
 
     face_enrolled = Column(Boolean, default=False)
@@ -117,7 +118,7 @@ class Employee(BaseModel):
     leaves = relationship("Leave", back_populates="employee")
     balances = relationship("LeaveBalance", back_populates="employee")
     notifications = relationship("Notification", back_populates="employee", cascade="all, delete-orphan")
-    
+
     # Approval requests where this employee is the target
     approval_requests = relationship("ApprovalRequest", foreign_keys="ApprovalRequest.employee_id", back_populates="employee")
     # Approval requests made by this employee (as requester)
@@ -134,7 +135,7 @@ class Leave(BaseModel):
     leave_type = Column(String, nullable=False)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
-    status = Column(String, default='Pending')
+    status = Column(String, default=LeaveStatus.PENDING)
     reason = Column(Text)
     rejection_reason = Column(Text, nullable=True)
     employee = relationship("Employee", back_populates="leaves")
@@ -156,7 +157,7 @@ class User(BaseModel):
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default='employee')
+    role = Column(String, default=RoleName.EMPLOYEE)
     is_active = Column(Boolean, default=True)
 
     is_verified = Column(Boolean, default=False)
@@ -225,13 +226,13 @@ class PINVerification(BaseModel):
     __tablename__ = "pin_verifications"
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
-    pin_code = Column(String(6), nullable=False)
+    pin_hash = Column(String(128), nullable=False)   # bcrypt hash — never store plaintext
     phone_number = Column(String(20), nullable=False)
     expires_at = Column(DateTime, nullable=False)
     verified = Column(Boolean, default=False)
     attempts = Column(Integer, default=0)
     max_attempts = Column(Integer, default=3)
-    pin_type = Column(String(20), default='login')
+    pin_type = Column(String(20), default=PinType.LOGIN)
     employee = relationship("Employee", back_populates="pin_verifications")
 
 
@@ -243,7 +244,7 @@ class EmailLog(Base):
     recipient = Column(String(255), nullable=False)
     subject = Column(String(500), nullable=False)
     body_preview = Column(Text, nullable=True)
-    status = Column(String(20), default="sent")
+    status = Column(String(20), default=EmailLogStatus.SENT)
     error = Column(Text, nullable=True)
     sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     triggered_by = Column(String(100), nullable=True)
@@ -261,7 +262,7 @@ class Notification(BaseModel):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Approval Workflow Models (No hardcoding)
+# Approval Workflow Models
 # ──────────────────────────────────────────────────────────────────────────────
 class ApprovalRequest(Base):
     __tablename__ = "approval_requests"
@@ -272,7 +273,7 @@ class ApprovalRequest(Base):
     field_name = Column(String(100), nullable=False)
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=False)
-    status = Column(String(20), default='pending')  # pending, approved, rejected
+    status = Column(String(20), default=ApprovalStatus.PENDING)
     reason = Column(Text, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     resolved_by_employee_id = Column(Integer, ForeignKey('employees.id'), nullable=True)

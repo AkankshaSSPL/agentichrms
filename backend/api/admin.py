@@ -11,7 +11,8 @@ from datetime import datetime
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, Role
 from backend.core.security import require_role
-from backend.core.email import send_email   # re-use existing email helper
+from backend.core.email import send_email
+from backend.enums import RoleName
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -57,13 +58,13 @@ class EmployeeRoleResponse(BaseModel):
 
 @router.get("/employees", response_model=List[EmployeeRoleResponse])
 def list_employees(
-    payload: dict = Depends(require_role(["admin", "hr"])),   # HR can read, not modify
+    payload: dict = Depends(require_role([RoleName.ADMIN, RoleName.HR])),
     db: Session = Depends(get_db),
 ):
     employees = db.query(Employee).all()
     result = []
     for emp in employees:
-        role_name = emp.role.name if emp.role else "employee"
+        role_name = emp.role.name if emp.role else RoleName.EMPLOYEE
         result.append({
             "id": emp.id,
             "name": emp.name,
@@ -77,7 +78,7 @@ def list_employees(
 @router.put("/role")
 def update_user_role(
     req: RoleUpdateRequest,
-    payload: dict = Depends(require_role(["admin"])),
+    payload: dict = Depends(require_role([RoleName.ADMIN])),
     db: Session = Depends(get_db),
 ):
     if req.employee_id == int(payload.get("sub")):
@@ -87,7 +88,13 @@ def update_user_role(
     if not employee:
         raise HTTPException(404, "Employee not found")
 
-    role = db.query(Role).filter(Role.name == req.role_name).first()
+    # Validate the requested role name is a known role
+    try:
+        requested_role = RoleName(req.role_name)
+    except ValueError:
+        raise HTTPException(400, f"Role '{req.role_name}' does not exist. Valid roles: {[r.value for r in RoleName]}")
+
+    role = db.query(Role).filter(Role.name == requested_role).first()
     if not role:
         raise HTTPException(400, f"Role '{req.role_name}' does not exist.")
 
@@ -95,31 +102,28 @@ def update_user_role(
     db.commit()
 
     # ── Notify the employee by email ──────────────────────────────────────────
-    role_labels = {"admin": "Administrator", "hr": "HR Manager", "employee": "Employee"}
-    role_label = role_labels.get(req.role_name, req.role_name.capitalize())
     try:
         send_email(
             to=employee.email,
-            subject=f"Your role has been updated — {role_label}",
+            subject=f"Your role has been updated — {requested_role.label}",
             body=(
                 f"Hi {employee.name},\n\n"
                 f"Your role in the HRMS system has been updated by an administrator.\n\n"
-                f"New Role: {role_label}\n\n"
+                f"New Role: {requested_role.label}\n\n"
                 f"If you have any questions about this change, please reach out to your HR team.\n\n"
                 f"Best regards,\nHRMS System"
             ),
         )
     except Exception as e:
-        # Email failure should not block the API response
-        print(f"⚠️  Role-change email failed for {employee.email}: {e}")
+        print(f"Role-change email failed for {employee.email}: {e}")
 
-    return {"message": f"Role for {employee.name} updated to {req.role_name}"}
+    return {"message": f"Role for {employee.name} updated to {requested_role.value}"}
 
 
 @router.delete("/employees/{employee_id}")
 def delete_employee(
     employee_id: int,
-    payload: dict = Depends(require_role(["admin"])),
+    payload: dict = Depends(require_role([RoleName.ADMIN])),
     db: Session = Depends(get_db),
 ):
     if employee_id == int(payload.get("sub")):
@@ -129,7 +133,6 @@ def delete_employee(
     if not employee:
         raise HTTPException(404, "Employee not found")
 
-    # Hard delete – remove completely
     db.delete(employee)
     db.commit()
 
