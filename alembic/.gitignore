@@ -1,0 +1,61 @@
+# ======================
+# Python basics
+# ======================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ======================
+# Virtual environment
+# ======================
+venv/
+env/
+.venv/
+
+# ======================
+# Environment variables (IMPORTANT for Twilio, secrets)
+# ======================
+.env
+
+# ======================
+# ML / Face Recognition files
+# ======================
+*.npy
+*.pkl
+*.h5
+*.model
+
+# ======================
+# Datasets (images/videos)
+# ======================
+dataset_raw/
+dataset_cropped/
+data/
+*.jpg
+*.png
+*.jpeg
+*.mp4
+
+# ======================
+# Build / logs / outputs
+# ======================
+*.log
+*.txt
+
+# ======================
+# OS files
+# ======================
+.DS_Store
+Thumbs.db
+
+# ======================
+# IDE / Editor files
+# ======================
+.vscode/
+.idea/
+
+# ======================
+# Wheel / packages
+# ======================
+*.whl
