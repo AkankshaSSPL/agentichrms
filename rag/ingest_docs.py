@@ -8,7 +8,13 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import chromadb
 from sentence_transformers import SentenceTransformer
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from config import DOCS_DIR, CHROMA_DIR, LOCAL_EMBEDDING_MODEL, CHROMA_COLLECTION_NAME
+# Single settings source (root config.py shim removed in Phase 0.6).
+from backend.core.config import settings
+
+DOCS_DIR = settings.DOCS_DIR
+CHROMA_DIR = settings.CHROMA_DIR
+LOCAL_EMBEDDING_MODEL = settings.EMBEDDING_MODEL
+CHROMA_COLLECTION_NAME = settings.CHROMA_COLLECTION_NAME
 
 def ingest_documents():
     print(f"Loading embedding model: {LOCAL_EMBEDDING_MODEL}")
