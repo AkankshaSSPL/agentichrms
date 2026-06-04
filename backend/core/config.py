@@ -14,7 +14,8 @@ import json
 class Settings(BaseSettings):
 
     # ── Database ───────────────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql://hrms_user:agentichrms@localhost/agentic_hrms"
+    # No default (RULES R8) — provide via .env. App refuses to boot if missing.
+    DATABASE_URL: str
 
     # ── Security & JWT ─────────────────────────────────────────────────────────
     # No default — app will refuse to start if JWT_SECRET is missing from .env
