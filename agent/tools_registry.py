@@ -61,8 +61,11 @@ def get_db():
         with get_db() as db:
             emp = db.query(Employee)...
     """
-    with get_db() as db:
+    db = SessionLocal()
+    try:
         yield db
+    finally:
+        db.close()
 
 
 

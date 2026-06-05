@@ -19,6 +19,7 @@ from backend.database.models import Employee
 from backend.enums import ChatRole
 from backend.core.config import settings
 from backend.repositories.onboarding_repository import OnboardingRepository
+from backend.repositories.approval_repository import ApprovalRepository
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,6 @@ async def _call_openai(messages: list, max_tokens: int = 1024) -> str:
 
 def _detect_name_change(message: str, history: list, current_name: str) -> Optional[str]:
     """Extract a new name from HR message if present. Returns None if no change."""
-    # Pattern 1: "change/update/rename name to X"
     m1 = re.search(
         r"(?:change|update|rename|set)\s+(?:the\s+)?name\s+(?:to|as)\s+([A-Z][a-zA-Z ]{1,40}?)(?:\.|,|$|\n)",
         message, re.IGNORECASE
@@ -174,7 +174,6 @@ def _detect_name_change(message: str, history: list, current_name: str) -> Optio
         if 2 <= len(candidate) <= 50:
             return candidate
 
-    # Pattern 2: "new name: X"
     m2 = re.search(
         r"new\s+name\s*[:\s]+([A-Z][a-zA-Z ]{1,40}?)(?:\.|,|$|\n)",
         message, re.IGNORECASE
@@ -184,7 +183,6 @@ def _detect_name_change(message: str, history: list, current_name: str) -> Optio
         if 2 <= len(candidate) <= 50:
             return candidate
 
-    # Pattern 3: plain name reply after bot asked
     if history:
         last_bot = next(
             (h["content"] for h in reversed(history) if h.get("role") == ChatRole.ASSISTANT), ""
@@ -194,7 +192,6 @@ def _detect_name_change(message: str, history: list, current_name: str) -> Optio
             if re.match(r"^[A-Z][a-zA-Z ]{1,40}$", candidate):
                 return candidate
 
-    stop_words = {"name", "the", "their", "her", "his", "to", "please", "update", "change"}
     return None
 
 
@@ -232,15 +229,67 @@ class OnboardingService:
             **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in profile.items()},
         }
 
-    def save_profile(self, employee: Employee, fields: dict) -> dict:
-        allowed = {k: v for k, v in fields.items() if k in EMPLOYEE_EDITABLE_FIELDS and v is not None}
-        if not allowed:
-            return {"message": "No editable fields provided", "onboarding_completed": employee.onboarding_completed}
-        apply_fields(employee, allowed, self.db)
-        employee.onboarding_completed = True
-        employee.profile_completed = True
-        self.db.commit()
-        return {"message": "Profile saved", "onboarding_completed": True}
+    def save_profile(self, employee: Employee, fields: dict, requested_by_id: Optional[int] = None) -> dict:
+        approval_repo = ApprovalRepository(self.db)
+        requester_id = requested_by_id or employee.id
+
+        directly_saved = []
+        pending_approval = []
+        skipped = []
+
+        for field, value in fields.items():
+            if value is None:
+                continue
+
+            if field in EMPLOYEE_EDITABLE_FIELDS:
+                apply_fields(employee, {field: value}, self.db)
+                directly_saved.append(field)
+
+            elif field in HR_APPROVAL_REQUIRED:
+                old_value = getattr(employee, field, None)
+                if str(old_value or "").strip() == str(value).strip():
+                    skipped.append(field)
+                    continue
+                apr = approval_repo.create_request(
+                    employee_id=employee.id,
+                    requested_by_employee_id=requester_id,
+                    field_name=field,
+                    old_value=old_value,
+                    new_value=value,
+                )
+                approval_repo.save_notification(
+                    employee.id,
+                    title="Profile Change Requested",
+                    message=(
+                        f"Your request to update '{HR_APPROVAL_REQUIRED[field]}' "
+                        f"to '{value}' has been submitted to HR for approval."
+                    ),
+                )
+                pending_approval.append({
+                    "field": field,
+                    "label": HR_APPROVAL_REQUIRED[field],
+                    "request_id": apr.id,
+                })
+            else:
+                skipped.append(field)
+
+        if directly_saved:
+            all_editable_filled = all(
+                getattr(employee, f, None) not in (None, "")
+                for f in EMPLOYEE_EDITABLE_FIELDS
+            )
+            if all_editable_filled:
+                employee.onboarding_completed = True
+                employee.profile_completed = True
+                self.db.commit()
+
+        return {
+            "message": "Profile update processed.",
+            "directly_saved": directly_saved,
+            "pending_approval": pending_approval,
+            "skipped": skipped,
+            "onboarding_completed": employee.onboarding_completed,
+        }
 
     def hr_direct_update(self, employee: Employee, fields: dict) -> dict:
         date_fields = {"join_date", "date_of_birth"}
@@ -365,7 +414,6 @@ RULES:
         answer = await _call_openai(messages, max_tokens=1024)
         answer, profile_data, profile_complete = _parse_tags(answer, employee, self.db)
 
-        # Name change detection (HR only)
         name_changed = False
         new_name = _detect_name_change(message, history, employee.name)
         stop_words = {"name", "the", "their", "her", "his", "to", "please", "update", "change"}
@@ -391,9 +439,47 @@ RULES:
             "new_name": new_name,
         }
 
+    # ── THE FIXED self_chat METHOD ──────────────────────────────────────────
     async def self_chat(self, employee: Employee, message: str, history: list, resume_text: Optional[str] = None) -> dict:
+        # Step 1: Pre-process – detect HR‑approval fields WITHOUT a new value
+        msg_lower = message.lower().strip()
+        hr_fields_map = {v.lower(): k for k, v in HR_APPROVAL_REQUIRED.items()}
+        field_detected = None
+        for field_label, field_key in hr_fields_map.items():
+            if field_label in msg_lower or field_key in msg_lower:
+                field_detected = field_key
+                break
+
+        # If a restricted field is mentioned, check if the message contains a new value
+        if field_detected:
+            # Extract potential new value – look for quoted text or after "to"
+            new_val_match = re.search(r'(?:to|as|:=|->)\s*["\']?([^"\'\n]{2,50})["\']?', message, re.IGNORECASE)
+            if not new_val_match:
+                # Also try catching after the field name like "change name to John"
+                new_val_match = re.search(rf'{field_detected}\s+(?:to|as)\s+([A-Za-z0-9\s]+?)(?:\.|$|\n)', message, re.IGNORECASE)
+            if not new_val_match:
+                # No new value provided – ask for it immediately
+                label = HR_APPROVAL_REQUIRED[field_detected]
+                return {
+                    "reply": f"Sure! What would you like to change your {label} to?",
+                    "profile_complete": False,
+                    "approval_requests": []
+                }
+
+        # Step 2: If we reach here, either the field is not restricted, or a new value was provided.
+        # Build the AI prompt with instruction to emit approval tag.
         system_prompt = self.build_self_edit_prompt(employee)
-        messages = [{"role": ChatRole.SYSTEM, "content": system_prompt}]
+        approval_instruction = (
+            "\n\nAPPROVAL REQUEST HANDLING (CRITICAL):\n"
+            "If the employee asks to change a field that requires HR approval (name, email, department, designation, employment_type, bank_account_number, base_salary) AND they have provided a specific new value, you MUST:\n"
+            "1. Tell them the request has been submitted to HR for approval.\n"
+            "2. Emit this tag at the very END of your reply (never visible to user):\n"
+            '   <APPROVAL_REQUEST>{"field": "field_name", "new_value": "requested value"}</APPROVAL_REQUEST>\n'
+            "Do NOT say 'contact HR' or 'requires approval' – say 'Your request has been submitted to HR'.\n"
+            "If the employee has not provided a new value, ask for it first."
+        )
+
+        messages = [{"role": ChatRole.SYSTEM, "content": system_prompt + approval_instruction}]
         for msg in history:
             if msg.get("role") in (ChatRole.USER, ChatRole.ASSISTANT):
                 messages.append({"role": msg["role"], "content": msg["content"]})
@@ -402,7 +488,7 @@ RULES:
 
         answer = await _call_openai(messages, max_tokens=800)
 
-        # Partial save — enforce whitelist
+        # ── Direct-save fields (employee‑updatable) ──────────────────────────
         for m in re.finditer(r"<PARTIAL_SAVE>(.*?)</PARTIAL_SAVE>", answer, re.DOTALL):
             try:
                 raw = json.loads(m.group(1).strip())
@@ -412,6 +498,76 @@ RULES:
                 logger.warning("Self partial save failed: %s", e)
         answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
 
+        # ── HR approval request tags ─────────────────────────────────────────
+        approval_requests_created = []
+        approval_repo = ApprovalRepository(self.db)
+        for m in re.finditer(r"<APPROVAL_REQUEST>(.*?)</APPROVAL_REQUEST>", answer, re.DOTALL):
+            try:
+                data = json.loads(m.group(1).strip())
+                field = data.get("field")
+                new_value = data.get("new_value")
+                if not field or not new_value or field not in HR_APPROVAL_REQUIRED:
+                    continue
+                old_value = getattr(employee, field, None)
+                if str(old_value or "").strip() == str(new_value).strip():
+                    continue
+                apr = approval_repo.create_request(
+                    employee_id=employee.id,
+                    requested_by_employee_id=employee.id,
+                    field_name=field,
+                    old_value=old_value,
+                    new_value=new_value,
+                )
+                # Notify employee
+                approval_repo.save_notification(
+                    employee.id,
+                    title="Profile Change Requested",
+                    message=(
+                        f"Your request to update '{HR_APPROVAL_REQUIRED[field]}' "
+                        f"to '{new_value}' has been submitted to HR for approval."
+                    ),
+                )
+                # Notify all HR/Admin staff in-app
+                for hr in approval_repo.get_hr_employees():
+                    approval_repo.save_notification(
+                        hr.id,
+                        title="Profile Update Request",
+                        message=(
+                            f"{employee.name} has requested to update "
+                            f"'{HR_APPROVAL_REQUIRED[field]}' to '{new_value}'. "
+                            f"Please review in the Approval Requests section."
+                        ),
+                    )
+                # Email HR
+                try:
+                    from backend.core.email import send_email
+                    from backend.core.config import settings as _settings
+                    hr_email = getattr(_settings, "HR_EMAIL", None)
+                    if hr_email:
+                        send_email(
+                            to=hr_email,
+                            subject=f"Profile Update Request — {employee.name}",
+                            body=(
+                                f"{employee.name} has requested to update "
+                                f"'{HR_APPROVAL_REQUIRED[field]}' to '{new_value}'.\n\n"
+                                f"Please log in to HRMS and review the Approval Requests section."
+                            ),
+                            triggered_by="self_chat_approval",
+                            db=self.db,
+                        )
+                except Exception as e:
+                    logger.warning("HR email notification failed: %s", e)
+
+                approval_requests_created.append({
+                    "field": field,
+                    "label": HR_APPROVAL_REQUIRED[field],
+                    "request_id": apr.id,
+                })
+            except Exception as e:
+                logger.warning("Approval request tag parse failed: %s", e)
+        answer = re.sub(r"<APPROVAL_REQUEST>.*?</APPROVAL_REQUEST>", "", answer, flags=re.DOTALL).strip()
+
+        # ── Profile complete tag ─────────────────────────────────────────────
         profile_data = None
         profile_complete = False
         pm = re.search(r"<PROFILE_DATA>(.*?)</PROFILE_DATA>", answer, re.DOTALL)
@@ -427,7 +583,11 @@ RULES:
             except Exception as e:
                 logger.error("Self profile parse failed: %s", e)
 
-        return {"reply": answer, "profile_complete": profile_complete}
+        return {
+            "reply": answer,
+            "profile_complete": profile_complete,
+            "approval_requests": approval_requests_created,
+        }
 
     @staticmethod
     async def extract_resume_text(pdf_base64: str) -> str:

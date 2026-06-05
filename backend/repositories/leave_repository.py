@@ -34,6 +34,17 @@ class LeaveRepository:
             query = query.filter(Leave.status == status_filter)
         return query.all()
 
+    def get_all_with_employee(
+        self, status_filter: Optional[LeaveStatus] = None
+    ) -> list[tuple[Leave, Employee]]:
+        query = (
+            self.db.query(Leave, Employee)
+            .join(Employee, Leave.employee_id == Employee.id)
+        )
+        if status_filter:
+            query = query.filter(Leave.status == status_filter)
+        return query.order_by(Leave.id.desc()).all()
+
     def get_by_employee(self, employee_id: int) -> list[Leave]:
         return self.db.query(Leave).filter(Leave.employee_id == employee_id).all()
 

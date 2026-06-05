@@ -131,7 +131,11 @@ async def extract_resume_text(request: Request):
 @router.post("/save")
 async def save_profile(payload: ProfileSaveRequest, request: Request, db: Session = Depends(get_db)):
     employee = _get_employee(request, db)
-    return OnboardingService(db).save_profile(employee, payload.dict())
+    return OnboardingService(db).save_profile(
+        employee,
+        payload.dict(exclude_none=True),
+        requested_by_id=employee.id,
+    )
 
 
 @router.get("/employees-pending")
@@ -170,7 +174,7 @@ def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Sess
     return OnboardingService(db).get_profile(emp)
 
 
-# ── Approval endpoints (kept here for backward compat, delegate to ApprovalService) ──
+# ── Approval endpoints (backward compat, delegate to ApprovalService) ─────────
 
 @router.get("/approval-requests/pending")
 def get_pending_approval_requests(request: Request, db: Session = Depends(get_db)):

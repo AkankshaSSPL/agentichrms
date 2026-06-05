@@ -35,23 +35,10 @@ class LeaveService:
 
     def get_pending_leaves(self) -> list[dict]:
         rows = self.repo.get_pending()
-        return [
-            {
-                "id": leave.id,
-                "employee_id": leave.employee_id,
-                "employee_name": emp.name,
-                "employee_email": emp.email,
-                "leave_type": leave.leave_type,
-                "start_date": leave.start_date.strftime("%Y-%m-%d") if leave.start_date else "",
-                "end_date": leave.end_date.strftime("%Y-%m-%d") if leave.end_date else "",
-                "status": leave.status,
-                "reason": leave.reason or "",
-            }
-            for leave, emp in rows
-        ]
+        return [self._serialize(leave, emp) for leave, emp in rows]
 
-    def get_all_leaves(self, status_filter: Optional[str] = None) -> list[Leave]:
-        if status_filter:
+    def get_all_leaves(self, status_filter: Optional[str] = None) -> list[dict]:
+        if status_filter and status_filter.lower() != "all":
             try:
                 status = LeaveStatus(status_filter.capitalize())
             except ValueError:
@@ -61,11 +48,37 @@ class LeaveService:
                     f"Invalid status filter '{status_filter}'. "
                     f"Valid values: {[s.value for s in LeaveStatus]}"
                 )
-            return self.repo.get_all(status_filter=status)
-        return self.repo.get_all()
+            rows = self.repo.get_all_with_employee(status_filter=status)
+        else:
+            rows = self.repo.get_all_with_employee()
+        return [self._serialize(leave, emp) for leave, emp in rows]
 
-    def get_leaves_by_employee(self, employee_id: int) -> list[Leave]:
-        return self.repo.get_by_employee(employee_id)
+    def get_leaves_by_employee(self, employee_id: int) -> list[dict]:
+        leaves = self.repo.get_by_employee(employee_id)
+        emp = self.repo.get_employee(employee_id)
+        return [self._serialize(leave, emp) for leave in leaves]
+
+    # ── Serializer ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _serialize(leave, emp) -> dict:
+        """Single canonical shape returned by every list endpoint."""
+        start = leave.start_date
+        end   = leave.end_date
+        days  = ((end - start).days + 1) if start and end else 0
+        return {
+            "id": leave.id,
+            "employee_id": leave.employee_id,
+            "employee_name": emp.name if emp else "",
+            "employee_email": emp.email if emp else "",
+            "leave_type": leave.leave_type,
+            "start_date": start.strftime("%Y-%m-%d") if start else "",
+            "end_date":   end.strftime("%Y-%m-%d")   if end   else "",
+            "days": days,
+            "status": leave.status.value if hasattr(leave.status, "value") else leave.status,
+            "reason": leave.reason or "",
+            "rejection_reason": leave.rejection_reason or "",
+        }
 
     # ── Update status (approve or reject) ────────────────────────────────────
 
@@ -148,3 +161,4 @@ class LeaveService:
                 )
         except Exception as e:
             logger.warning("Rejection notification failed: %s", e)
+            

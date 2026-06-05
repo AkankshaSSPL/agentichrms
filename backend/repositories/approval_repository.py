@@ -1,12 +1,10 @@
 """
 Approval Repository — database operations only.
 """
-
 import logging
 from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-
 from backend.database.models import ApprovalRequest, Employee, Notification
 from backend.enums import ApprovalStatus
 
@@ -38,6 +36,47 @@ class ApprovalRepository:
     def get_employee(self, employee_id: int) -> Optional[Employee]:
         return self.db.query(Employee).filter(Employee.id == employee_id).first()
 
+    def create_request(
+        self,
+        employee_id: int,
+        requested_by_employee_id: int,
+        field_name: str,
+        old_value: Optional[str],
+        new_value: str,
+    ) -> ApprovalRequest:
+        """Create a new pending approval request for a field change."""
+        # Cancel any existing pending request for the same employee + field
+        existing = (
+            self.db.query(ApprovalRequest)
+            .filter(
+                ApprovalRequest.employee_id == employee_id,
+                ApprovalRequest.field_name == field_name,
+                ApprovalRequest.status == ApprovalStatus.PENDING,
+            )
+            .first()
+        )
+        if existing:
+            existing.status = ApprovalStatus.CANCELLED if hasattr(ApprovalStatus, "CANCELLED") else "cancelled"
+            existing.reason = "Superseded by a newer request"
+            existing.resolved_at = datetime.utcnow()
+
+        apr = ApprovalRequest(
+            employee_id=employee_id,
+            requested_by_employee_id=requested_by_employee_id,
+            field_name=field_name,
+            old_value=str(old_value) if old_value is not None else None,
+            new_value=str(new_value),
+            status=ApprovalStatus.PENDING,
+        )
+        self.db.add(apr)
+        self.db.commit()
+        self.db.refresh(apr)
+        logger.info(
+            "ApprovalRequest created: emp=%d field=%s old=%s new=%s",
+            employee_id, field_name, old_value, new_value,
+        )
+        return apr
+
     def resolve(
         self,
         apr: ApprovalRequest,
@@ -55,7 +94,6 @@ class ApprovalRepository:
     def apply_field_change(self, emp: Employee, field_name: str, new_value: str) -> None:
         if not hasattr(emp, field_name):
             return
-        # Type coercions
         if field_name == "base_salary":
             try:
                 new_value = float(new_value)
@@ -68,6 +106,20 @@ class ApprovalRepository:
                 pass
         setattr(emp, field_name, new_value)
         self.db.commit()
+
+    def get_hr_employees(self) -> list[Employee]:
+        """Return all active HR and Admin employees to notify of pending approvals."""
+        from backend.enums import RoleName
+        from backend.database.models import Role
+        return (
+            self.db.query(Employee)
+            .join(Role, Employee.role_id == Role.id)
+            .filter(
+                Role.name.in_([RoleName.HR, RoleName.ADMIN]),
+                Employee.deleted_at.is_(None),
+            )
+            .all()
+        )
 
     def save_notification(self, employee_id: int, title: str, message: str) -> None:
         try:

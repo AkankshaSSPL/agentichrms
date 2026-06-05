@@ -112,6 +112,22 @@ class ApprovalService:
                 title="Profile Update Approved",
                 message=f"Your request to change {field_label} to '{apr.new_value}' has been approved by HR.",
             )
+            try:
+                from backend.core.email import send_email
+                send_email(
+                    to=emp.email,
+                    subject=f"Profile Update Approved — {field_label}",
+                    body=(
+                        f"Hi {emp.name},\n\n"
+                        f"Your request to update '{field_label}' to '{apr.new_value}' "
+                        f"has been approved by HR. Your profile has been updated.\n\n"
+                        f"Regards,\nHR Team"
+                    ),
+                    triggered_by="approval_approve",
+                    db=self.repo.db,
+                )
+            except Exception as e:
+                logger.warning("Approval email failed: %s", e)
 
         elif action == "reject":
             self.repo.resolve(apr, ApprovalStatus.REJECTED, hr_id, reason)
@@ -123,6 +139,23 @@ class ApprovalService:
                     + (f" Reason: {reason}" if reason else "")
                 ),
             )
+            try:
+                from backend.core.email import send_email
+                send_email(
+                    to=emp.email,
+                    subject=f"Profile Update Not Approved — {field_label}",
+                    body=(
+                        f"Hi {emp.name},\n\n"
+                        f"Your request to update '{field_label}' to '{apr.new_value}' "
+                        f"could not be approved."
+                        + (f"\n\nReason: {reason}" if reason else "")
+                        + f"\n\nIf you have questions, please contact HR.\n\nRegards,\nHR Team"
+                    ),
+                    triggered_by="approval_reject",
+                    db=self.repo.db,
+                )
+            except Exception as e:
+                logger.warning("Rejection email failed: %s", e)
 
         else:
             raise HTTPException(400, f"Unknown action '{action}'. Use 'approve' or 'reject'.")
