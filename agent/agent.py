@@ -1,31 +1,44 @@
 """
 agent.py  –  HR Assistant agent runner.
 
-KEY CHANGE: The logged-in employee's email is injected into the system prompt
+The logged-in employee's email is injected into the system prompt
 and prepended to every tool call that needs it, so the agent NEVER asks the
 user for their name.
+
+Caching: AgentExecutor instances are cached per (employee_email, today's date).
+The date is part of the cache key so the system prompt refreshes automatically
+at midnight without any manual invalidation.
 """
 
+from datetime import date
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from backend.core.config import settings
 from agent.tools_registry import get_all_tools
 
+# ── Module-level cache: (employee_email, date_str) → AgentExecutor ────────────
+_agent_cache: dict = {}
+
 
 def build_agent(employee_email: str, employee_name: str) -> AgentExecutor:
-    from datetime import date
-    today = date.today().strftime("%A, %d %B %Y")  # e.g. Wednesday, 06 May 2026
     """
-    Build an agent executor scoped to the currently logged-in employee.
+    Return a cached AgentExecutor scoped to the logged-in employee.
+
+    Cache key is (employee_email, today's date) so:
+    - Same employee reuses the executor across all messages in a session.
+    - Cache auto-refreshes at midnight (new date = new key).
+    - Different employees never share an executor.
 
     Args:
         employee_email: Email pulled from the active auth session.
-        employee_name: Display name pulled from the active auth session.
-
-    The system prompt embeds these so the LLM always passes them to tools that
-    accept `employee_email`, avoiding any need to ask the user who they are.
+        employee_name:  Display name pulled from the active auth session.
     """
+    today = date.today().strftime("%A, %d %B %Y")
+    cache_key = (employee_email, today)
+
+    if cache_key in _agent_cache:
+        return _agent_cache[cache_key]
 
     system_prompt = f"""You are an intelligent HR Assistant for the HRMS platform.
 
@@ -101,20 +114,14 @@ RULE 8 — NEVER RE-EXECUTE: Only act on the CURRENT message. Never repeat or re
         ]
     )
 
-    agent = create_openai_tools_agent(llm, get_all_tools(), prompt)
-    return AgentExecutor(agent=agent, tools=get_all_tools(), verbose=True, return_intermediate_steps=True)
+    tools = get_all_tools()
+    agent = create_openai_tools_agent(llm, tools, prompt)
+    executor = AgentExecutor(
+        agent=agent,
+        tools=tools,
+        verbose=True,
+        return_intermediate_steps=True,
+    )
 
-
-# ── Example: how to call from your FastAPI route ───────────────────────────────
-#
-# @router.post("/chat")
-# async def chat(request: ChatRequest, current_user: Employee = Depends(get_current_user)):
-#     executor = build_agent(
-#         employee_email=current_user.email,
-#         employee_name=current_user.name,
-#     )
-#     result = executor.invoke({
-#         "input": request.message,
-#         "chat_history": request.history,
-#     })
-#     return {"answer": result["output"]}
+    _agent_cache[cache_key] = executor
+    return executor

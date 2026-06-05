@@ -1,121 +1,170 @@
-# backend/core/permissions.py
-# Phase 7: Centralized Permissions System (FastAPI version)
+"""
+backend/core/permissions.py
+─────────────────────────────────────────────────────────────────────────────
+Permission-based access control for the HRMS API.
 
-from fastapi import Depends, HTTPException
-from backend.core.security import require_role
-from backend.enums.roles import RoleName
+DESIGN
+------
+Each role is assigned a fixed set of permission strings.
+Endpoints declare which permission they need via:
 
+    Depends(require_permission("leave.approve"))
 
-# ─────────────────────────────────────────────
-# 1. Permission Registry
-# ─────────────────────────────────────────────
+The dependency reads the caller's role fresh from the DB on every request
+(same approach as require_role) so role changes take effect immediately
+without re-login.
 
-PERMISSIONS: dict[str, list[str]] = {
-    RoleName.ADMIN: [
+PERMISSION STRINGS
+------------------
+Format: "<resource>.<action>"
+
+    leave.view          — read any employee's leave requests
+    leave.approve       — approve leave requests
+    leave.reject        — reject leave requests
+    leave.apply         — submit own leave request (all employees)
+
+    employee.view       — view employee list and profiles
+    employee.create     — register new employees
+    employee.update     — update any employee's profile
+    employee.delete     — delete employees
+
+    approval.view       — view profile-change approval requests
+    approval.action     — approve or reject profile-change requests
+
+    admin.role_manage   — change employee roles
+    admin.settings      — manage system settings (email config etc.)
+
+    onboarding.view     — view onboarding tasks
+    onboarding.manage   — create / complete onboarding tasks
+
+ROLE → PERMISSION MAPPING
+--------------------------
+    admin    — everything
+    hr       — leave + employee (no delete) + approval + onboarding
+    manager  — leave.view + leave.approve + leave.reject + employee.view
+    employee — leave.apply + onboarding.view (own data only, enforced in route)
+"""
+
+from fastapi import HTTPException, Request
+from backend.enums import RoleName
+
+# ── Permission registry ───────────────────────────────────────────────────────
+
+ROLE_PERMISSIONS: dict[str, set[str]] = {
+    RoleName.ADMIN: {
+        "leave.view",
         "leave.approve",
         "leave.reject",
-        "leave.view",
+        "leave.apply",
+        "employee.view",
         "employee.create",
         "employee.update",
         "employee.delete",
-        "employee.view",
-        "reports.view",
-        "reports.export",
-        "settings.manage",
-    ],
-    RoleName.HR: [
+        "approval.view",
+        "approval.action",
+        "admin.role_manage",
+        "admin.settings",
+        "onboarding.view",
+        "onboarding.manage",
+    },
+    RoleName.HR: {
+        "leave.view",
         "leave.approve",
         "leave.reject",
-        "leave.view",
+        "leave.apply",
+        "employee.view",
+        "employee.create",
         "employee.update",
-        "employee.view",
-        "reports.view",
-    ],
-    RoleName.EMPLOYEE: [
-        "leave.view",
-        "employee.view",
-    ],
+        "approval.view",
+        "approval.action",
+        "onboarding.view",
+        "onboarding.manage",
+    },
+    RoleName.EMPLOYEE: {
+        "leave.apply",
+        "onboarding.view",
+    },
 }
 
 
-# ─────────────────────────────────────────────
-# 2. Core helpers
-# ─────────────────────────────────────────────
-
-def get_permissions(role: str) -> list[str]:
-    """Return the permission list for a role (empty list for unknown roles)."""
-    return PERMISSIONS.get(role, [])
+def get_permissions(role_name: str) -> set[str]:
+    """Return the permission set for a given role name. Unknown roles get empty set."""
+    return ROLE_PERMISSIONS.get(role_name, set())
 
 
-def has_permission(role: str, permission: str) -> bool:
-    """Check whether a role holds a specific permission."""
-    return permission in get_permissions(role)
+def has_permission(role_name: str, permission: str) -> bool:
+    """Check if a role has a specific permission."""
+    return permission in get_permissions(role_name)
 
 
-# ─────────────────────────────────────────────
-# 3. FastAPI dependency factories
-# ─────────────────────────────────────────────
+# ── FastAPI dependency ────────────────────────────────────────────────────────
 
 def require_permission(permission: str):
     """
-    FastAPI dependency — raises 403 if the user lacks the permission.
+    FastAPI dependency — raises 403 if the caller's role lacks the permission.
 
-    Usage
-    -----
-    @router.post("/leave/approve")
-    def approve_leave(
-        payload: dict = Depends(require_permission("leave.approve")),
-    ):
-        ...
+    Always reads the role fresh from the DB so role changes take effect
+    immediately without requiring re-login.
+
+    Usage:
+        @router.get("/leaves/pending")
+        def pending(payload=Depends(require_permission("leave.view"))):
+            ...
+
+    The returned payload dict contains:
+        sub   — employee ID (str)
+        role  — role name (str, read from DB)
+        email — employee email
     """
-    def dependency(
-        payload: dict = Depends(require_role([RoleName.HR, RoleName.ADMIN, RoleName.EMPLOYEE]))
-    ):
-        role = payload.get("role")
-        if not has_permission(role, permission):
+    def _check(request: Request) -> dict:
+        from backend.core.security import verify_token
+        from backend.database.session import SessionLocal
+        from backend.database.models import Employee
+
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+        token = auth.split(" ", 1)[1]
+        payload = verify_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        employee_id = payload.get("sub")
+        if not employee_id:
+            raise HTTPException(status_code=401, detail="Invalid token: missing subject")
+
+        # Read role fresh from DB — role changes take effect on next API call
+        db = SessionLocal()
+        try:
+            emp = db.query(Employee).filter(Employee.id == int(employee_id)).first()
+            if not emp:
+                raise HTTPException(status_code=401, detail="Employee not found")
+            role_name = emp.role.name if emp.role and hasattr(emp.role, "name") else None
+            email = emp.email
+        except HTTPException:
+            raise
+        except Exception:
+            # DB unavailable — fall back to JWT claim
+            role_name = payload.get("role")
+            email = payload.get("email", "")
+        finally:
+            db.close()
+
+        if not role_name:
+            raise HTTPException(
+                status_code=401,
+                detail="Your session is outdated. Please log out and log in again.",
+            )
+
+        if not has_permission(role_name, permission):
             raise HTTPException(
                 status_code=403,
-                detail=(
-                    f"Permission denied. "
-                    f"Role '{role}' does not have '{permission}'."
-                ),
+                detail=f"Permission denied. Required: '{permission}'. Your role: '{role_name}'.",
             )
+
+        payload["role"] = role_name
+        payload["email"] = email
         return payload
-    return dependency
 
-
-def require_any_permission(*permissions: str):
-    """
-    Passes if the user holds AT LEAST ONE of the listed permissions.
-    """
-    def dependency(
-        payload: dict = Depends(require_role([RoleName.HR, RoleName.ADMIN, RoleName.EMPLOYEE]))
-    ):
-        role = payload.get("role")
-        user_perms = get_permissions(role)
-        if not any(p in user_perms for p in permissions):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Requires one of: {', '.join(permissions)}.",
-            )
-        return payload
-    return dependency
-
-
-def require_all_permissions(*permissions: str):
-    """
-    Passes only if the user holds ALL listed permissions.
-    """
-    def dependency(
-        payload: dict = Depends(require_role([RoleName.HR, RoleName.ADMIN, RoleName.EMPLOYEE]))
-    ):
-        role = payload.get("role")
-        user_perms = get_permissions(role)
-        missing = [p for p in permissions if p not in user_perms]
-        if missing:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Missing permissions: {', '.join(missing)}.",
-            )
-        return payload
-    return dependency
+    return _check

@@ -50,8 +50,10 @@ def get_pending_leaves(
             "leave_type": leave.leave_type,
             "start_date": leave.start_date.strftime("%Y-%m-%d") if leave.start_date else "",
             "end_date": leave.end_date.strftime("%Y-%m-%d") if leave.end_date else "",
-            "status": leave.status,
+            "days": ((leave.end_date - leave.start_date).days + 1) if leave.start_date and leave.end_date else 0,
+            "status": leave.status.value if hasattr(leave.status, "value") else leave.status,
             "reason": leave.reason or "",
+            "rejection_reason": leave.rejection_reason or "",
         }
         for leave, emp in leaves
     ]
@@ -63,15 +65,34 @@ def get_all_leaves(
     db: Session = Depends(get_db),
     status_filter: Optional[str] = None,
 ):
-    """Get all leave requests (HR/Admin only)"""
-    query = db.query(Leave)
-    if status_filter:
+    """Get all leave requests with employee info (HR/Admin only)"""
+    query = db.query(Leave, Employee).join(Employee, Leave.employee_id == Employee.id)
+    if status_filter and status_filter.lower() != "all":
         try:
             query = query.filter(Leave.status == LeaveStatus(status_filter.capitalize()))
         except ValueError:
-            raise HTTPException(400, f"Invalid status filter '{status_filter}'. Valid values: {[s.value for s in LeaveStatus]}")
-    leaves = query.all()
-    return {"leaves": leaves}
+            raise HTTPException(400, f"Invalid status: {status_filter}")
+    rows = query.order_by(Leave.id.desc()).all()
+
+    result = []
+    for leave, emp in rows:
+        start = leave.start_date
+        end   = leave.end_date
+        days  = ((end - start).days + 1) if start and end else 0
+        result.append({
+            "id": leave.id,
+            "employee_id": leave.employee_id,
+            "employee_name": emp.name,
+            "employee_email": emp.email,
+            "leave_type": leave.leave_type,
+            "start_date": start.strftime("%Y-%m-%d") if start else "",
+            "end_date":   end.strftime("%Y-%m-%d")   if end   else "",
+            "days": days,
+            "status": leave.status.value if hasattr(leave.status, "value") else leave.status,
+            "reason": leave.reason or "",
+            "rejection_reason": leave.rejection_reason or "",
+        })
+    return result
 
 
 class ApproveRequest(BaseModel):

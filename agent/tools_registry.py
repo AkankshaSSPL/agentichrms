@@ -14,12 +14,15 @@ KEY CHANGES:
 
 import chromadb
 import logging
+from contextlib import contextmanager
 from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from langchain.tools import tool
 from backend.core.config import settings
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, Leave, LeaveBalance, Notification, Role, ApprovalRequest
+from backend.enums.leave_status import LeaveStatus
+from backend.enums.roles import RoleName
 import os
 from backend.services.email_service import send_email as _send_email
 import requests
@@ -46,6 +49,21 @@ except Exception:
 def _get_employee_by_email(db, email: str):
     """Return Employee row for the logged-in user's email, or None."""
     return db.query(Employee).filter(Employee.email == email).first()
+
+
+@contextmanager
+def get_db():
+    """
+    Context manager for DB sessions in agent tools.
+    Guarantees the session is closed even if the tool raises an exception.
+
+    Usage:
+        with get_db() as db:
+            emp = db.query(Employee)...
+    """
+    with get_db() as db:
+        yield db
+
 
 
 def _fetch_ics_meetings(ics_url: str, start: date_type, end: date_type) -> list:
@@ -132,8 +150,7 @@ def search_policies(query: str, k: int = 3) -> dict:
 @tool
 def lookup_employee(name: str) -> dict:
     """Find employee details by name or email."""
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         emp = db.query(Employee).filter(
             (Employee.name.ilike(f"%{name}%")) | (Employee.email.ilike(f"%{name}%"))
         ).first()
@@ -146,8 +163,7 @@ def lookup_employee(name: str) -> dict:
                 f"Status: {emp.status}"
             )
         }
-    finally:
-        db.close()
+
 
 
 @tool
@@ -156,18 +172,16 @@ def check_leave_balance(employee_email: str) -> dict:
     Check leave balance for the currently logged-in employee.
     Pass the logged-in user's email — do NOT ask the user for their name.
     """
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         emp = _get_employee_by_email(db, employee_email)
         if not emp:
             return {"answer": f"Employee with email '{employee_email}' not found."}
         balances = db.query(LeaveBalance).filter(LeaveBalance.employee_id == emp.id).all()
         if not balances:
             return {"answer": f"No leave balances found for {emp.name}."}
-        lines = [f"{b.leave_type}: {b.days_remaining} days" for b in balances]
+        lines = [f"{b.leave_type}: {b.allocated - b.used} days remaining ({b.allocated} allocated, {b.used} used)" for b in balances]
         return {"answer": f"Leave balances for {emp.name}:\n" + "\n".join(lines)}
-    finally:
-        db.close()
+
 
 
 @tool
@@ -195,8 +209,7 @@ def apply_leave(
         end_date: YYYY-MM-DD format.
         reason: Short reason for the leave.
     """
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         # 1. Resolve employee
         emp = _get_employee_by_email(db, employee_email)
         if not emp:
@@ -257,7 +270,7 @@ def apply_leave(
             start_date=start,
             end_date=end,
             reason=reason,
-            status="Pending",
+            status=LeaveStatus.PENDING,
         )
         db.add(new_leave)
         db.commit()
@@ -295,8 +308,7 @@ Please log in to the HRMS portal to approve or reject this request.
             "leave_id": new_leave.id,
         }
 
-    finally:
-        db.close()
+
 
 
 @tool
@@ -318,8 +330,7 @@ def confirm_leave(
         end_date: YYYY-MM-DD.
         reason: Same as originally requested.
     """
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         emp = _get_employee_by_email(db, employee_email)
         if not emp:
             return {"answer": f"Employee not found for email '{employee_email}'."}
@@ -333,7 +344,7 @@ def confirm_leave(
             start_date=start,
             end_date=end,
             reason=reason,
-            status="Pending",
+            status=LeaveStatus.PENDING,
         )
         db.add(new_leave)
         db.commit()
@@ -373,8 +384,7 @@ Please log in to the HRMS portal to approve or reject this request.
             "leave_id": new_leave.id,
         }
 
-    finally:
-        db.close()
+
 
 
 @tool
@@ -384,14 +394,13 @@ def cancel_latest_pending_leave(employee_email: str) -> dict:
     Use this instead of cancel_leave_request when the employee does not have a leave ID —
     for example, when they click Cancel on the conflict popup.
     """
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         emp = _get_employee_by_email(db, employee_email)
         if not emp:
             return {"answer": f"Employee not found for email '{employee_email}'."}
         leave = (
             db.query(Leave)
-            .filter(Leave.employee_id == emp.id, Leave.status == "Pending")
+            .filter(Leave.employee_id == emp.id, Leave.status == LeaveStatus.PENDING)
             .order_by(Leave.created_at.desc())
             .first()
         )
@@ -401,22 +410,20 @@ def cancel_latest_pending_leave(employee_email: str) -> dict:
         db.delete(leave)
         db.commit()
         return {"answer": f" Your {leave_desc} has been cancelled. No email has been sent to HR."}
-    finally:
-        db.close()
+
 
 
 @tool
 def approve_leave(leave_id: int) -> dict:
     """Approve a leave request (manager action). Notifies HR and admin."""
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         leave = db.query(Leave).filter(Leave.id == leave_id).first()
         if not leave:
             return {"answer": f"Leave request {leave_id} not found."}
         emp = db.query(Employee).filter(Employee.id == leave.employee_id).first()
         if not emp:
             return {"answer": f"Employee not found for leave {leave_id}."}
-        leave.status = "Approved"
+        leave.status = LeaveStatus.APPROVED
         db.commit()
 
         # Prepare email content
@@ -444,22 +451,20 @@ This leave has been approved.
                 logger.error(f"Failed to send email to {recipient}: {exc}")
 
         return {"answer": f"Leave request {leave_id} approved. Notifications sent."}
-    finally:
-        db.close()
+
 
 
 @tool
 def reject_leave(leave_id: int, reason: str = "") -> dict:
     """Reject a leave request. Notifies HR and admin."""
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         leave = db.query(Leave).filter(Leave.id == leave_id).first()
         if not leave:
             return {"answer": f"Leave request {leave_id} not found."}
         emp = db.query(Employee).filter(Employee.id == leave.employee_id).first()
         if not emp:
             return {"answer": f"Employee not found for leave {leave_id}."}
-        leave.status = "Rejected"
+        leave.status = LeaveStatus.REJECTED
         leave.rejection_reason = reason
         db.commit()
 
@@ -485,19 +490,17 @@ Request ID: {leave.id}
                 logger.error(f"Failed to send email to {recipient}: {exc}")
 
         return {"answer": f"Leave request {leave_id} rejected. Notifications sent."}
-    finally:
-        db.close()
+
 
 
 @tool
 def cancel_leave_request(leave_id: int) -> dict:
     """Cancel a pending leave request."""
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         leave = db.query(Leave).filter(Leave.id == leave_id).first()
         if not leave:
             return {"answer": f"Leave request {leave_id} not found."}
-        if leave.status != "Pending":
+        if leave.status != LeaveStatus.PENDING:
             return {
                 "answer": (
                     f"Leave request {leave_id} is already {leave.status}. "
@@ -507,8 +510,7 @@ def cancel_leave_request(leave_id: int) -> dict:
         db.delete(leave)
         db.commit()
         return {"answer": f"Leave request {leave_id} has been cancelled."}
-    finally:
-        db.close()
+
 
 
 @tool
@@ -524,38 +526,124 @@ def send_notification_email(to: str, subject: str, body: str) -> dict:
 @tool
 def get_onboarding_checklist(employee_email: str) -> dict:
     """Get onboarding checklist for the logged-in employee."""
-    return {
-        "answer": (
-            "1. Complete profile\n"
-            "2. Sign policy documents\n"
-            "3. Setup tools\n"
-            "4. Attend orientation"
+    from backend.database.models import OnboardingTask
+    with get_db() as db:
+        emp = _get_employee_by_email(db, employee_email)
+        if not emp:
+            return {"answer": f"Employee not found for email '{employee_email}'."}
+        tasks = (
+            db.query(OnboardingTask)
+            .filter(OnboardingTask.employee_id == emp.id)
+            .order_by(OnboardingTask.order)
+            .all()
         )
-    }
+        if not tasks:
+            return {"answer": f"No onboarding tasks found for {emp.name}."}
+        lines = []
+        for i, t in enumerate(tasks, 1):
+            status_icon = "✅" if t.is_completed else "⬜"
+            lines.append(f"{i}. {status_icon} {t.task_name}")
+        return {"answer": f"Onboarding checklist for {emp.name}:\n" + "\n".join(lines)}
+
 
 
 @tool
 def mark_task_complete(employee_email: str, task_name: str) -> dict:
     """Mark an onboarding task as completed for the logged-in employee."""
-    return {"answer": f"Marked '{task_name}' as complete."}
+    from backend.database.models import OnboardingTask
+    with get_db() as db:
+        emp = _get_employee_by_email(db, employee_email)
+        if not emp:
+            return {"answer": f"Employee not found for email '{employee_email}'."}
+        task = (
+            db.query(OnboardingTask)
+            .filter(
+                OnboardingTask.employee_id == emp.id,
+                OnboardingTask.task_name.ilike(f"%{task_name}%"),
+            )
+            .first()
+        )
+        if not task:
+            return {"answer": f"No onboarding task matching '{task_name}' found for {emp.name}."}
+        if task.is_completed:
+            return {"answer": f"'{task.task_name}' is already marked as complete."}
+        task.is_completed = True
+        task.completed_at = datetime.utcnow()
+        db.commit()
+        return {"answer": f"✅ '{task.task_name}' marked as complete."}
+
 
 
 @tool
 def get_onboarding_progress(employee_email: str) -> dict:
     """Get onboarding progress for the logged-in employee."""
-    return {"answer": "Onboarding progress: 50% (2 of 4 tasks completed)"}
+    from backend.database.models import OnboardingTask
+    with get_db() as db:
+        emp = _get_employee_by_email(db, employee_email)
+        if not emp:
+            return {"answer": f"Employee not found for email '{employee_email}'."}
+        tasks = db.query(OnboardingTask).filter(OnboardingTask.employee_id == emp.id).all()
+        if not tasks:
+            return {"answer": f"No onboarding tasks found for {emp.name}."}
+        total = len(tasks)
+        completed = sum(1 for t in tasks if t.is_completed)
+        percent = int((completed / total) * 100)
+        return {
+            "answer": f"Onboarding progress for {emp.name}: {percent}% ({completed} of {total} tasks completed)."
+        }
+
 
 
 @tool
 def get_leave_summary(department: str = None) -> dict:
     """Get leave summary by department or overall."""
-    return {"answer": "Leave summary: 15 pending, 42 approved this month."}
+    with get_db() as db:
+        query = db.query(Leave)
+        if department:
+            query = query.join(Employee).filter(Employee.department.ilike(f"%{department}%"))
+        leaves = query.all()
+        if not leaves:
+            scope = f"the {department} department" if department else "all departments"
+            return {"answer": f"No leave records found for {scope}."}
+        summary = {}
+        for leave in leaves:
+            status = leave.status.value if hasattr(leave.status, "value") else leave.status
+            summary[status] = summary.get(status, 0) + 1
+        lines = [f"{status}: {count}" for status, count in sorted(summary.items())]
+        scope = f"{department} department" if department else "all departments"
+        return {"answer": f"Leave summary for {scope}:\n" + "\n".join(lines)}
+
 
 
 @tool
 def get_department_summary(department: str = None) -> dict:
     """Get department headcount and key metrics."""
-    return {"answer": f"{department or 'All'} departments: 120 employees, 8 managers."}
+    with get_db() as db:
+        query = db.query(Employee).filter(Employee.status == "active")
+        if department:
+            query = query.filter(Employee.department.ilike(f"%{department}%"))
+        employees = query.all()
+        if not employees:
+            scope = f"the {department} department" if department else "any department"
+            return {"answer": f"No active employees found in {scope}."}
+        total = len(employees)
+        # Count managers: employees who are someone else's manager
+        manager_ids = {e.manager_id for e in employees if e.manager_id}
+        managers = sum(1 for e in employees if e.id in manager_ids)
+        # Breakdown by department
+        dept_counts = {}
+        for e in employees:
+            dept_counts[e.department or "Unassigned"] = dept_counts.get(e.department or "Unassigned", 0) + 1
+        dept_lines = [f"  {dept}: {count}" for dept, count in sorted(dept_counts.items())]
+        scope = f"{department} department" if department else "all departments"
+        answer = (
+            f"Department summary ({scope}):\n"
+            f"Total active employees: {total}\n"
+            f"Managers: {managers}\n"
+            "Breakdown:\n" + "\n".join(dept_lines)
+        )
+        return {"answer": answer}
+
 
 
 # ── Field policy ───────────────────────────────────────────────────────────────
@@ -604,8 +692,7 @@ def request_profile_update(employee_email: str, field: str, new_value: str) -> d
     - If caller is employee and field is employee‑updatable → updates directly.
     - If caller is employee and field requires HR approval → creates ApprovalRequest.
     """
-    db = SessionLocal()
-    try:
+    with get_db() as db:
         from backend.database.models import ApprovalRequest
         emp = _get_employee_by_email(db, employee_email)
         if not emp:
@@ -616,7 +703,7 @@ def request_profile_update(employee_email: str, field: str, new_value: str) -> d
         # Actually we need the logged‑in user, not the target. This tool is called with the
         # logged‑in employee's email (passed from agent). So emp is the caller.
         # So we can get role from emp.role.
-        is_hr = emp.role.name in ["hr", "admin"] if emp.role else False
+        is_hr = emp.role.name in [RoleName.HR, RoleName.ADMIN] if emp.role else False
 
         field = field.strip().lower()
         if field == "account_number":
@@ -692,7 +779,7 @@ def request_profile_update(employee_email: str, field: str, new_value: str) -> d
 
             field_label = HR_APPROVAL_REQUIRED[field]
             # Notify HR
-            hr_roles = db.query(Role).filter(Role.name.in_(["hr", "admin"])).all()
+            hr_roles = db.query(Role).filter(Role.name.in_([RoleName.HR, RoleName.ADMIN])).all()
             hr_role_ids = [r.id for r in hr_roles]
             hr_emps = db.query(Employee).filter(
                 Employee.role_id.in_(hr_role_ids),
@@ -724,8 +811,7 @@ def request_profile_update(employee_email: str, field: str, new_value: str) -> d
                 "answer": f"I don't recognise '{field}' as a profile field. Fields you can update directly: {updatable}. Fields requiring HR approval: {hr_fields}."
             }
 
-    finally:
-        db.close()
+
 
 
 def get_all_tools():

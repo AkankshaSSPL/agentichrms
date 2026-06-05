@@ -71,7 +71,7 @@ def request_pin(
             db.query(Employee)
             .filter(
                 Employee.id == payload.employee_id,
-                Employee.status == "active",
+                Employee.status == EmployeeStatus.ACTIVE,
                 Employee.deleted_at.is_(None),
             )
             .first()
@@ -82,7 +82,7 @@ def request_pin(
             db.query(Employee)
             .filter(
                 Employee.email == payload.email.strip().lower(),
-                Employee.status == "active",
+                Employee.status == EmployeeStatus.ACTIVE,
                 Employee.deleted_at.is_(None),
             )
             .first()
@@ -95,7 +95,7 @@ def request_pin(
             db.query(Employee)
             .filter(
                 Employee.phone == raw,
-                Employee.status == "active",
+                Employee.status == EmployeeStatus.ACTIVE,
                 Employee.deleted_at.is_(None),
             )
             .first()
@@ -181,7 +181,7 @@ def login_with_pin(payload: LoginWithPinRequest, db: Session = Depends(get_db)):
     emp = db.query(Employee).filter(
         ((Employee.email == payload.identifier.strip().lower()) |
          (Employee.phone == payload.identifier.strip())),
-        Employee.status == "active",
+        Employee.status == EmployeeStatus.ACTIVE,
         Employee.deleted_at.is_(None),
     ).first()
     if not emp:
@@ -226,7 +226,7 @@ def verify_and_change_pin(payload: VerifyAndChangePinRequest, db: Session = Depe
     emp = db.query(Employee).filter(
         ((Employee.email == payload.identifier.strip().lower()) |
          (Employee.phone == payload.identifier.strip())),
-        Employee.status == "active",
+        Employee.status == EmployeeStatus.ACTIVE,
         Employee.deleted_at.is_(None),
     ).first()
     if not emp:

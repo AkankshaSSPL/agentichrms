@@ -14,7 +14,18 @@ import json
 class Settings(BaseSettings):
 
     # ── Database ───────────────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql://hrms_user:agentichrms@localhost/agentic_hrms"
+    # No default — app will refuse to start if DATABASE_URL is missing from .env
+    DATABASE_URL: str
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def database_url_must_be_set(cls, v: str) -> str:
+        if not v:
+            raise ValueError(
+                "DATABASE_URL must be set in your .env file. "
+                "Example: DATABASE_URL=postgresql://user:password@localhost/dbname"
+            )
+        return v
 
     # ── Security & JWT ─────────────────────────────────────────────────────────
     # No default — app will refuse to start if JWT_SECRET is missing from .env
@@ -128,7 +139,7 @@ class Settings(BaseSettings):
         extra = "allow"
 
 
-# Singleton instance — will raise ValidationError at startup if JWT_SECRET missing
+# Singleton instance — will raise ValidationError at startup if required secrets missing
 settings = Settings()
 
 

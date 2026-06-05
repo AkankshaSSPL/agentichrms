@@ -159,12 +159,11 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
         logger.error("SMS failed for %s: %s", new_employee.id, sms_result["error"])
 
     return {
-        "message": "Registration successful!" if sms_result["success"] else "Registered! SMS could not be sent — use the PIN shown below to log in.",
+        "message": "Registration successful! Your PIN has been sent via SMS." if sms_result["success"] else "Registered! SMS could not be sent — please contact HR to receive your PIN.",
         "employee_id": new_employee.id,
         "email": new_employee.email,
         "role": RoleName.EMPLOYEE,
         "pin_record_id": pin_record.id,
         "masked_phone": _mask(new_employee.phone),
         "sms_sent": sms_result["success"],
-        "default_pin": pin,
     }

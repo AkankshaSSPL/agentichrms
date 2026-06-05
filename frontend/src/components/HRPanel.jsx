@@ -184,7 +184,7 @@ function EmployeeDirectory({ token, onFillProfile, onAlert }) {
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
 
-    const COMPLETION_FIELDS = ['gender', 'date_of_birth', 'department', 'designation', 'employment_type', 'join_date', 'address_line1', 'city', 'state', 'country', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'bank_name', 'account_number', 'bank_branch']
+    const COMPLETION_FIELDS = ['gender', 'date_of_birth', 'department', 'designation', 'employment_type', 'join_date', 'address_line1', 'city', 'state', 'country', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'bank_name', 'bank_account_number', 'bank_branch']
 
     const fetchEmployees = useCallback(async () => {
         try {

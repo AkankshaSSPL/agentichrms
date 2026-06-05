@@ -15,7 +15,7 @@ from backend.api.face_auth import router as face_auth_router
 from backend.api.pin_auth import router as pin_auth_router
 from backend.api.registration import router as registration_router 
 from backend.api.onboarding import router as onboarding_router
-from backend.api.onboarding_profile import router as onboarding_profile_router
+from backend.api.onboarding_router import router as onboarding_profile_router
 from backend.api.chat import router as chat_router
 from backend.api.docs import router as docs_router   # ✅ ADDED
 from backend.api.meetings import router as meetings_router
@@ -23,33 +23,16 @@ from backend.api.leaves_admin import router as leaves_admin_router
 from backend.api.notifications import router as notifications_router
 from backend.api.admin import router as admin_router
 from backend.api.email_settings import router as email_settings_router
-try:
-    from backend.api.approval_requests import router as approval_requests_router
-    _has_approvals = True
-except ImportError:
-    approval_requests_router = None
-    _has_approvals = False
+from backend.api.approval_router import router as approval_requests_router
 
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def run_migrations():
-    try:
-        from alembic.config import Config
-        from alembic import command
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("✅ Migrations done")
-    except Exception as e:
-        logger.warning(f"⚠️ Migration skipped: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 Starting...")
-    run_migrations()
     logger.info("✅ Application startup complete")
     yield
     logger.info("👋 Shutting down...")
@@ -94,8 +77,7 @@ app.include_router(leaves_admin_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(email_settings_router, prefix=API_PREFIX)
-if _has_approvals:
-    app.include_router(approval_requests_router, prefix=API_PREFIX)
+app.include_router(approval_requests_router, prefix=API_PREFIX)
 
 
 @app.get("/")

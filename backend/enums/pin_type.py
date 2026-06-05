@@ -16,3 +16,4 @@ class PinType(str, Enum):
     DEFAULT = "default"
     LOGIN = "login"
     REGISTRATION = "registration"
+    CUSTOM = "custom"       # employee-set PIN via verify-and-change-pin

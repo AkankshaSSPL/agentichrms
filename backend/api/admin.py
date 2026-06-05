@@ -10,7 +10,7 @@ from datetime import datetime
 
 from backend.database.session import SessionLocal
 from backend.database.models import Employee, Role
-from backend.core.security import require_role
+from backend.core.permissions import require_permission
 from backend.core.email import send_email
 from backend.enums import RoleName
 
@@ -58,7 +58,7 @@ class EmployeeRoleResponse(BaseModel):
 
 @router.get("/employees", response_model=List[EmployeeRoleResponse])
 def list_employees(
-    payload: dict = Depends(require_role([RoleName.ADMIN, RoleName.HR])),
+    payload: dict = Depends(require_permission("employee.view")),
     db: Session = Depends(get_db),
 ):
     employees = db.query(Employee).all()
@@ -78,7 +78,7 @@ def list_employees(
 @router.put("/role")
 def update_user_role(
     req: RoleUpdateRequest,
-    payload: dict = Depends(require_role([RoleName.ADMIN])),
+    payload: dict = Depends(require_permission("admin.role_manage")),
     db: Session = Depends(get_db),
 ):
     if req.employee_id == int(payload.get("sub")):
@@ -123,7 +123,7 @@ def update_user_role(
 @router.delete("/employees/{employee_id}")
 def delete_employee(
     employee_id: int,
-    payload: dict = Depends(require_role([RoleName.ADMIN])),
+    payload: dict = Depends(require_permission("employee.delete")),
     db: Session = Depends(get_db),
 ):
     if employee_id == int(payload.get("sub")):

@@ -1,3 +1,4 @@
+from backend.enums import ChatRole
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -64,10 +65,10 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 ChatMessage.session_id == payload.session_id
             ).order_by(ChatMessage.created_at).limit(20).all()
             for msg in db_messages:
-                if msg.role == "user":
-                    chat_history.append({"role": "user", "content": msg.content})
-                elif msg.role == "assistant":
-                    chat_history.append({"role": "assistant", "content": msg.content})
+                if msg.role == ChatRole.USER:
+                    chat_history.append({"role": ChatRole.USER, "content": msg.content})
+                elif msg.role == ChatRole.ASSISTANT:
+                    chat_history.append({"role": ChatRole.ASSISTANT, "content": msg.content})
 
         safe_name = str(employee.name).replace('{', '(').replace('}', ')')
         def sanitize(text: str) -> str:
@@ -126,9 +127,9 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
 
         # Save messages if session exists
         if payload.session_id:
-            user_msg = ChatMessage(session_id=payload.session_id, role="user", content=payload.message)
+            user_msg = ChatMessage(session_id=payload.session_id, role=ChatRole.USER, content=payload.message)
             db.add(user_msg)
-            assistant_msg = ChatMessage(session_id=payload.session_id, role="assistant", content=answer)
+            assistant_msg = ChatMessage(session_id=payload.session_id, role=ChatRole.ASSISTANT, content=answer)
             db.add(assistant_msg)
             db.commit()
 

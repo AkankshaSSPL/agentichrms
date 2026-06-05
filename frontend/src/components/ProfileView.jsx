@@ -570,7 +570,7 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
 
     useEffect(() => { loadProfile() }, [token])
 
-    const completionFields = ['name', 'email', 'phone', 'gender', 'date_of_birth', 'department', 'designation', 'employment_type', 'join_date', 'address_line1', 'city', 'state', 'country', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'bank_name', 'account_number', 'bank_branch']
+    const completionFields = ['name', 'email', 'phone', 'gender', 'date_of_birth', 'department', 'designation', 'employment_type', 'join_date', 'address_line1', 'city', 'state', 'country', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'bank_name', 'bank_account_number', 'bank_branch']
     const filled = completionFields.filter(f => form[f]).length
     const pct = Math.round((filled / completionFields.length) * 100)
 
@@ -686,7 +686,7 @@ export default function ProfileView({ employee, token, onBack, onSaved }) {
                         <Card title="Banking Information">
                             <Field label="Bank Name" value={form.bank_name} />
                             <Field label="Account Holder" value={form.account_holder_name} />
-                            <Field label="Account Number" value={form.account_number} />
+                            <Field label="Account Number" value={form.bank_account_number} />
                             <Field label="Branch" value={form.bank_branch} />
                             <Field label="Base Salary (₹)" value={form.base_salary} />
                         </Card>
