@@ -1,0 +1,40 @@
+# Ruff config — lint baseline for the refactor (RULES R13, R14, plus E/F/I).
+# CI may currently report violations on legacy code; the rule is that every NEW
+# commit keeps the count from rising. Tighten `select` / drop `ignore` as the
+# migration progresses.
+
+target-version = "py311"
+line-length = 100
+
+# Generated / vendored / out-of-scope code.
+extend-exclude = [
+    "alembic/versions",
+    ".venv-tools",
+    "venv",
+    "frontend",
+    "data",
+]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (undefined names, unused imports)
+    "I",    # import sorting
+    "T20",  # flake8-print  -> T201 bans print()      (RULES R13)
+    "BLE",  # flake8-blind-except -> BLE001 bans bare except (RULES R14)
+]
+ignore = [
+    "E501",  # line-too-long: not a priority for the baseline
+]
+
+# Scripts are allowed to print for human-readable output (RULES R13 exemption).
+# NOTE: on this branch the seed/admin scripts live at the repo root (Suraj's
+# layout) rather than under scripts/. Relocating them to scripts/ is a logged
+# follow-up — see CLEANUP_LOG.md. Until then, exempt them by name.
+[lint.per-file-ignores]
+"scripts/*" = ["T201"]
+"seed_db.py" = ["T201"]
+"seed_meetings.py" = ["T201"]
+"set_admin_pin.py" = ["T201"]
+"retrain.py" = ["T201"]
+"rag/ingest_docs.py" = ["T201"]

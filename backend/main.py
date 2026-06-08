@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 import logging
 
 from backend.core.config import settings
-from backend.database.session import engine, Base
 
 from backend.api.face_auth import router as face_auth_router
 from backend.api.pin_auth import router as pin_auth_router
@@ -35,21 +34,14 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def run_migrations():
-    try:
-        from alembic.config import Config
-        from alembic import command
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("✅ Migrations done")
-    except Exception as e:
-        logger.warning(f"⚠️ Migration skipped: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # NOTE: Database migrations are intentionally NOT run here. They are an
+    # explicit deploy step: `alembic upgrade head` before/at deploy time.
+    # Running migrations at app startup hid failures behind a warning and let
+    # a broken schema boot silently. (Re-removed after merging Suraj's branch,
+    # which had reintroduced run_migrations() — see CLEANUP_LOG.md.)
     logger.info("🚀 Starting...")
-    run_migrations()
     logger.info("✅ Application startup complete")
     yield
     logger.info("👋 Shutting down...")
