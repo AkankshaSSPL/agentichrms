@@ -1,6 +1,6 @@
 # HANDOFF — Agentic HRMS refactor (read this first)
 
-_Last updated: 2026-06-05. Branch: `develop`._
+_Last updated: 2026-06-08. Branch: `develop`._
 
 This document is the single place to resume work from any machine. It records
 **where the code stands**, the **decisions made**, the **next task in flight**,
@@ -12,16 +12,21 @@ and **how to set up a fresh PC**. The deep design docs live in `codereview/`
 
 ## 1. Branch model (git flow)
 
-- **`develop`** = the clean integration base. Branch off it for every change,
-  merge back. **This is the branch to work on.** Now pushed to `origin`.
+- **`develop`** = the clean integration base and **the branch to work on**. Branch
+  off it for every change, merge back. Pushed to `origin`.
 - **`main`** = production (untouched). Open PRs into `main` from `develop` when shipping.
-- **`rolebased_demochatbot`** = the original "latest features" branch (archive).
-- **`clean`** = an older, tidy snapshot (archive). **`clean` and `rolebased`
-  share NO git history** (clean came from a downloaded zip) — never `git merge` them.
+- **`rolebased_demochatbot`** = Suraj's refactor branch. It was **adopted as the
+  base** for `develop` (see below); it is now 3 commits behind `develop`.
+- **`clean`** = an older, tidy snapshot (archive). Shares NO git history with
+  `rolebased` — never `git merge` them.
 - `master` = stale local-only experiment; ignore.
 
-`develop` = `rolebased_demochatbot` (all latest features) **+** re-applied Phase-0
-cleanup (dead code removed, single settings source, `.env.example`/`ruff.toml`/CI added).
+**As of 2026-06-08, `develop` = `rolebased_demochatbot` (Suraj's full backend
+refactor: models split into a package, service/repository layers, router
+restructuring) + our re-applied Phase-0 guardrails.** The integration is on
+`develop` (`-s ours` merge that keeps the old Phase-0 history as an ancestor).
+`develop` and `rolebased_demochatbot` have diverged again — if Suraj pushes more,
+reconcile deliberately.
 
 ---
 
@@ -47,59 +52,51 @@ cleanup (dead code removed, single settings source, `.env.example`/`ruff.toml`/C
 
 | Area | State |
 |---|---|
-| Phase 0 (safety) | ~90% on develop. ✅ PIN hashed at rest, JWT_SECRET required, dead code gone, single settings source, ruff/CI/.env.example added. ❌ remaining: auto-migration still in `backend/main.py:38-52` (`run_migrations()` in lifespan — remove, R16); scripts still at repo root (move to `scripts/`); README still stale; **`alembic/env.py` MISSING**. |
-| Phase 1 (foundation) | ~25%. ✅ Enums created **and wired in** (`backend/enums/*`, used by models + 6 api files). ❌ `backend/database/models.py` still a ~600-line monolith; no base repo/service/exceptions; no request-id middleware; no tests. |
-| Phase 2 (leave) | **In flight — see §4.** Clean `LeaveService`/`LeaveRepository` exist in `backend/repositories/` but are unwired + had a broken import. Only covers HR-admin side (approve/reject/view), not employee apply/confirm. |
-| Phase 3 (notifications) | ~30%. `backend/notifications/{notification_service,notification_templates}.py` built, consumed only by the (unwired) leave service. Live routers still inline notifications. |
-| Phase 4 | minimal. `admin.py` + `email_settings.py` still use old `require_role` (vs `require_permission`). |
+| Phase 0 (safety) | ✅ **Done on develop.** PIN hashed at rest, JWT_SECRET required, dead code gone, single settings source, ruff/CI/.env.example added. Auto-migration **removed** from `backend/main.py`. **`alembic/env.py` AUTHORED** (was missing). Remaining (small): seed scripts still at repo root; drop plaintext `permanent_pin` column. |
+| Phase 1 (foundation) | ✅ **Largely done by Suraj.** `backend/database/models/` is now a per-domain package (auth/employee/leave/chat/rbac/workflow/notification). Enums wired in. ❌ still no base repo/service/exception scaffolding, no request-id middleware, no tests. |
+| Phase 2 (leave) | ✅ **Done.** `LeaveService`/`LeaveRepository` live in `backend/services/` + `backend/repositories/`, wired via `backend/api/leave_router.py`; old `leaves_admin.py` deleted. HR approve/reject/view consolidated. Employee apply/confirm still lives in `agent/tools_registry.py` (creation path). |
+| Phase 3 (notifications) | ⚠️ **NEXT TASK — see §4.** Half-built: `backend/notifications/` templates exist but only cover leave approve/reject; producers are inconsistent and several events emit no in-app notification. Plan approved in `NOTIFICATIONS_RBAC_PLAN.md`. |
+| Phase 4 (RBAC) | ⚠️ **Fragile — folded into the §4 task.** Silent JWT fallback on DB error, NULL-role crashes, unguarded endpoints. `email_settings.py` still uses `require_role` vs `require_permission`. |
 | Phase 5 (agent runner) | not started. `agent/agent.py` + `agent/tools_registry.py` monolith; executor likely rebuilt per request. |
 | Phase 6/7 (frontend) | not started (all `.jsx`). |
 | Phase 8 (hardening) | not started. |
 
 ---
 
-## 4. NEXT TASK IN FLIGHT — Leave consolidation (the cheap, high-value win)
+## 4. NEXT TASK IN FLIGHT — Notifications + RBAC hardening
 
-**Goal:** make HR-admin leave logic (approve / reject / view) live in **one
-place** — `backend/repositories/leave_service.py` (`LeaveService`) — called by
-**both** the REST router and the chatbot tools. The service is already written
-and is *better* than the live code (single `update_leave_status`, validates the
-PENDING→done transition, template-driven notifications).
+**Full approved plan: `NOTIFICATIONS_RBAC_PLAN.md` (read it before starting).**
 
-Do this on a branch: `git checkout develop && git checkout -b feat/leave-consolidation`
+Two problems, one pass. Do it on a branch:
+`git checkout develop && git checkout -b feat/notifications-rbac`
 
-**Steps (each verified by `python -m compileall backend agent`):**
+**Part 1 — make notifications work cleanly (one unified `Notifier`):**
+- Build `backend/notifications/notifier.py` — `to_employee` / `to_hr` (HR+Admin
+  fan-out) / `from_template`. Route **every** producer through it.
+- Fix the real gaps: leave-apply (`agent/tools_registry.py:270`,`:344`) currently
+  emails HR but writes **no in-app notification** → add HR + employee notifications;
+  `save_profile` (`backend/services/onboarding_service.py:260`) notifies the
+  employee only → add the HR fan-out the `self_chat` path already does.
+- Generalize `backend/notifications/notification_templates.py` +
+  `notification_service.py` (decouple from the `Leave` type), then retire the two
+  ad-hoc `save_notification` variants (`approval_repository.py`, `leave_repository.py`).
+- Frontend needs **no change** (`NotificationBell.jsx` already polls correctly).
 
-1. **Fix the broken import** — `backend/repositories/leave_router.py:15` says
-   `from backend.services.leave_service import LeaveService` but the service is
-   at `backend.repositories.leave_service`. Repoint it.
-2. **Restore RBAC parity** — `leave_router.py` uses the OLD
-   `require_role([RoleName.HR, RoleName.ADMIN])`. The live `leaves_admin.py`
-   already uses `require_permission("leave.view"/"leave.approve"/"leave.reject")`.
-   Change `leave_router.py` to use `require_permission(...)` so wiring it in does
-   not regress RBAC.
-3. **Mount it, retire the old one** — in `backend/main.py`, replace the
-   `leaves_admin` import + `include_router(leaves_admin_router, ...)` with the
-   leave router from `repositories/leave_router.py`. Then **delete
-   `backend/api/leaves_admin.py`** (the new router is a 100% drop-in: same
-   `/leaves/*` routes, same response shapes). Confirm the frontend
-   (`frontend/src/components/LeaveRequests.jsx`) still gets the same JSON.
-4. **Point the chatbot at the service** — in `agent/tools_registry.py`, the
-   `approve_leave` (line ~409) and `reject_leave` (line ~452) tools each open
-   their own `SessionLocal()`, set `leave.status = "Approved"/"Rejected"` (raw
-   strings!), and send their own emails. Replace their bodies with a call to
-   `LeaveService(db).approve_leave(leave_id, approved_by=...)` /
-   `.reject_leave(leave_id, reason, rejected_by=...)`. This removes the
-   duplication AND fixes the raw-string status (service uses the `LeaveStatus`
-   enum).
-5. **Verify + commit + merge to develop.** Compile-check, then
-   `git checkout develop && git merge --no-ff feat/leave-consolidation`.
+**Part 2 — fix the critical RBAC fragilities:**
+- Remove the silent JWT-fallback-on-DB-error in `backend/core/permissions.py:147`
+  and `backend/core/security.py:98` → **fail closed** (503).
+- Null-safe every `employee.role.name` access (no 500s on NULL role).
+- Guard the wide-open endpoints: `backend/api/onboarding.py` (self-or-HR) and
+  `backend/api/docs.py` (require auth).
+- Author (do NOT apply) an Alembic migration making `role_id` NOT NULL.
 
-**Deferred (NOT in this task — bigger):** employee leave **apply/confirm** path.
-`LeaveService` has no `request_leave()` yet; `agent/tools_registry.py`
-`apply_leave` (line ~174) / `confirm_leave` (line ~303) still own creation +
-conflict-detection. Extend the service with a `request_leave(...)` before
-consolidating those.
+**Deferred (diagnosed, logged in `CLEANUP_LOG.md`):** collapse the 3 guard
+patterns into `require_permission`; remove the dead `permissions`/`role_permissions`
+tables; consolidate the 3 token-extraction copies.
+
+**Verify:** `python -m compileall backend agent` + ruff on changed files +
+grep-gate that no `save_notification(` call sites remain. End-to-end checklist in
+the plan doc.
 
 ---
 
@@ -147,13 +144,12 @@ cd frontend && npm run build && cd ..            # frontend build — must succe
 
 ## 6. KNOWN BLOCKERS before the backend can actually boot/migrate
 
-1. **`alembic/env.py` is missing** from the repo — `alembic upgrade head` cannot
-   run. Options: (a) restore a standard Alembic `env.py` wired to
-   `backend.database.session` + the models' `Base.metadata`; or (b) for local dev
-   only, create the schema directly with `Base.metadata.create_all(engine)`
-   (the models already define `pin_hash`, enums, etc., so a fresh schema is correct).
-2. **Auto-migration at startup** (`backend/main.py:run_migrations()` in lifespan)
-   should be removed once (1) is sorted — migrations are a deploy step (R16).
+1. ✅ **`alembic/env.py` now exists** (authored during integration, wired to
+   `settings.DATABASE_URL` + the models-package `Base.metadata`). `alembic upgrade
+   head` can run once a DB is reachable. NOTE: migrations have **not** been applied
+   here (no DB access) — run `alembic upgrade head` as an explicit deploy step.
+2. ✅ **Auto-migration at startup removed** from `backend/main.py` (R16). Migrations
+   are a deploy step, not a boot step.
 3. The **heavy deps must be installed** in the venv before importing
    `backend.main` (it pulls langchain → sentence-transformers → torch, plus
    face_recognition → dlib, opencv).
@@ -170,17 +166,22 @@ cd frontend && npm run dev
 
 ---
 
-## 7. Deferred Phase-0 cleanup (small, do when convenient)
-- Move `seed_db.py`, `seed_meetings.py`, `set_admin_pin.py`, `retrain.py` → `scripts/`.
-- Rewrite stale `README.md` (says SQLite/Streamlit; it's Postgres/FastAPI).
-- Add `alembic/versions/rename_pin_code_to_pin_hash.py` only if migrating an
-  EXISTING db that still has a `pin_code` column (fresh dbs already get `pin_hash`).
+## 7. Deferred cleanup (small, do when convenient — also in `CLEANUP_LOG.md`)
+- Move `seed_db.py`, `seed_meetings.py`, `set_admin_pin.py`, `retrain.py` → `scripts/`
+  (currently print-exempted by name in `ruff.toml`).
+- Drop the plaintext `Employee.permanent_pin` column (write-nowhere; PINs live in
+  `permanent_pin_hash`).
+- Rotate the old secrets (`JWT_SECRET`, DB password, email creds) on the server.
 
 ---
 
 ## 8. Quick reference
 - Single settings reader: `backend/core/config.py` (`from backend.core.config import settings`). Root `config.py` shim was deleted.
-- Live leave path (to be retired): `backend/api/leaves_admin.py`.
-- New leave path (to wire in): `backend/repositories/leave_{service,repository,router}.py`.
+- Leave path (live): service `backend/services/leave_service.py`, repo
+  `backend/repositories/leave_repository.py`, router `backend/api/leave_router.py`.
+  (`leaves_admin.py` was deleted.)
+- Models: per-domain package `backend/database/models/` (no monolith).
+- Notifications: `backend/notifications/` (+ the new `notifier.py` per §4 plan).
 - Chatbot tools (monolith): `agent/tools_registry.py`.
+- Cleanup trail: `CLEANUP_LOG.md`. Approved next-task plan: `NOTIFICATIONS_RBAC_PLAN.md`.
 - Design docs: `codereview/` (reference only — see Decision 1).
