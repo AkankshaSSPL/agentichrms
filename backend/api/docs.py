@@ -1,15 +1,16 @@
 """
 Documents API — returns document count from ChromaDB for the frontend status bar.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from chromadb import PersistentClient
 from backend.core.config import settings
+from backend.core.permissions import require_authenticated
 
 router = APIRouter(tags=["Documents"])
 
 
 @router.get("/documents")
-async def list_documents():
+async def list_documents(payload: dict = Depends(require_authenticated)):
     """
     Return one entry per unique source document so the frontend's
     `d.documents.length` shows the real file count, not always "1".
@@ -42,7 +43,7 @@ async def list_documents():
 
 
 @router.get("/documents/{filename}")
-async def get_document_status(filename: str):
+async def get_document_status(filename: str, payload: dict = Depends(require_authenticated)):
     """Check if a specific document exists in the docs folder."""
     import os
     file_path = os.path.join(settings.DOCS_DIR, filename)

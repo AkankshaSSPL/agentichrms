@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification
 from backend.core.security import verify_token
 from agent.agent import build_agent
@@ -17,12 +17,6 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 async def ping():
     return {"message": "pong"}
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 def get_current_employee(request: Request, db: Session = Depends(get_db)):
     auth = request.headers.get("Authorization")

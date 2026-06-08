@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from backend.database.models import ApprovalRequest, Employee, Notification
+from backend.database.models import ApprovalRequest, Employee
 from backend.enums import ApprovalStatus
 
 logger = logging.getLogger(__name__)
@@ -120,16 +120,3 @@ class ApprovalRepository:
             )
             .all()
         )
-
-    def save_notification(self, employee_id: int, title: str, message: str) -> None:
-        try:
-            self.db.add(Notification(
-                employee_id=employee_id,
-                title=title,
-                message=message,
-                is_read=False,
-            ))
-            self.db.commit()
-        except Exception as e:
-            logger.warning("Notification failed: %s", e)
-            self.db.rollback()

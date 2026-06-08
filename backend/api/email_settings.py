@@ -11,21 +11,15 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import EmailLog
-from backend.core.security import require_role
+from backend.core.permissions import require_permission
 from backend.core.config import settings
 from backend.core.email import send_email
 
 router = APIRouter(prefix="/email-settings", tags=["Email Settings"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # ── Email log ─────────────────────────────────────────────────────────────────
@@ -47,7 +41,7 @@ class EmailLogResponse(BaseModel):
 def get_email_logs(
     skip: int = 0,
     limit: int = 50,
-    payload: dict = Depends(require_role(["admin"])),
+    payload: dict = Depends(require_permission("admin.settings")),
     db: Session = Depends(get_db),
 ):
     logs = (
@@ -75,7 +69,7 @@ def get_email_logs(
 # ── SMTP config (read-only, no secrets) ──────────────────────────────────────
 @router.get("/config")
 def get_smtp_config(
-    payload: dict = Depends(require_role(["admin"])),
+    payload: dict = Depends(require_permission("admin.settings")),
 ):
     return {
         "host": settings.EMAIL_HOST,
@@ -95,7 +89,7 @@ class TestEmailRequest(BaseModel):
 @router.post("/test")
 def send_test_email(
     req: TestEmailRequest,
-    payload: dict = Depends(require_role(["admin"])),
+    payload: dict = Depends(require_permission("admin.settings")),
     db: Session = Depends(get_db),
 ):
     send_email(

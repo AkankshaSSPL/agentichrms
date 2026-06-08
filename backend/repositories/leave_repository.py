@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from backend.database.models import Leave, Employee, Notification
+from backend.database.models import Leave, Employee
 from backend.enums import LeaveStatus
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,3 @@ class LeaveRepository:
             leave.rejection_reason = rejection_reason
         self.db.commit()
         return leave
-
-    def save_notification(self, notification: Notification) -> None:
-        self.db.add(notification)
-        self.db.commit()

@@ -18,7 +18,7 @@ from sqlalchemy import func
 
 from backend.core.config import settings
 from backend.core.security import create_access_token, verify_password, get_password_hash
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee, FaceLoginAttempt, PINVerification
 from backend.services.face_service import face_service
 from backend.services.twilio_service import generate_pin, send_pin_sms
@@ -30,12 +30,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # ── POST /api/auth/face-login ──────────────────────────────────────────────────

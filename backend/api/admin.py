@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import List
 from datetime import datetime
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee, Role
 from backend.core.permissions import require_permission
 from backend.core.email import send_email
@@ -17,12 +17,6 @@ from backend.enums import RoleName
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class RoleUpdateRequest(BaseModel):

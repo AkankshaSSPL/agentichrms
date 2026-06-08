@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.core.permissions import require_permission
 from backend.services.leave_service import LeaveService
 
@@ -21,12 +21,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/leaves", tags=["Leave Management"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # ── Request schemas ───────────────────────────────────────────────────────────

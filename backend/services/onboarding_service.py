@@ -20,6 +20,8 @@ from backend.enums import ChatRole
 from backend.core.config import settings
 from backend.repositories.onboarding_repository import OnboardingRepository
 from backend.repositories.approval_repository import ApprovalRepository
+from backend.notifications.notifier import Notifier
+from backend.notifications.notification_templates import NotifKey
 
 logger = logging.getLogger(__name__)
 
@@ -257,13 +259,18 @@ class OnboardingService:
                     old_value=old_value,
                     new_value=value,
                 )
-                approval_repo.save_notification(
+                notifier = Notifier(self.db)
+                notifier.from_template(
+                    NotifKey.PROFILE_CHANGE_REQUESTED,
                     employee.id,
-                    title="Profile Change Requested",
-                    message=(
-                        f"Your request to update '{HR_APPROVAL_REQUIRED[field]}' "
-                        f"to '{value}' has been submitted to HR for approval."
-                    ),
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=value,
+                )
+                notifier.from_template_to_hr(
+                    NotifKey.PROFILE_CHANGE_REQUESTED_HR,
+                    employee_name=employee.name,
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=value,
                 )
                 pending_approval.append({
                     "field": field,
@@ -309,12 +316,12 @@ class OnboardingService:
                     pass
             else:
                 setattr(employee, key, val)
-        self.repo.save_notification(
+        self.db.commit()
+        Notifier(self.db).to_employee(
             employee.id,
             title="Profile Updated by HR",
             message=f"HR has updated: {', '.join(fields.keys())}. Please review your profile.",
         )
-        self.db.commit()
         return {"message": "Profile updated", "updated_fields": list(fields.keys())}
 
     def build_hr_system_prompt(self, employee: Employee) -> str:
@@ -518,26 +525,19 @@ RULES:
                     old_value=old_value,
                     new_value=new_value,
                 )
-                # Notify employee
-                approval_repo.save_notification(
+                notifier = Notifier(self.db)
+                notifier.from_template(
+                    NotifKey.PROFILE_CHANGE_REQUESTED,
                     employee.id,
-                    title="Profile Change Requested",
-                    message=(
-                        f"Your request to update '{HR_APPROVAL_REQUIRED[field]}' "
-                        f"to '{new_value}' has been submitted to HR for approval."
-                    ),
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=new_value,
                 )
-                # Notify all HR/Admin staff in-app
-                for hr in approval_repo.get_hr_employees():
-                    approval_repo.save_notification(
-                        hr.id,
-                        title="Profile Update Request",
-                        message=(
-                            f"{employee.name} has requested to update "
-                            f"'{HR_APPROVAL_REQUIRED[field]}' to '{new_value}'. "
-                            f"Please review in the Approval Requests section."
-                        ),
-                    )
+                notifier.from_template_to_hr(
+                    NotifKey.PROFILE_CHANGE_REQUESTED_HR,
+                    employee_name=employee.name,
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=new_value,
+                )
                 # Email HR
                 try:
                     from backend.core.email import send_email

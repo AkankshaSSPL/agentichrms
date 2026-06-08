@@ -1,9 +1,22 @@
 """
-agent.py  –  HR Assistant agent runner.
+agent.py  —  HR Assistant agent runner.
 
 Forces the agent to call request_profile_update for any profile change request.
+
+EXECUTOR LIFECYCLE
+──────────────────
+AgentExecutor is stateless (tools hold no per-request state) so it is safe to
+cache for the duration of one calendar day per user.  The previous cache used a
+plain dict that grew without bound; this version caps it at MAX_CACHE_SIZE
+entries and evicts the oldest entry when the cap is hit.
+
+The cache key is (employee_email, date_string).  A new day or a server restart
+produces a fresh executor, which is correct — the system prompt embeds today's
+date.  Role changes take effect on the next API call through the DB-read in the
+permission layer; the agent prompt itself does not encode the role.
 """
 
+from collections import OrderedDict
 from datetime import date
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_openai import ChatOpenAI
@@ -11,7 +24,9 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from backend.core.config import settings
 from agent.tools_registry import get_all_tools
 
-_agent_cache: dict = {}
+# LRU-style bounded cache: evicts oldest when full.
+MAX_CACHE_SIZE = 200
+_agent_cache: OrderedDict = OrderedDict()
 
 
 def build_agent(employee_email: str, employee_name: str) -> AgentExecutor:
@@ -19,6 +34,8 @@ def build_agent(employee_email: str, employee_name: str) -> AgentExecutor:
     cache_key = (employee_email, today)
 
     if cache_key in _agent_cache:
+        # Move to end so it counts as recently used
+        _agent_cache.move_to_end(cache_key)
         return _agent_cache[cache_key]
 
     system_prompt_template = """
@@ -84,6 +101,10 @@ For greetings or thanks, respond conversationally without tools.
         verbose=True,
         return_intermediate_steps=True,
     )
+
+    # Evict oldest entry if at capacity
+    if len(_agent_cache) >= MAX_CACHE_SIZE:
+        _agent_cache.popitem(last=False)
 
     _agent_cache[cache_key] = executor
     return executor

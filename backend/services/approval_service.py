@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from backend.database.models import ApprovalRequest
 from backend.enums import ApprovalStatus
 from backend.repositories.approval_repository import ApprovalRepository
+from backend.notifications.notifier import Notifier
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class ApprovalService:
         if action == "approve":
             self.repo.apply_field_change(emp, apr.field_name, apr.new_value)
             self.repo.resolve(apr, ApprovalStatus.APPROVED, hr_id, reason)
-            self.repo.save_notification(
+            Notifier(self.repo.db).to_employee(
                 emp.id,
                 title="Profile Update Approved",
                 message=f"Your request to change {field_label} to '{apr.new_value}' has been approved by HR.",
@@ -131,7 +132,7 @@ class ApprovalService:
 
         elif action == "reject":
             self.repo.resolve(apr, ApprovalStatus.REJECTED, hr_id, reason)
-            self.repo.save_notification(
+            Notifier(self.repo.db).to_employee(
                 emp.id,
                 title="Profile Update Rejected",
                 message=(

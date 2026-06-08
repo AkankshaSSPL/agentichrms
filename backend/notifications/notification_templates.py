@@ -9,6 +9,10 @@ from enum import Enum
 class NotifKey(Enum):
     LEAVE_APPROVED = "LEAVE_APPROVED"
     LEAVE_REJECTED = "LEAVE_REJECTED"
+    LEAVE_SUBMITTED = "LEAVE_SUBMITTED"
+    LEAVE_SUBMITTED_HR = "LEAVE_SUBMITTED_HR"
+    PROFILE_CHANGE_REQUESTED = "PROFILE_CHANGE_REQUESTED"
+    PROFILE_CHANGE_REQUESTED_HR = "PROFILE_CHANGE_REQUESTED_HR"
 
 
 NOTIFICATION_TEMPLATES = {
@@ -32,6 +36,22 @@ NOTIFICATION_TEMPLATES = {
             "{reason_line}\n\n"
             "Please contact HR if you have questions.\n\nBest regards,\nHRMS System"
         ),
+    },
+    NotifKey.LEAVE_SUBMITTED: {
+        "title": "Leave Request Submitted",
+        "message": "Your {leave_type} leave request ({date_str}) has been submitted and is awaiting approval.",
+    },
+    NotifKey.LEAVE_SUBMITTED_HR: {
+        "title": "New Leave Request",
+        "message": "{employee_name} has submitted a {leave_type} leave request ({date_str}). Please review.",
+    },
+    NotifKey.PROFILE_CHANGE_REQUESTED: {
+        "title": "Profile Change Requested",
+        "message": "Your request to update '{field_label}' to '{new_value}' has been submitted to HR for approval.",
+    },
+    NotifKey.PROFILE_CHANGE_REQUESTED_HR: {
+        "title": "Profile Update Request",
+        "message": "{employee_name} has requested to update '{field_label}' to '{new_value}'. Please review in the Approval Requests section.",
     },
 }
 

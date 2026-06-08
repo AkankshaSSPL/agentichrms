@@ -10,19 +10,13 @@ from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Meeting, Employee, User
 from backend.core.security import verify_token
 
 router = APIRouter(prefix="/meetings", tags=["Meetings"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def get_current_employee(request: Request, db: Session = Depends(get_db)):

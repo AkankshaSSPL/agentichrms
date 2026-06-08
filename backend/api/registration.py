@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee, Role, PINVerification
 from backend.enums import RoleName, EmployeeStatus, PinType
 from backend.core.config import settings
@@ -27,12 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Registration"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class EmployeeRegisterRequest(BaseModel):
@@ -76,6 +70,21 @@ def register_employee(
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(exc)}")
 
 
+def _delete_employee(db: Session, employee_id: int) -> None:
+    """Hard-delete a partially registered employee and all related records."""
+    try:
+        from backend.database.models import PINVerification, FaceLoginAttempt
+        db.query(PINVerification).filter(PINVerification.employee_id == employee_id).delete()
+        db.query(FaceLoginAttempt).filter(FaceLoginAttempt.employee_id == employee_id).delete()
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if emp:
+            db.delete(emp)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("Cleanup failed for employee %s: %s", employee_id, e)
+
+
 def _do_register(payload: EmployeeRegisterRequest, db: Session):
     # 1. Explicit duplicate checks
     if db.query(Employee).filter(Employee.email == payload.email).first():
@@ -114,6 +123,27 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
         db.rollback()
         raise HTTPException(400, _friendly_integrity_error(exc))
 
+    # 3b. Create linked User record (required for chat sessions)
+    from backend.database.models import User
+    new_user = User(
+        employee_id=new_employee.id,
+        username=new_employee.email,
+        password_hash=new_employee.permanent_pin_hash,
+        role=RoleName.EMPLOYEE,
+        is_active=True,
+        is_verified=False,
+        face_registered=False,
+        face_login_enabled=False,
+    )
+    db.add(new_user)
+    try:
+        db.commit()
+        db.refresh(new_user)
+    except IntegrityError as exc:
+        db.rollback()
+        _delete_employee(db, new_employee.id)
+        raise HTTPException(400, _friendly_integrity_error(exc))
+
     # 4. Enrol face
     try:
         enrol_result = face_service.enroll_faces(
@@ -121,14 +151,12 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
             images_base64=payload.face_images,
         )
         if not enrol_result.get("success"):
-            db.delete(new_employee)
-            db.commit()
+            _delete_employee(db, new_employee.id)
             raise HTTPException(422, enrol_result.get("error", "Face enrolment failed. Please retake your photos."))
     except HTTPException:
         raise
     except Exception as exc:
-        db.delete(new_employee)
-        db.commit()
+        _delete_employee(db, new_employee.id)
         raise HTTPException(500, f"Face enrolment failed: {str(exc)}")
 
     # 5. Retrain (non-fatal)

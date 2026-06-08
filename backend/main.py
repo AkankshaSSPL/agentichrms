@@ -6,9 +6,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import logging
 
 from backend.core.config import settings
+from backend.database.session import engine, Base
 
 from backend.api.face_auth import router as face_auth_router
 from backend.api.pin_auth import router as pin_auth_router
@@ -33,15 +38,25 @@ except ImportError:
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Rate limiter keyed by client IP
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+
+
+def run_migrations():
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("✅ Migrations done")
+    except Exception as e:
+        logger.warning(f"⚠️ Migration skipped: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # NOTE: Database migrations are intentionally NOT run here. They are an
-    # explicit deploy step: `alembic upgrade head` before/at deploy time.
-    # Running migrations at app startup hid failures behind a warning and let
-    # a broken schema boot silently. (Re-removed after merging Suraj's branch,
-    # which had reintroduced run_migrations() — see CLEANUP_LOG.md.)
     logger.info("🚀 Starting...")
+    run_migrations()
     logger.info("✅ Application startup complete")
     yield
     logger.info("👋 Shutting down...")
@@ -52,6 +67,9 @@ app = FastAPI(
     version=settings.VERSION,
     lifespan=lifespan
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 
 @app.exception_handler(Exception)
