@@ -13,7 +13,6 @@ from slowapi.middleware import SlowAPIMiddleware
 import logging
 
 from backend.core.config import settings
-from backend.database.session import engine, Base
 
 from backend.api.face_auth import router as face_auth_router
 from backend.api.pin_auth import router as pin_auth_router
@@ -42,21 +41,14 @@ logging.basicConfig(level=logging.INFO)
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 
-def run_migrations():
-    try:
-        from alembic.config import Config
-        from alembic import command
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("✅ Migrations done")
-    except Exception as e:
-        logger.warning(f"⚠️ Migration skipped: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # NOTE: Database migrations are intentionally NOT run here. They are an
+    # explicit deploy step: `alembic upgrade head` before/at deploy time.
+    # Running migrations at startup hid failures behind a warning and let a
+    # broken schema boot silently (R16). (Re-removed after the notification_rbac
+    # branch reintroduced it — see CLEANUP_LOG.md.)
     logger.info("🚀 Starting...")
-    run_migrations()
     logger.info("✅ Application startup complete")
     yield
     logger.info("👋 Shutting down...")

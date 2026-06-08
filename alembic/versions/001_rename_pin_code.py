@@ -1,8 +1,15 @@
 """rename pin_code to pin_hash in pin_verifications
 
 Revision ID: 001_rename_pin_code
-Revises: 
+Revises: 9f3e1a2b4c5d
 Create Date: 2026-06-08
+
+NOTE: down_revision was originally None, which made this a SECOND root of the
+migration graph — it could be scheduled before the initial schema created the
+pin_verifications table, and a redundant add_column migration (dc375aac3cda)
+then duplicated pin_hash, breaking a fresh `alembic upgrade head`. Re-pointed
+onto the real previous head (9f3e1a2b4c5d, make_role_id_not_null) to give one
+clean linear chain. See CLEANUP_LOG.md.
 
 Run with:
     alembic upgrade head
@@ -11,7 +18,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '001_rename_pin_code'
-down_revision = None
+down_revision = '9f3e1a2b4c5d'
 branch_labels = None
 depends_on = None
 

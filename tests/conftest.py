@@ -1,5 +1,5 @@
 """
-conftest.py — D:\agentichrms-main\tests\conftest.py
+conftest.py — shared pytest fixtures (SQLite test DB + httpx client).
 """
 import sys
 import os
@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 import pytest_asyncio
-from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -43,10 +42,11 @@ def create_test_tables():
 
 @pytest_asyncio.fixture
 async def client(create_test_tables):
+    # Migrations no longer run at app startup (removed run_migrations from
+    # backend.main); the test schema is built by create_test_tables above.
     app.dependency_overrides[get_db] = override_get_db
 
-    with patch("backend.main.run_migrations", return_value=None):
-        async with httpx.AsyncClient(app=app, base_url="http://test") as c:
-            yield c
+    async with httpx.AsyncClient(app=app, base_url="http://test") as c:
+        yield c
 
     app.dependency_overrides.clear()
