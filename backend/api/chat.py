@@ -9,6 +9,7 @@ from backend.database.session import get_db
 from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification
 from backend.core.security import verify_token
 from agent.agent import build_agent
+from langchain_core.messages import HumanMessage, AIMessage
 import json, re
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -55,6 +56,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
 
         chat_history = []
         if payload.session_id:
+            # Load last 20 messages from DB — authoritative source of truth
             db_messages = db.query(ChatMessage).filter(
                 ChatMessage.session_id == payload.session_id
             ).order_by(ChatMessage.created_at).limit(20).all()
@@ -63,15 +65,26 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                     chat_history.append({"role": ChatRole.USER, "content": msg.content})
                 elif msg.role == ChatRole.ASSISTANT:
                     chat_history.append({"role": ChatRole.ASSISTANT, "content": msg.content})
+        elif payload.history:
+            # Fallback: use frontend-supplied history when no session_id present
+            for m in payload.history:
+                role = m.get("role", "")
+                if role in (ChatRole.USER, ChatRole.ASSISTANT):
+                    chat_history.append({"role": role, "content": m.get("content", "")})
 
         safe_name = str(employee.name).replace('{', '(').replace('}', ')')
         def sanitize(text: str) -> str:
             return text.replace('{', '{{').replace('}', '}}')
 
-        safe_history = [
-            {"role": m["role"], "content": sanitize(m["content"])}
-            for m in chat_history
-        ]
+        # LangChain requires message objects — raw dicts are silently ignored,
+        # which caused the agent to lose context on every turn.
+        lc_history = []
+        for m in chat_history:
+            text = sanitize(m["content"])
+            if m["role"] == ChatRole.USER:
+                lc_history.append(HumanMessage(content=text))
+            elif m["role"] == ChatRole.ASSISTANT:
+                lc_history.append(AIMessage(content=text))
 
         executor = build_agent(
             employee_email=employee.email,
@@ -80,7 +93,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
 
         result = executor.invoke({
             "input": payload.message,
-            "chat_history": safe_history,
+            "chat_history": lc_history,
         })
 
         answer = result.get("output", "")

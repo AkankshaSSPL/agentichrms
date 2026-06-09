@@ -92,6 +92,7 @@ export default function OnboardingChat({ employee, token, onComplete, isHRMode =
     const [messages, setMessages]     = useState([])
     const [input, setInput]           = useState('')
     const [loading, setLoading]       = useState(false)
+    const [sessionId, setSessionId]   = useState(null)   // persistent DB session
     const [resumeFile, setResumeFile] = useState(null)
     const [resumeText, setResumeText] = useState(null)
     const [saving, setSaving]         = useState(false)
@@ -114,12 +115,22 @@ export default function OnboardingChat({ employee, token, onComplete, isHRMode =
     const showToast = (type, message) => setToast({ type, message })
 
     useEffect(() => {
+        // Show local greeting immediately
         setMessages([{
             role: 'assistant',
             content: isHRMode
                 ? `Hi! Let's fill in the profile for **${employee.name}** (${employee.email}).\n\nYou can upload their resume (PDF) and I'll extract what I can, or just answer the questions.\n\nFirst — what department are they joining and what's their job title?`
                 : `Welcome ${employee.name}!\n\nI'll help set up your profile in about 2 minutes.\n\nYou can upload your resume (PDF) and I'll fill in what I can, or just answer a few quick questions.\n\nFirst — which department and job title?`,
         }])
+        // Create a DB session so every message is persisted and the agent
+        // receives full conversation history on each turn.
+        fetch(`${API}/chat/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        })
+            .then(r => r.json())
+            .then(data => setSessionId(data.id))
+            .catch(err => console.warn('Could not create chat session:', err))
     }, [])
 
     useEffect(() => {
@@ -196,33 +207,27 @@ export default function OnboardingChat({ employee, token, onComplete, isHRMode =
         }
     }
 
-    /* ── Send to onboarding chat endpoint ─────────────────────────────────── */
+    /* ── Send message — unified /api/chat endpoint with session_id ────────── */
     const sendMessage = async (text, resumeTextOverride) => {
         const userMsg = text || input.trim()
         if (!userMsg || loading) return
         setInput('')
-        // Only add the user bubble when it's a manual message (not an internal auto-message)
+        // Only add the user bubble for manual messages, not internal auto-messages
         if (!text) setMessages(prev => [...prev, { role: 'user', content: userMsg }])
         setLoading(true)
         try {
-            const res = await fetch(`${API}/onboarding-profile/${isHRMode ? 'chat-for' : 'chat'}`, {
+            const res = await fetch(`${API}/chat/`, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body:    JSON.stringify({
-                    ...(isHRMode ? { employee_id: employee.id } : {}),
-                    message:     userMsg,
-                    history:     messages.filter(m => !m.content.startsWith('📎')),
-                    resume_text: resumeTextOverride !== undefined ? resumeTextOverride : resumeText,
+                    message:    userMsg,
+                    session_id: sessionId,   // backend loads full history from DB
                 }),
             })
             const data = await res.json()
-            const reply        = data.reply || ''
-            const displayReply = reply
-                .replace('PROFILE_COMPLETE', '')
-                .replace(/```json[\s\S]*?```/g, '')
-                .trim()
+            const reply = data.answer || ''
 
-            setMessages(prev => [...prev, { role: 'assistant', content: displayReply }])
+            setMessages(prev => [...prev, { role: 'assistant', content: reply }])
 
             // Advance progress stepper based on keywords in reply
             const r = reply.toLowerCase()
@@ -230,11 +235,6 @@ export default function OnboardingChat({ employee, token, onComplete, isHRMode =
             if (r.includes('address') || r.includes('city'))                          setCurrentStep(s => Math.max(s, 2))
             if (r.includes('emergency') || r.includes('contact name'))                setCurrentStep(s => Math.max(s, 3))
             if (r.includes('bank') || r.includes('account') || r.includes('salary')) setCurrentStep(s => Math.max(s, 4))
-
-            if (data.profile_complete && data.extracted_profile) {
-                setCurrentStep(5)
-                setTimeout(() => saveProfile(data.extracted_profile), 800)
-            }
         } catch {
             showToast('error', 'Oops! Something went wrong. Try again.')
         } finally {
