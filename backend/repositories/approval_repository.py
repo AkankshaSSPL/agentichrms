@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from backend.database.models import ApprovalRequest, Employee
+from backend.database.models import ApprovalRequest, Employee, Notification
 from backend.enums import ApprovalStatus
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,9 @@ class ApprovalRepository:
     def get_all(self, status: Optional[str] = None) -> list[ApprovalRequest]:
         query = self.db.query(ApprovalRequest)
         if status:
-            query = query.filter(ApprovalRequest.status == status)
+            # Normalise to lowercase — DB stores 'pending', 'approved', 'rejected'
+            normalised = status.strip().lower()
+            query = query.filter(ApprovalRequest.status == normalised)
         return query.order_by(ApprovalRequest.id.desc()).all()
 
     def get_by_employee(self, employee_id: int) -> list[ApprovalRequest]:
@@ -120,3 +122,16 @@ class ApprovalRepository:
             )
             .all()
         )
+
+    def save_notification(self, employee_id: int, title: str, message: str) -> None:
+        try:
+            self.db.add(Notification(
+                employee_id=employee_id,
+                title=title,
+                message=message,
+                is_read=False,
+            ))
+            self.db.commit()
+        except Exception as e:
+            logger.warning("Notification failed: %s", e)
+            self.db.rollback()
