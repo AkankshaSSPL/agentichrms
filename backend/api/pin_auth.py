@@ -20,6 +20,8 @@ from backend.database.session import get_db
 from backend.database.models import Employee, PINVerification
 from backend.services.twilio_service import generate_pin, send_pin_sms
 from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest
+from backend.enums import EmployeeStatus, PinType, RoleName
+from backend.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +69,7 @@ def request_pin(
             db.query(Employee)
             .filter(
                 Employee.id == payload.employee_id,
-                Employee.status == "active",
+                Employee.status == EmployeeStatus.ACTIVE,
                 Employee.deleted_at.is_(None),
             )
             .first()
@@ -78,20 +80,19 @@ def request_pin(
             db.query(Employee)
             .filter(
                 Employee.email == payload.email.strip().lower(),
-                Employee.status == "active",
+                Employee.status == EmployeeStatus.ACTIVE,
                 Employee.deleted_at.is_(None),
             )
             .first()
         )
 
     if not employee and payload.phone:
-        # Normalize: strip spaces and try both with/without +91
         raw = payload.phone.strip()
         employee = (
             db.query(Employee)
             .filter(
                 Employee.phone == raw,
-                Employee.status == "active",
+                Employee.status == EmployeeStatus.ACTIVE,
                 Employee.deleted_at.is_(None),
             )
             .first()
@@ -122,13 +123,13 @@ def request_pin(
 
     pin_record = PINVerification(
         employee_id=employee.id,
-        pin_code=pin,
+        pin_hash=get_password_hash(pin),
         phone_number=employee.phone,
         expires_at=expires_at,
         verified=False,
         attempts=0,
         max_attempts=settings.PIN_MAX_ATTEMPTS,
-        pin_type="login",
+        pin_type=PinType.LOGIN,
     )
     db.add(pin_record)
     db.commit()
@@ -178,32 +179,32 @@ def login_with_pin(request: Request, payload: LoginWithPinRequest, db: Session =
     emp = db.query(Employee).filter(
         ((Employee.email == payload.identifier.strip().lower()) |
          (Employee.phone == payload.identifier.strip())),
-        Employee.status == "active",
+        Employee.status == EmployeeStatus.ACTIVE,
         Employee.deleted_at.is_(None),
     ).first()
     if not emp:
         raise HTTPException(404, "No active employee found with the provided details.")
 
-    # Verify PIN
     if not emp.permanent_pin_hash:
         raise HTTPException(400, "No PIN set. Please use your default PIN or contact HR.")
 
     if not verify_password(payload.pin, emp.permanent_pin_hash):
         raise HTTPException(401, "Incorrect PIN.")
 
+    role_name = emp.role.name if emp.role else RoleName.EMPLOYEE
     token = create_access_token({
         "sub": str(emp.id),
         "email": emp.email,
-        "role": emp.role.name if emp.role else "employee",
+        "role": role_name,
     }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
 
     return {
         "access_token": token,
-        "employee": {
-            "id": emp.id, "name": emp.name, "email": emp.email,
-            "role": emp.role.name if emp.role else "employee",
-            "onboarding_completed": emp.onboarding_completed,
-        }
+        "token_type": "bearer",
+        "employee_id": emp.id,
+        "name": emp.name,
+        "email": emp.email,
+        "role": role_name,
     }
 
 
@@ -224,13 +225,12 @@ def verify_and_change_pin(request: Request, payload: VerifyAndChangePinRequest, 
     emp = db.query(Employee).filter(
         ((Employee.email == payload.identifier.strip().lower()) |
          (Employee.phone == payload.identifier.strip())),
-        Employee.status == "active",
+        Employee.status == EmployeeStatus.ACTIVE,
         Employee.deleted_at.is_(None),
     ).first()
     if not emp:
         raise HTTPException(404, "No active employee found with the provided details.")
 
-    # Verify current PIN
     if not emp.permanent_pin_hash:
         raise HTTPException(400, "No PIN set on this account.")
     if not verify_password(payload.current_pin, emp.permanent_pin_hash):
@@ -239,25 +239,25 @@ def verify_and_change_pin(request: Request, payload: VerifyAndChangePinRequest, 
     if len(payload.new_pin) != settings.PIN_LENGTH:
         raise HTTPException(400, f"New PIN must be {settings.PIN_LENGTH} digits.")
 
-    # Set new PIN
+    # Set new PIN — hash only, never store plaintext
     emp.permanent_pin_hash = get_password_hash(payload.new_pin)
-    emp.permanent_pin = payload.new_pin  # store plain only if your schema has it
-    emp.pin_type = "custom"
+    emp.pin_type = PinType.CUSTOM
     emp.pin_set_at = datetime.utcnow()
     db.commit()
 
+    role_name = emp.role.name if emp.role else RoleName.EMPLOYEE
     token = create_access_token({
         "sub": str(emp.id),
         "email": emp.email,
-        "role": emp.role.name if emp.role else "employee",
+        "role": role_name,
     }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
 
     logger.info("PIN changed for employee %s", emp.id)
     return {
         "access_token": token,
-        "employee": {
-            "id": emp.id, "name": emp.name, "email": emp.email,
-            "role": emp.role.name if emp.role else "employee",
-            "onboarding_completed": emp.onboarding_completed,
-        }
+        "token_type": "bearer",
+        "employee_id": emp.id,
+        "name": emp.name,
+        "email": emp.email,
+        "role": role_name,
     }

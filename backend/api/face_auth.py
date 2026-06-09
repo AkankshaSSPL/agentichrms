@@ -107,6 +107,8 @@ def face_login(
         email=employee.email,
         role=role_name,
     )
+
+@router.post("/login-with-pin-face", response_model=TokenResponse)
 def login_with_permanent_pin(
     payload: PermanentPinLoginRequest,
     db: Session = Depends(get_db),
