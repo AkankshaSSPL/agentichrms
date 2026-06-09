@@ -7,8 +7,13 @@ Run from your project root:
 What it does:
   1. Creates all tables (safe if they already exist).
   2. Upserts employee rows — updates phone if the email already exists.
-  3. Creates a linked User row (hashed password) for each employee.
-  4. Skips rows that are already fully seeded so it's safe to re-run.
+  3. Sets a default 6-digit login PIN (123456) for every seeded employee, stored
+     hashed in `permanent_pin_hash`. Existing custom PINs are left untouched.
+  4. Creates a linked User row (hashed password) for each employee.
+  5. Skips rows that are already fully seeded so it's safe to re-run.
+
+Login (PIN flow): email/phone + the 6-digit PIN below. Change DEFAULT_PIN to
+rotate the seeded PIN for fresh users.
 
 Phone numbers MUST be E.164 format: +<country_code><number>
   India   → +91XXXXXXXXXX   (10 digits after +91)
@@ -32,6 +37,11 @@ from backend.database.models import Employee, User, Role
 from passlib.context import CryptContext
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Default login PIN given to every seeded employee (stored hashed in
+# Employee.permanent_pin_hash). Used by the PIN login flow (login-with-pin).
+# Must be exactly 6 digits. Existing custom PINs are NOT overwritten on re-run.
+DEFAULT_PIN = "123456"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -175,6 +185,12 @@ def seed():
                 if emp.phone != phone:
                     emp.phone = phone
                     changed = True
+                # Backfill the default PIN only if this employee has none yet —
+                # never overwrite a PIN the user has since customised.
+                if not emp.permanent_pin_hash:
+                    emp.permanent_pin_hash = pwd_ctx.hash(DEFAULT_PIN)
+                    emp.pin_set_at = datetime.utcnow()
+                    changed = True
                 if changed:
                     db.commit()
                     print(f"  🔄  Updated   : {name} ({email})")
@@ -195,10 +211,13 @@ def seed():
                     phone_verified=False,
                     phone_country_code=phone[:3] if phone.startswith("+") else "+91",
                     role_id=role_map.get(data.get("role", "employee"), role_map["employee"]),
+                    permanent_pin_hash=pwd_ctx.hash(DEFAULT_PIN),
+                    pin_set_at=datetime.utcnow(),
                 )
                 db.add(emp)
                 db.flush()   # get emp.id before creating User
-                print(f"  ✅  Inserted   : {name} ({email})  phone={phone}  role={data.get('role','employee')}")
+                print(f"  ✅  Inserted   : {name} ({email})  phone={phone}  "
+                      f"role={data.get('role','employee')}  pin={DEFAULT_PIN}")
                 seeded += 1
 
             # ── 3. Upsert linked User ──────────────────────────────────────────
