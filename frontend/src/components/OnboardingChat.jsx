@@ -92,7 +92,6 @@ export default function OnboardingChat({ employee, token, onComplete, isHRMode =
     const [messages, setMessages]     = useState([])
     const [input, setInput]           = useState('')
     const [loading, setLoading]       = useState(false)
-    const [sessionId, setSessionId]   = useState(null)   // persistent DB session
     const [resumeFile, setResumeFile] = useState(null)
     const [resumeText, setResumeText] = useState(null)
     const [saving, setSaving]         = useState(false)
@@ -122,15 +121,7 @@ export default function OnboardingChat({ employee, token, onComplete, isHRMode =
                 ? `Hi! Let's fill in the profile for **${employee.name}** (${employee.email}).\n\nYou can upload their resume (PDF) and I'll extract what I can, or just answer the questions.\n\nFirst — what department are they joining and what's their job title?`
                 : `Welcome ${employee.name}!\n\nI'll help set up your profile in about 2 minutes.\n\nYou can upload your resume (PDF) and I'll fill in what I can, or just answer a few quick questions.\n\nFirst — which department and job title?`,
         }])
-        // Create a DB session so every message is persisted and the agent
-        // receives full conversation history on each turn.
-        fetch(`${API}/chat/sessions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        })
-            .then(r => r.json())
-            .then(data => setSessionId(data.id))
-            .catch(err => console.warn('Could not create chat session:', err))
+
     }, [])
 
     useEffect(() => {
@@ -221,7 +212,7 @@ export default function OnboardingChat({ employee, token, onComplete, isHRMode =
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body:    JSON.stringify({
                     message:    userMsg,
-                    session_id: sessionId,   // backend loads full history from DB
+                    session_id: null,   // onboarding is stateless — never saved to chat sessions
                 }),
             })
             const data = await res.json()
