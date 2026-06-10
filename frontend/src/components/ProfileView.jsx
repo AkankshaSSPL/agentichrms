@@ -100,84 +100,66 @@ function Card({ title, children }) {
     )
 }
 
-// ── Helper: extract fields from resume text (same as OnboardingChat) ──────────
-function extractFieldsFromText(text) {
-    const t = text || ''
-    const found = {}
-
-    const emailM = t.match(/[\w.+-]+@[\w.-]+\.\w{2,}/)
-    if (emailM) found.email = emailM[0].trim()
-
-    const phoneM = t.match(/(?:\+?\d[\s\-.]?){9,14}\d/)
-    if (phoneM) found.phone = phoneM[0].replace(/[\s\-.]/g, '')
-
-    const titleM = t.match(/(?:designation|job title|position|role)[:\s]+([^\n]{3,60})/i)
-    if (titleM) found.designation = titleM[1].trim()
-
-    const deptM = t.match(/(?:department|division|team)[:\s]+([^\n]{3,60})/i)
-    if (deptM) found.department = deptM[1].trim()
-
-    const joinM = t.match(/(?:joining date|date of joining|start date|joined)[:\s]+([^\n]{4,30})/i)
-    if (joinM) found.join_date = joinM[1].trim()
-
-    const nameM = t.match(/(?:name)[:\s]+([^\n]{2,50})/i)
-    if (nameM) found.name = nameM[1].trim()
-
-    const genderM = t.match(/\b(male|female|non[\s-]binary|other)\b/i)
-    if (genderM) found.gender = genderM[1].charAt(0).toUpperCase() + genderM[1].slice(1).toLowerCase()
-
-    const dobM = t.match(/(?:dob|date of birth|born)[:\s]+(\d{1,2}[\s/\-]\w{2,9}[\s/\-]\d{2,4}|\w+ \d{1,2},? \d{4})/i)
-    if (dobM) found.date_of_birth = dobM[1].trim()
-
-    return found
-}
-
-// ── Build resume message for AI ──────────────────────────────────────────────
-function buildResumeMessage(found, filename) {
-    const lines = [`I uploaded my resume (${filename}).`]
-    if (Object.keys(found).length > 0) {
-        lines.push('\nI found the following details in the resume:')
-        const labels = {
-            name: 'Name', email: 'Email', phone: 'Phone',
-            designation: 'Job title', department: 'Department',
-            join_date: 'Date of joining', gender: 'Gender',
-            date_of_birth: 'Date of birth',
-        }
-        Object.entries(found).forEach(([k, v]) => {
-            lines.push(`- ${labels[k] || k}: ${v}`)
-        })
-        lines.push('\nPlease use these to pre-fill my profile and only ask for the fields that are still missing.')
-    } else {
-        lines.push('The text could be extracted but no specific fields were found. Please ask me the questions to fill in my profile.')
-    }
-    return lines.join('\n')
-}
-
-// ── Profile Edit Chat Modal (fixed resume upload) ─────────────────────────────
+// ── Profile Edit Chat Modal (with resume upload step) ─────────────────────────
 function ProfileEditChat({ token, onClose, onSaved }) {
+    const [step, setStep] = useState('mode')     // 'mode', 'upload', 'chat'
     const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
-    const [sessionId, setSessionId] = useState(null)   // persistent DB session
+    const [sessionId, setSessionId] = useState(null)
     const [resumeFile, setResumeFile] = useState(null)
-    const [resumeText, setResumeText] = useState(null)
+    const [uploading, setUploading] = useState(false)
+    const [extractedData, setExtractedData] = useState(null)
     const [toast, setToast] = useState(null)
     const endRef = useRef(null)
     const fileRef = useRef(null)
     const inputRef = useRef(null)
+    const chatInitialized = useRef(false)
 
     const showToast = (type, message) => {
         setToast({ type, message })
         setTimeout(() => setToast(null), 4000)
     }
 
-    // Create a DB session + send opening greeting on mount
+    const handleResumeUpload = async (file) => {
+        if (!file) return
+        setUploading(true)
+        setResumeFile(file)
+
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+            const base64 = e.target.result.split(',')[1]
+            try {
+                const res = await fetch(`${API}/api/onboarding-profile/resume-extract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ pdf_base64: base64 })
+                })
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.detail || 'Extraction failed')
+                setExtractedData(data)
+                showToast('success', `Extracted ${data.extracted?.length || 0} fields from resume`)
+                setStep('chat')
+            } catch (err) {
+                console.error(err)
+                showToast('error', err.message || 'Failed to process resume')
+                setStep('mode')
+            } finally {
+                setUploading(false)
+            }
+        }
+        reader.readAsDataURL(file)
+    }
+
+    // Chat initialisation – runs only once when step becomes 'chat'
     useEffect(() => {
-        const init = async () => {
+        if (step !== 'chat') return
+        if (chatInitialized.current) return
+        chatInitialized.current = true
+
+        const initChat = async () => {
             setLoading(true)
             try {
-                // 1. Create a persistent session so every message is stored and
-                //    the agent receives full conversation history on each turn.
                 const sessRes = await fetch(`${API}/api/chat/sessions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -186,47 +168,47 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                 const sid = sessData.id
                 setSessionId(sid)
 
-                // 2. Opening message through the unified /api/chat endpoint
+                let initialMessage = ''
+                if (extractedData?.extracted?.length > 0 || extractedData?.missing?.length > 0) {
+                    const extractedList = extractedData.extracted.map(f => `• ${f}`).join('\n')
+                    const missingList = extractedData.missing.map(f => `• ${f}`).join('\n')
+                    initialMessage = `I uploaded my resume. Here's what I found:\n${extractedList}\n\nPlease help me fill the missing fields:\n${missingList}\n\nFor fields that need HR approval, please create approval requests. Let's start with the first missing field.`
+                } else {
+                    initialMessage = 'Hello, I want to update my personal details.'
+                }
+
                 const res = await fetch(`${API}/api/chat/`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({
-                        message: 'Hello, I want to update my personal details.',
-                        session_id: sid,
-                    }),
+                    body: JSON.stringify({ message: initialMessage, session_id: sid })
                 })
                 const data = await res.json()
                 setMessages([{ role: 'assistant', content: data.answer }])
-            } catch {
-                setMessages([{ role: 'assistant', content: "What would you like to update? I can help with your address, emergency contact, gender, or date of birth. Work details like department or designation require HR approval." }])
+            } catch (err) {
+                console.error(err)
+                setMessages([{ role: 'assistant', content: "Let's update your profile. What would you like to change?" }])
             } finally {
                 setLoading(false)
+                inputRef.current?.focus()
             }
         }
-        init()
-    }, [])
+        initChat()
+    }, [step, token])   // extractedData intentionally omitted
 
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-    // Main send — always uses sessionId so backend loads history from DB
-    const send = async (textOverride, resumeOverride = null) => {
+    const send = async (textOverride) => {
         const text = textOverride !== undefined ? textOverride : input.trim()
         if (!text || loading) return
         setInput('')
-        if (!textOverride) setMessages(prev => [...prev, { role: 'user', content: text }])
+        setMessages(prev => [...prev, { role: 'user', content: text }])
         setLoading(true)
 
         try {
-            const body = { message: text, session_id: sessionId }
-            // Include resume text in the message when uploading so the agent
-            // has the extracted content; it is NOT a separate API field here.
-            if (resumeOverride !== null || resumeText) {
-                body.message = text  // resume content already baked into text by buildResumeMessage
-            }
             const res = await fetch(`${API}/api/chat/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify(body),
+                body: JSON.stringify({ message: text, session_id: sessionId })
             })
             const data = await res.json()
             setMessages(prev => [...prev, { role: 'assistant', content: data.answer }])
@@ -238,68 +220,6 @@ function ProfileEditChat({ token, onClose, onSaved }) {
         }
     }
 
-    // Resume upload handler (now calls 'send' correctly)
-    const handleResumeUpload = async (file) => {
-        if (!file) return
-        setResumeFile(file)
-        setMessages(prev => [...prev, { role: 'user', content: `📎 Uploaded: ${file.name}` }])
-
-        const readFile = (asText = false) => new Promise((res, rej) => {
-            const reader = new FileReader()
-            reader.onload  = e => res(e.target.result)
-            reader.onerror = rej
-            asText ? reader.readAsText(file) : reader.readAsDataURL(file)
-        })
-
-        const isPdf = file.name.toLowerCase().endsWith('.pdf')
-
-        try {
-            let rawText = ''
-            if (isPdf) {
-                const dataUrl = await readFile(false)
-                const base64  = dataUrl.split(',')[1]
-                const res = await fetch(`${API}/api/onboarding-profile/extract-resume`, {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body:    JSON.stringify({ pdf_base64: base64, filename: file.name }),
-                })
-                const data = await res.json()
-                rawText = data.text || ''
-            } else {
-                const full = await readFile(true)
-                rawText = (typeof full === 'string' ? full : '').slice(0, 8000)
-            }
-
-            setResumeText(rawText)
-
-            if (!rawText.trim()) {
-                showToast('error', 'Could not read file text. Please type your details.')
-                send("I uploaded my resume but couldn't extract text. Please ask me the questions.", null)
-                return
-            }
-
-            const found = extractFieldsFromText(rawText)
-            const message = buildResumeMessage(found, file.name)
-
-            const foundCount = Object.keys(found).length
-            if (foundCount > 0) {
-                const summary = Object.entries(found)
-                    .map(([k, v]) => `• ${k.replace(/_/g,' ')}: ${v}`)
-                    .join('\n')
-                setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: `I found ${foundCount} field${foundCount > 1 ? 's' : ''} in your resume:\n${summary}\n\nLet me ask for the rest…`,
-                }])
-            }
-
-            send(message, rawText)
-        } catch (err) {
-            console.error('Resume upload error:', err)
-            showToast('error', 'Upload failed. Please type your details.')
-            send("My resume upload failed. Please ask me the questions.", null)
-        }
-    }
-
     const handleSend = () => send()
     const handleKey = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -308,13 +228,151 @@ function ProfileEditChat({ token, onClose, onSaved }) {
         }
     }
 
+    const handleClose = () => {
+        onSaved?.()
+        onClose()
+    }
+
+    // Mode selection UI
+    if (step === 'mode') {
+        return (
+            <div style={{
+                position: 'fixed', inset: 0, zIndex: 99998,
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+                <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 24,
+                    width: '92%',
+                    maxWidth: 420,
+                    padding: '32px 24px',
+                    textAlign: 'center',
+                    boxShadow: '0 24px 48px rgba(0,0,0,0.4)',
+                }}>
+                    <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Update Profile</h2>
+                    <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 32 }}>Choose how you'd like to provide your information</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <button
+                            onClick={() => setStep('upload')}
+                            style={{
+                                background: 'linear-gradient(135deg, var(--accent-dim), rgba(124,58,237,.1))',
+                                border: '1px solid var(--accent)',
+                                borderRadius: 16,
+                                padding: '18px 20px',
+                                fontSize: 16,
+                                fontWeight: 600,
+                                color: 'var(--accent)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 12,
+                            }}
+                        >
+                            <span style={{ fontSize: 24 }}></span> Upload Resume (PDF)
+                        </button>
+                        <button
+                            onClick={() => setStep('chat')}
+                            style={{
+                                background: 'var(--bg-card)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 16,
+                                padding: '18px 20px',
+                                fontSize: 16,
+                                fontWeight: 600,
+                                color: 'var(--text-primary)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 12,
+                            }}
+                        >
+                            <span style={{ fontSize: 24 }}></span> Fill by chatting
+                        </button>
+                        <button
+                            onClick={handleClose}
+                            style={{
+                                marginTop: 8,
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                fontSize: 13,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    // Upload step
+    if (step === 'upload') {
+        return (
+            <div style={{
+                position: 'fixed', inset: 0, zIndex: 99998,
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+                <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 24,
+                    width: '92%',
+                    maxWidth: 420,
+                    padding: '32px 24px',
+                    textAlign: 'center',
+                }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>Upload your resume</h3>
+                    <div
+                        style={{
+                            border: '2px dashed var(--border)',
+                            borderRadius: 20,
+                            padding: '40px 20px',
+                            marginBottom: 20,
+                            cursor: 'pointer',
+                        }}
+                        onClick={() => fileRef.current?.click()}
+                    >
+                        <div style={{ fontSize: 40, marginBottom: 12 }}>📎</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                            {resumeFile ? resumeFile.name : 'Click to select PDF or TXT'}
+                        </div>
+                    </div>
+                    <input ref={fileRef} type="file" accept=".pdf,.txt" style={{ display: 'none' }}
+                        onChange={e => handleResumeUpload(e.target.files?.[0])} />
+                    {uploading && (
+                        <div style={{ marginTop: 12, fontSize: 13, color: 'var(--accent)' }}>
+                            Extracting information...
+                        </div>
+                    )}
+                    <button onClick={() => setStep('mode')} style={{
+                        marginTop: 16,
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        fontSize: 13,
+                        cursor: 'pointer',
+                    }}>← Back</button>
+                </div>
+            </div>
+        )
+    }
+
+    // Chat UI
     return (
         <div style={{
             position: 'fixed', inset: 0, zIndex: 99998,
             background: 'rgba(0,0,0,0.6)',
             backdropFilter: 'blur(8px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            animation: 'fadeIn 0.2s ease',
         }}>
             <div style={{
                 background: 'var(--bg-secondary)',
@@ -327,7 +385,6 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                 flexDirection: 'column',
                 boxShadow: '0 24px 48px rgba(0,0,0,0.4)',
                 overflow: 'hidden',
-                animation: 'scaleIn 0.2s ease',
             }}>
                 {/* Header */}
                 <div style={{
@@ -340,55 +397,24 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                 }}>
                     <div>
                         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Update Profile</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                            Tell me what you want to update
-                        </div>
+                        {extractedData?.extracted?.length > 0 && (
+                            <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2 }}>
+                                ✅ {extractedData.extracted.length} fields auto-filled
+                            </div>
+                        )}
                     </div>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            fontSize: 20,
-                            cursor: 'pointer',
-                            color: 'var(--text-muted)',
-                            padding: '4px 8px',
-                            borderRadius: 8,
-                            transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-dim)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >✕</button>
+                    <button onClick={handleClose} style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
                 </div>
 
                 {/* Messages */}
-                <div style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    padding: '20px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 16,
-                    background: 'var(--bg-primary)',
-                }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 16, background: 'var(--bg-primary)' }}>
                     {messages.map((m, i) => (
-                        <div
-                            key={i}
-                            style={{
-                                display: 'flex',
-                                justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
-                                animation: 'fadeSlideUp 0.2s ease',
-                            }}
-                        >
+                        <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                             <div style={{
                                 maxWidth: '80%',
                                 padding: '10px 16px',
-                                borderRadius: m.role === 'user'
-                                    ? '18px 18px 4px 18px'
-                                    : '18px 18px 18px 4px',
-                                background: m.role === 'user'
-                                    ? 'linear-gradient(135deg, var(--accent), #7c3aed)'
-                                    : 'var(--bg-card)',
+                                borderRadius: m.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                                background: m.role === 'user' ? 'linear-gradient(135deg, var(--accent), #7c3aed)' : 'var(--bg-card)',
                                 border: m.role === 'user' ? 'none' : '1px solid var(--border)',
                                 fontSize: 13,
                                 lineHeight: 1.5,
@@ -403,65 +429,17 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                     ))}
                     {loading && (
                         <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                            <div style={{
-                                padding: '10px 16px',
-                                borderRadius: '18px',
-                                background: 'var(--bg-card)',
-                                border: '1px solid var(--border)',
-                                display: 'flex',
-                                gap: 6,
-                                alignItems: 'center',
-                            }}>
-                                {[0, 1, 2].map(i => (
-                                    <span key={i} style={{
-                                        width: 8,
-                                        height: 8,
-                                        borderRadius: '50%',
-                                        background: 'var(--accent)',
-                                        animation: `bounce 0.9s ease-in-out ${i * 0.2}s infinite`,
-                                        display: 'inline-block',
-                                    }} />
-                                ))}
+                            <div style={{ padding: '10px 16px', borderRadius: '18px', background: 'var(--bg-card)', display: 'flex', gap: 6 }}>
+                                {[0,1,2].map(i => <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', animation: `bounce 0.9s ease-in-out ${i*0.2}s infinite` }} />)}
                             </div>
                         </div>
                     )}
                     <div ref={endRef} />
                 </div>
 
-                {/* Input area with attach button */}
-                <div style={{
-                    padding: '16px 20px',
-                    borderTop: '1px solid var(--border)',
-                    background: 'var(--bg-card)',
-                }}>
+                {/* Input area */}
+                <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)' }}>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-                        <button
-                            onClick={() => fileRef.current?.click()}
-                            style={{
-                                background: 'transparent',
-                                border: '1px solid var(--border)',
-                                borderRadius: 12,
-                                width: 40,
-                                height: 40,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                fontSize: 18,
-                                color: 'var(--text-muted)',
-                                transition: 'all 0.2s',
-                            }}
-                            title="Upload resume (PDF or TXT)"
-                        >
-                            📎
-                        </button>
-                        <input
-                            ref={fileRef}
-                            type="file"
-                            accept=".pdf,.txt"
-                            style={{ display: 'none' }}
-                            onChange={e => handleResumeUpload(e.target.files?.[0])}
-                        />
                         <textarea
                             ref={inputRef}
                             value={input}
@@ -483,7 +461,6 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                                 lineHeight: 1.5,
                                 maxHeight: 100,
                                 overflowY: 'auto',
-                                transition: 'border-color 0.2s',
                             }}
                             onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                             onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
@@ -501,62 +478,38 @@ function ProfileEditChat({ token, onClose, onSaved }) {
                                 fontWeight: 600,
                                 cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
                                 opacity: loading || !input.trim() ? 0.5 : 1,
-                                transition: 'opacity 0.2s, transform 0.1s',
                                 whiteSpace: 'nowrap',
                             }}
                         >
                             Send
                         </button>
                     </div>
-                    {resumeFile && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                            📄 {resumeFile.name} · <span style={{ color: 'var(--green)' }}>ready</span>
-                        </div>
-                    )}
                 </div>
             </div>
 
             {toast && (
                 <div style={{
                     position: 'fixed', bottom: 24, right: 24, zIndex: 10000,
-                    display: 'flex', alignItems: 'center', gap: 12,
                     background: toast.type === 'success' ? 'var(--green)' : 'var(--red)',
-                    color: '#fff', padding: '12px 20px', borderRadius: 40,
-                    fontSize: 13, fontWeight: 500, boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
-                    animation: 'toastSlide 0.3s ease', backdropFilter: 'blur(8px)',
+                    color: '#fff', padding: '12px 20px', borderRadius: 40, fontSize: 13,
+                    boxShadow: '0 8px 20px rgba(0,0,0,0.2)',
                 }}>
-                    <span>{toast.type === 'success' ? '✓' : '⚠'}</span>
-                    <span>{toast.message}</span>
+                    {toast.message}
                 </div>
             )}
 
             <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes scaleIn {
-                    from { opacity: 0; transform: scale(0.96); }
-                    to { opacity: 1; transform: scale(1); }
-                }
-                @keyframes fadeSlideUp {
-                    from { opacity: 0; transform: translateY(8px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes bounce {
-                    0%, 100% { transform: translateY(0); }
-                    50% { transform: translateY(-4px); }
-                }
-                @keyframes toastSlide {
-                    from { opacity: 0; transform: translateX(30px); }
-                    to { opacity: 1; transform: translateX(0); }
-                }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+                @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+                @keyframes toastSlide { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
             `}</style>
         </div>
     )
 }
 
-// ── Main ProfileView (unchanged) ──────────────────────────────────────────
+// ── Main ProfileView ──────────────────────────────────────────────────────────
 export default function ProfileView({ employee, token, onBack, onSaved }) {
     const [form, setForm] = useState({})
     const [loading, setLoading] = useState(true)

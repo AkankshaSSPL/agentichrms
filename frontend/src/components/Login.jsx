@@ -25,6 +25,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
     const [showCurrentPin, setShowCurrentPin] = useState(false)
     const [showNewPin, setShowNewPin] = useState(false)
     const [showConfirmPin, setShowConfirmPin] = useState(false)
+    const [fieldErrors, setFieldErrors] = useState({})
 
     // Theme state (local)
     const [theme, setTheme] = useState(() => localStorage.getItem('hrms_theme') || 'dark')
@@ -59,6 +60,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         setShowCurrentPin(false)
         setShowNewPin(false)
         setShowConfirmPin(false)
+        setFieldErrors({})
         if (animationRef.current) cancelAnimationFrame(animationRef.current)
         if (stabilityTimerRef.current) clearTimeout(stabilityTimerRef.current)
     }
@@ -70,6 +72,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
         setMessage('')
         setScanning(false)
         setShowChangePin(false)
+        setFieldErrors({})
         if (method === 'choice') resetState()
     }
 
@@ -220,17 +223,23 @@ const Login = ({ onSuccess, onRegisterClick }) => {
 
     const handlePinLoginSubmit = async (e) => {
         e.preventDefault()
-        setLoading(true)
+        setFieldErrors({})
         setError('')
+
+        // Inline field validation before hitting the API
+        const fe = {}
+        if (!identifier) fe.identifier = 'Please enter your email or phone number'
+        if (!currentPin || currentPin.length !== 6) fe.currentPin = 'PIN must be exactly 6 digits'
+        if (showChangePin) {
+            if (!newPin || newPin.length !== 6) fe.newPin = 'New PIN must be exactly 6 digits'
+            if (!confirmNewPin || confirmNewPin.length !== 6) fe.confirmNewPin = 'Please confirm your new PIN'
+            else if (newPin !== confirmNewPin) fe.confirmNewPin = 'PINs do not match — please re-enter'
+        }
+        if (Object.keys(fe).length > 0) { setFieldErrors(fe); return }
+
+        setLoading(true)
         try {
-            if (!identifier || !currentPin) throw new Error('All fields required')
-            if (currentPin.length !== 6) throw new Error('PIN must be 6 digits')
-
             if (showChangePin) {
-                if (!newPin || !confirmNewPin) throw new Error('Enter and confirm new PIN')
-                if (newPin.length !== 6) throw new Error('New PIN must be 6 digits')
-                if (newPin !== confirmNewPin) throw new Error('PINs do not match')
-
                 const res = await fetch('/api/auth/verify-and-change-pin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -382,15 +391,18 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                             <form onSubmit={handlePinLoginSubmit} className="pin-form">
                                 <div className="form-group">
                                     <label>Email or Phone Number</label>
-                                    <input type="text" value={identifier} onChange={e => setIdentifier(e.target.value)}
-                                        placeholder="name@company.com or +91 98765 43210" required autoFocus disabled={loading} />
+                                    <input type="text" value={identifier} onChange={e => { setIdentifier(e.target.value); setFieldErrors(fe => ({ ...fe, identifier: '' })) }}
+                                        placeholder="name@company.com or +91 98765 43210" required autoFocus disabled={loading}
+                                        style={fieldErrors.identifier ? { borderColor: '#f87171' } : {}} />
+                                    {fieldErrors.identifier && <div style={{ color: '#f87171', fontSize: 11, marginTop: 4 }}>⚠ {fieldErrors.identifier}</div>}
                                 </div>
                                 <div className="form-group">
                                     <label>Current PIN (6 digits)</label>
                                     <div className="pin-input-wrap">
                                         <input type={showCurrentPin ? "text" : "password"} value={currentPin}
-                                            onChange={e => setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                            placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                            onChange={e => { setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setFieldErrors(fe => ({ ...fe, currentPin: '' })) }}
+                                            placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field"
+                                            style={fieldErrors.currentPin ? { borderColor: '#f87171' } : {}} />
                                         <button type="button" className="pin-eye-btn" onClick={() => setShowCurrentPin(v => !v)} tabIndex={-1} aria-label={showCurrentPin ? "Hide PIN" : "Show PIN"}>
                                             {showCurrentPin ? (
                                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -399,6 +411,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                                             )}
                                         </button>
                                     </div>
+                                    {fieldErrors.currentPin && <div style={{ color: '#f87171', fontSize: 11, marginTop: 4 }}>⚠ {fieldErrors.currentPin}</div>}
                                 </div>
                                 {!showChangePin && (
                                     <div className="change-pin-toggle">
@@ -411,8 +424,9 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                                             <label>New PIN (6 digits)</label>
                                             <div className="pin-input-wrap">
                                                 <input type={showNewPin ? "text" : "password"} value={newPin}
-                                                    onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                                    placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                                    onChange={e => { setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setFieldErrors(fe => ({ ...fe, newPin: '' })) }}
+                                                    placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field"
+                                                    style={fieldErrors.newPin ? { borderColor: '#f87171' } : {}} />
                                                 <button type="button" className="pin-eye-btn" onClick={() => setShowNewPin(v => !v)} tabIndex={-1} aria-label={showNewPin ? "Hide PIN" : "Show PIN"}>
                                                     {showNewPin ? (
                                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -421,13 +435,15 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                                                     )}
                                                 </button>
                                             </div>
+                                            {fieldErrors.newPin && <div style={{ color: '#f87171', fontSize: 11, marginTop: 4 }}>⚠ {fieldErrors.newPin}</div>}
                                         </div>
                                         <div className="form-group">
                                             <label>Confirm New PIN</label>
                                             <div className="pin-input-wrap">
                                                 <input type={showConfirmPin ? "text" : "password"} value={confirmNewPin}
-                                                    onChange={e => setConfirmNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                                    placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field" />
+                                                    onChange={e => { setConfirmNewPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setFieldErrors(fe => ({ ...fe, confirmNewPin: '' })) }}
+                                                    placeholder="••••••" maxLength={6} required disabled={loading} className="pin-input-field"
+                                                    style={fieldErrors.confirmNewPin ? { borderColor: '#f87171' } : {}} />
                                                 <button type="button" className="pin-eye-btn" onClick={() => setShowConfirmPin(v => !v)} tabIndex={-1} aria-label={showConfirmPin ? "Hide PIN" : "Show PIN"}>
                                                     {showConfirmPin ? (
                                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -436,6 +452,7 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                                                     )}
                                                 </button>
                                             </div>
+                                            {fieldErrors.confirmNewPin && <div style={{ color: '#f87171', fontSize: 11, marginTop: 4 }}>⚠ {fieldErrors.confirmNewPin}</div>}
                                         </div>
                                         <div className="change-pin-toggle">
                                             <button type="button" className="link-button" onClick={() => { setShowChangePin(false); setNewPin(''); setConfirmNewPin(''); }}>Cancel PIN change</button>

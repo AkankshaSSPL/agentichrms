@@ -5,7 +5,7 @@ These meetings are checked against leave requests for conflicts.
 """
 
 from fastapi import APIRouter, HTTPException, Request, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -40,6 +40,41 @@ class MeetingCreate(BaseModel):
     start_time: str          # HH:MM  (24h)
     end_time: str            # HH:MM  (24h)
     attendees: Optional[str] = ""
+
+    @validator("title")
+    def title_not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("Meeting title cannot be blank")
+        return v.strip()
+
+    @validator("meeting_date")
+    def date_format(cls, v):
+        try:
+            from datetime import datetime, date
+            parsed = datetime.strptime(v, "%Y-%m-%d").date()
+            if parsed < date.today():
+                raise ValueError("Meeting date cannot be in the past")
+        except ValueError as e:
+            if "does not match format" in str(e) or "time data" in str(e):
+                raise ValueError("Date must be in YYYY-MM-DD format")
+            raise
+        return v
+
+    @validator("end_time")
+    def end_after_start(cls, v, values):
+        start = values.get("start_time")
+        if start:
+            try:
+                from datetime import datetime
+                s = datetime.strptime(start, "%H:%M")
+                e = datetime.strptime(v, "%H:%M")
+                if e <= s:
+                    raise ValueError("End time must be after start time")
+            except ValueError as err:
+                if "does not match format" in str(err) or "time data" in str(err):
+                    raise ValueError("Time must be in HH:MM format (24h)")
+                raise
+        return v
 
 
 class MeetingResponse(BaseModel):

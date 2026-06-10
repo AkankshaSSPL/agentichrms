@@ -36,6 +36,7 @@ export default function LeaveRequests({ token: tokenProp, onAlert }) {
     const [actionLoading, setActionLoading] = useState(null)
     const [rejectModal, setRejectModal]     = useState(null)  // leave object
     const [rejectReason, setRejectReason]   = useState('')
+    const [rejectError, setRejectError]     = useState('')
     const [counts, setCounts]               = useState({ Pending: 0, Approved: 0, Rejected: 0 })
 
     const fetchLeaves = useCallback(async (statusFilter) => {
@@ -100,7 +101,8 @@ export default function LeaveRequests({ token: tokenProp, onAlert }) {
     }
 
     const handleReject = async () => {
-        if (!rejectReason.trim()) { showAlert('Please enter a rejection reason', 'warning'); return }
+        if (!rejectReason.trim()) { setRejectError('Please enter a reason for rejection'); return }
+        setRejectError('')
         const leaveId = rejectModal.id
         setActionLoading(leaveId + 'reject')
         try {
@@ -113,6 +115,7 @@ export default function LeaveRequests({ token: tokenProp, onAlert }) {
             showAlert('Leave rejected', 'info')
             setRejectModal(null)
             setRejectReason('')
+            setRejectError('')
             fetchLeaves(filter)
             fetchCounts()
         } catch (e) {
@@ -135,14 +138,17 @@ export default function LeaveRequests({ token: tokenProp, onAlert }) {
                         <textarea
                             autoFocus
                             value={rejectReason}
-                            onChange={e => setRejectReason(e.target.value)}
+                            onChange={e => { setRejectReason(e.target.value); if (rejectError) setRejectError('') }}
                             placeholder="Reason for rejection (required)…"
                             rows={3}
-                            style={{ width:'100%', background:'var(--bg-input)', border:'1px solid var(--border)', borderRadius:8, padding:'9px 12px', color:'var(--text-primary)', fontSize:12, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
+                            style={{ width:'100%', background:'var(--bg-input)', border:`1px solid ${rejectError ? '#f87171' : 'var(--border)'}`, borderRadius:8, padding:'9px 12px', color:'var(--text-primary)', fontSize:12, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReject() } }}
                         />
+                        {rejectError && (
+                            <div style={{ color: '#f87171', fontSize: 11, marginTop: 5 }}>⚠ {rejectError}</div>
+                        )}
                         <div style={{ display:'flex', gap:8, marginTop:14, justifyContent:'flex-end' }}>
-                            <button onClick={() => { setRejectModal(null); setRejectReason('') }}
+                            <button onClick={() => { setRejectModal(null); setRejectReason(''); setRejectError('') }}
                                 style={{ padding:'7px 16px', borderRadius:7, border:'1px solid var(--border)', background:'transparent', color:'var(--text-secondary)', fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>
                                 Cancel
                             </button>

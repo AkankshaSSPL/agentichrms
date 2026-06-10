@@ -58,9 +58,11 @@ export default function Register({ onBackToLogin }) {
     const [form, setForm] = useState({ name: '', email: '', phone: '' })
     const [error, setError] = useState('')
     const [errorType, setErrorType] = useState('') // 'duplicate' | ''
+    const [fieldErrors, setFieldErrors] = useState({}) // inline per-field errors
     const [loading, setLoading] = useState(false)
     const [faceImages, setFaceImages] = useState([])
-    const [smsInfo, setSmsInfo] = useState(null) // { masked_phone, sms_sent }
+    const [smsInfo, setSmsInfo] = useState(null) // { masked_phone, sms_sent, pin }
+    const [pinCopied, setPinCopied] = useState(false)
     const [instruction, setInstruction] = useState('')
     const [showFlash, setShowFlash] = useState(false)
     const [enrolmentActive, setEnrolmentActive] = useState(false)
@@ -79,6 +81,7 @@ export default function Register({ onBackToLogin }) {
     const handleChange = (e) => {
         const { name, value } = e.target
         setForm({ ...form, [name]: value })
+        if (fieldErrors[name]) setFieldErrors(fe => ({ ...fe, [name]: '' }))
         if (error) {
             if ((error.toLowerCase().includes('email') && name === 'email') ||
                 (error.toLowerCase().includes('phone') && name === 'phone')) {
@@ -89,7 +92,11 @@ export default function Register({ onBackToLogin }) {
 
     const handleRegisterSubmit = async (e) => {
         e.preventDefault()
-        if (!form.name || !form.email || !form.phone) { setError('All fields are required'); return }
+        const fe = {}
+        if (!form.name) fe.name = 'Full name is required'
+        if (!form.email) fe.email = 'Email is required'
+        if (!form.phone) fe.phone = 'Phone number is required'
+        if (Object.keys(fe).length > 0) { setFieldErrors(fe); return }
         setStep(2)
     }
 
@@ -202,14 +209,16 @@ export default function Register({ onBackToLogin }) {
             if (!res.ok) {
                 const err = await res.json()
                 const msg = err.detail || 'Registration failed'
-                // Detect duplicate email/phone to show login link
+                // Detect duplicate email/phone to show login link and inline field error
                 if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already exists')) {
                     setErrorType('duplicate')
+                    if (msg.toLowerCase().includes('email')) setFieldErrors(fe => ({ ...fe, email: 'This email is already registered' }))
+                    else if (msg.toLowerCase().includes('phone')) setFieldErrors(fe => ({ ...fe, phone: 'This phone number is already registered' }))
                 }
                 throw new Error(msg)
             }
             const data = await res.json()
-            setSmsInfo({ masked_phone: data.masked_phone, sms_sent: data.sms_sent })
+            setSmsInfo({ masked_phone: data.masked_phone, sms_sent: data.sms_sent, pin: data.pin })
             setStep(3)
         } catch (err) {
             setError(err.message)
@@ -274,15 +283,21 @@ export default function Register({ onBackToLogin }) {
                     <form onSubmit={handleRegisterSubmit} className="register-form">
                         <div className="form-group">
                             <label>Full Name</label>
-                            <input type="text" name="name" value={form.name} onChange={handleChange} required />
+                            <input type="text" name="name" value={form.name} onChange={handleChange} required
+                                style={fieldErrors.name ? { borderColor: '#f87171' } : {}} />
+                            {fieldErrors.name && <div style={{ color: '#f87171', fontSize: 11, marginTop: 4 }}>⚠ {fieldErrors.name}</div>}
                         </div>
                         <div className="form-group">
                             <label>Email</label>
-                            <input type="email" name="email" value={form.email} onChange={handleChange} required />
+                            <input type="email" name="email" value={form.email} onChange={handleChange} required
+                                style={fieldErrors.email ? { borderColor: '#f87171' } : {}} />
+                            {fieldErrors.email && <div style={{ color: '#f87171', fontSize: 11, marginTop: 4 }}>⚠ {fieldErrors.email}</div>}
                         </div>
                         <div className="form-group">
                             <label>Phone (E.164 format, e.g. +919876543210)</label>
-                            <input type="tel" name="phone" value={form.phone} onChange={handleChange} required />
+                            <input type="tel" name="phone" value={form.phone} onChange={handleChange} required
+                                style={fieldErrors.phone ? { borderColor: '#f87171' } : {}} />
+                            {fieldErrors.phone && <div style={{ color: '#f87171', fontSize: 11, marginTop: 4 }}>⚠ {fieldErrors.phone}</div>}
                         </div>
                         <button type="submit" className="btn-primary">Continue to Face Capture →</button>
                         <button type="button" className="btn-secondary" onClick={onBackToLogin}>← Back to Login</button>
@@ -300,6 +315,11 @@ export default function Register({ onBackToLogin }) {
                                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
                             {showFlash && <div className="flash-overlay" />}
                         </div>
+                        {error && (
+                            <div style={{ color: '#f87171', fontSize: 12, marginTop: 8, textAlign: 'center', padding: '6px 12px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8 }}>
+                                ⚠ {error}
+                            </div>
+                        )}
 
                         <div className="progress-ring-large">
                             <svg className="progress-ring-svg" width="180" height="180" viewBox="0 0 180 180">
@@ -369,6 +389,39 @@ export default function Register({ onBackToLogin }) {
                                 <div style={{ fontSize: 16, fontWeight: 700, color: '#4f8ef7', fontFamily: 'monospace', letterSpacing: 2 }}>
                                     {smsInfo.masked_phone}
                                 </div>
+                                {smsInfo.pin && (
+                                    <div style={{ marginTop: 14 }}>
+                                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>Your PIN</div>
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                                            background: 'rgba(79,142,247,0.08)', border: '1px solid rgba(79,142,247,0.25)',
+                                            borderRadius: 8, padding: '10px 16px',
+                                        }}>
+                                            <span style={{ fontSize: 28, fontWeight: 800, color: '#e2e8f0', fontFamily: 'monospace', letterSpacing: 6 }}>
+                                                {smsInfo.pin}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(smsInfo.pin)
+                                                    setPinCopied(true)
+                                                    setTimeout(() => setPinCopied(false), 2000)
+                                                }}
+                                                style={{
+                                                    background: pinCopied ? 'rgba(52,211,153,0.15)' : 'rgba(79,142,247,0.15)',
+                                                    border: `1px solid ${pinCopied ? 'rgba(52,211,153,0.4)' : 'rgba(79,142,247,0.4)'}`,
+                                                    borderRadius: 6, color: pinCopied ? '#34d399' : '#4f8ef7',
+                                                    fontSize: 11, fontWeight: 600, padding: '5px 10px',
+                                                    cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                {pinCopied ? '✓ Copied' : 'Copy'}
+                                            </button>
+                                        </div>
+                                        <div style={{ fontSize: 10, color: '#4a5168', marginTop: 6 }}>
+                                            Save this PIN — it won't be shown again.
+                                        </div>
+                                    </div>
+                                )}
                                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 8 }}>
                                     Check your SMS to get your PIN. You can change it after logging in.
                                 </div>

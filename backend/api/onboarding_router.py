@@ -5,7 +5,7 @@ Onboarding Profile Router — thin layer, delegates to OnboardingService.
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 
 from backend.database.session import get_db
@@ -83,6 +83,45 @@ class ProfileSaveRequest(BaseModel):
     bank_account_number: Optional[str] = None
     bank_branch: Optional[str] = None
     base_salary: Optional[float] = None
+
+    @validator("date_of_birth")
+    def dob_not_future(cls, v):
+        if v:
+            from datetime import datetime, date
+            try:
+                parsed = datetime.strptime(v, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError("Date of birth must be in YYYY-MM-DD format")
+            if parsed > date.today():
+                raise ValueError("Date of birth cannot be in the future")
+        return v
+
+    @validator("gender")
+    def gender_valid(cls, v):
+        allowed = {"Male", "Female", "Other", "Prefer not to say"}
+        if v and v not in allowed:
+            raise ValueError(f"Gender must be one of: {', '.join(sorted(allowed))}")
+        return v
+
+    @validator("bank_account_number")
+    def bank_account_alphanumeric(cls, v):
+        if v and not v.replace(" ", "").isalnum():
+            raise ValueError("Bank account number must contain only letters and digits")
+        return v
+
+    @validator("base_salary")
+    def salary_positive(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Base salary cannot be negative")
+        return v
+
+    @validator("emergency_contact_phone")
+    def emergency_phone_format(cls, v):
+        if v:
+            import re
+            if not re.match(r"^\+?[\d\s\-]{7,20}$", v.strip()):
+                raise ValueError("Emergency contact phone must be a valid phone number")
+        return v
 
 class HRDirectUpdateRequest(BaseModel):
     fields: dict

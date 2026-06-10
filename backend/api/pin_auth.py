@@ -7,7 +7,7 @@ POST /api/auth/request-pin  — Look up employee by ID/email/phone → send SMS 
 import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -168,6 +168,20 @@ class LoginWithPinRequest(BaseModel):
     identifier: str   # email or phone
     pin: str
 
+    @validator("identifier")
+    def identifier_not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("Identifier cannot be blank")
+        return v.strip()
+
+    @validator("pin")
+    def pin_digits_only(cls, v):
+        if not v.isdigit():
+            raise ValueError("PIN must contain digits only")
+        if len(v) != 6:
+            raise ValueError("PIN must be exactly 6 digits")
+        return v
+
 
 @router.post("/login-with-pin")
 @limiter.limit("10/minute")
@@ -213,6 +227,20 @@ class VerifyAndChangePinRequest(BaseModel):
     identifier: str   # email or phone
     current_pin: str
     new_pin: str
+
+    @validator("identifier")
+    def identifier_not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("Identifier cannot be blank")
+        return v.strip()
+
+    @validator("current_pin", "new_pin")
+    def pin_digits_only(cls, v):
+        if not v.isdigit():
+            raise ValueError("PIN must contain digits only")
+        if len(v) != 6:
+            raise ValueError("PIN must be exactly 6 digits")
+        return v
 
 
 @router.post("/verify-and-change-pin")

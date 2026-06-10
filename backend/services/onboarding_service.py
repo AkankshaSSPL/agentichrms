@@ -118,9 +118,22 @@ def apply_fields(employee: Employee, fields: dict, db: Session) -> None:
 
 def _parse_tags(answer: str, employee: Employee, db: Session) -> tuple[str, Optional[dict], bool]:
     """Extract and process PARTIAL_SAVE and PROFILE_DATA tags from AI response."""
+    validation_errors = []
     for m in re.finditer(r"<PARTIAL_SAVE>(.*?)</PARTIAL_SAVE>", answer, re.DOTALL):
         try:
-            apply_fields(employee, json.loads(m.group(1).strip()), db)
+            raw = json.loads(m.group(1).strip())
+            # Validate each field before saving
+            valid_fields = {}
+            for field, value in raw.items():
+                if value and str(value).strip():
+                    err = _validate_field_value(field, str(value))
+                    if err:
+                        validation_errors.append(err)
+                        logger.warning("Blocked invalid value for %s: %s — %s", field, value, err)
+                    else:
+                        valid_fields[field] = value
+            if valid_fields:
+                apply_fields(employee, valid_fields, db)
         except Exception as e:
             logger.warning("Partial save failed: %s", e)
     answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
@@ -132,15 +145,33 @@ def _parse_tags(answer: str, employee: Employee, db: Session) -> tuple[str, Opti
         try:
             raw = pm.group(1).strip()
             profile_data = json.loads(raw) if raw and raw != "{}" else {}
-            profile_complete = True
             answer = re.sub(r"<PROFILE_DATA>.*?</PROFILE_DATA>", "", answer, flags=re.DOTALL).strip()
             if profile_data:
-                apply_fields(employee, profile_data, db)
-            employee.onboarding_completed = True
-            employee.profile_completed = True
-            db.commit()
+                # Validate each field before saving
+                valid_fields = {}
+                for field, value in profile_data.items():
+                    if value and str(value).strip():
+                        err = _validate_field_value(field, str(value))
+                        if err:
+                            validation_errors.append(err)
+                            logger.warning("Blocked invalid value for %s: %s — %s", field, value, err)
+                        else:
+                            valid_fields[field] = value
+                if valid_fields:
+                    apply_fields(employee, valid_fields, db)
+            # Only mark complete if no validation errors blocked fields
+            if not validation_errors:
+                profile_complete = True
+                employee.onboarding_completed = True
+                employee.profile_completed = True
+                db.commit()
         except Exception as e:
             logger.error("Profile parse failed: %s", e)
+
+    # If any fields were blocked, append error message to reply so the AI re-asks
+    if validation_errors:
+        error_text = " ".join(validation_errors)
+        answer = (answer + f"\n\n⚠ {error_text} Please provide a valid value.").strip()
 
     return answer, profile_data, profile_complete
 
@@ -195,6 +226,56 @@ def _detect_name_change(message: str, history: list, current_name: str) -> Optio
                 return candidate
 
     return None
+
+
+# ── Field value validators ────────────────────────────────────────────────────
+
+def _validate_field_value(field: str, value: str) -> Optional[str]:
+    """
+    Validate a field value before saving or submitting for approval.
+    Returns an error message string if invalid, or None if valid.
+    """
+    v = str(value).strip()
+
+    if field == "bank_account_number":
+        digits_only = re.sub(r"\s", "", v)
+        if not digits_only.isdigit():
+            return "Bank account number must contain digits only — no letters or special characters."
+        if not (9 <= len(digits_only) <= 18):
+            return f"Bank account number must be between 9 and 18 digits (you entered {len(digits_only)})."
+
+    elif field == "date_of_birth":
+        from datetime import date
+        parsed = None
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"):
+            try:
+                parsed = datetime.strptime(v[:10], fmt).date()
+                break
+            except ValueError:
+                continue
+        if not parsed:
+            return "Date of birth must be a valid date (e.g. 1990-06-15)."
+        if parsed > date.today():
+            return "Date of birth cannot be in the future."
+
+    elif field == "emergency_contact_phone":
+        if not re.match(r"^\+?[\d\s\-]{7,20}$", v):
+            return "Emergency contact phone must be a valid phone number (7–20 digits)."
+
+    elif field == "base_salary":
+        try:
+            salary = float(v.replace(",", ""))
+            if salary < 0:
+                return "Base salary cannot be negative."
+        except ValueError:
+            return "Base salary must be a valid number."
+
+    elif field == "gender":
+        allowed = {"Male", "Female", "Other", "Prefer not to say"}
+        if v not in allowed:
+            return f"Gender must be one of: {', '.join(sorted(allowed))}."
+
+    return None  # valid
 
 
 # ── Service class ─────────────────────────────────────────────────────────────
@@ -378,6 +459,14 @@ CONVERSATION RULES:
    <PROFILE_DATA>{json_template}</PROFILE_DATA>
    Only include newly collected values (leave others as empty string "").
 6. If all required fields were already filled, say so warmly and output <PROFILE_DATA>{{}}</PROFILE_DATA>.
+
+FIELD VALIDATION RULES (CRITICAL — enforce before saving):
+- bank_account_number: Must be digits only, between 9 and 18 digits. If the value given is too short, too long, or contains letters/symbols, do NOT save it. Instead tell the user it's invalid and ask again. Example: "123" is invalid — tell them "Bank account numbers must be 9–18 digits. Could you double-check that?"
+- date_of_birth: Must be a valid date, not in the future.
+- emergency_contact_phone: Must be a valid phone number, 7–20 digits.
+- base_salary: Must be a positive number.
+- gender: Must be one of Male, Female, Other, or Prefer not to say.
+Never silently accept an invalid value. Always ask again with a clear friendly explanation of what's expected.
 """
 
     def build_self_edit_prompt(self, employee: Employee) -> str:
@@ -506,6 +595,14 @@ RULES:
                     "profile_complete": False,
                     "approval_requests": []
                 }
+            # Validate the value before submitting
+            val_error = _validate_field_value(pending_field, new_value)
+            if val_error:
+                return {
+                    "reply": f"That doesn't look right — {val_error} Please try again.",
+                    "profile_complete": False,
+                    "approval_requests": []
+                }
             # Create ApprovalRequest directly — no LLM needed
             from backend.database.models import ApprovalRequest as _ApprovalRequest
             approval_repo = ApprovalRepository(self.db)
@@ -610,6 +707,11 @@ RULES:
                 new_value = data.get("new_value")
                 if not field or not new_value or field not in HR_APPROVAL_REQUIRED:
                     continue
+                # Validate before creating the approval request
+                val_error = _validate_field_value(field, str(new_value))
+                if val_error:
+                    answer = f"That doesn't look right — {val_error} Please try again."
+                    break
                 old_value = getattr(employee, field, None)
                 if str(old_value or "").strip() == str(new_value).strip():
                     continue

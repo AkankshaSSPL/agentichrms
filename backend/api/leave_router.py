@@ -8,7 +8,7 @@ FILE: save as backend/api/leaves.py
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -33,6 +33,12 @@ class ApproveRequest(BaseModel):
 class RejectRequest(BaseModel):
     leave_id: int
     reason: str
+
+    @validator("reason")
+    def reason_not_blank(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Rejection reason cannot be empty")
+        return v.strip()
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

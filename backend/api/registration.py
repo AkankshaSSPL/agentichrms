@@ -93,6 +93,15 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
     if db.query(Employee).filter(Employee.phone == payload.phone).first():
         raise HTTPException(400, "This phone number is already registered. Please use a different phone number.")
 
+    # 1b. Validate phone can be normalized for SMS delivery
+    from backend.services.twilio_service import _normalize_phone
+    if not _normalize_phone(payload.phone):
+        raise HTTPException(
+            400,
+            "The phone number you entered is not valid for SMS delivery. "
+            "Please enter a valid number in international format, e.g. +919876543210."
+        )
+
     # 2. Default role
     default_role = db.query(Role).filter(Role.name == RoleName.EMPLOYEE).first()
     if not default_role:
@@ -194,4 +203,5 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
         "pin_record_id": pin_record.id,
         "masked_phone": _mask(new_employee.phone),
         "sms_sent": sms_result["success"],
+        "pin": pin,  # shown once on registration screen only — never stored in plaintext
     }
