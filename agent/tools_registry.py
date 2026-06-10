@@ -20,11 +20,14 @@ from sentence_transformers import SentenceTransformer
 from langchain.tools import tool
 from backend.core.config import settings
 from backend.database.session import SessionLocal
-from backend.database.models import Employee, Leave, LeaveBalance, Notification, Role, ApprovalRequest
+from backend.database.models import Employee, Leave, LeaveBalance, ApprovalRequest
 from backend.enums.leave_status import LeaveStatus
 from backend.enums.roles import RoleName
+from backend.enums.approval_status import ApprovalStatus
 import os
 from backend.services.email_service import send_email as _send_email
+from backend.notifications.notifier import Notifier
+from backend.notifications.notification_templates import NotifKey
 import requests
 from icalendar import Calendar as ICalendar
 from datetime import date as date_type
@@ -279,6 +282,18 @@ def apply_leave(
         db.commit()
         db.refresh(new_leave)
 
+        # ── In-app notifications ───────────────────────────────────────────
+        date_str = f"{start_date} to {end_date}"
+        notifier = Notifier(db)
+        notifier.from_template(
+            NotifKey.LEAVE_SUBMITTED, emp.id,
+            leave_type=leave_type, date_str=date_str,
+        )
+        notifier.from_template_to_hr(
+            NotifKey.LEAVE_SUBMITTED_HR,
+            employee_name=emp.name, leave_type=leave_type, date_str=date_str,
+        )
+
         hr_email = getattr(settings, "HR_EMAIL", None)
         if hr_email:
             email_subject = f"Leave Request: {emp.name} ({leave_type}) — {start_date} to {end_date}"
@@ -352,6 +367,18 @@ def confirm_leave(
         db.add(new_leave)
         db.commit()
         db.refresh(new_leave)
+
+        # ── In-app notifications ───────────────────────────────────────────
+        date_str = f"{start_date} to {end_date}"
+        notifier = Notifier(db)
+        notifier.from_template(
+            NotifKey.LEAVE_SUBMITTED, emp.id,
+            leave_type=leave_type, date_str=date_str,
+        )
+        notifier.from_template_to_hr(
+            NotifKey.LEAVE_SUBMITTED_HR,
+            employee_name=emp.name, leave_type=leave_type, date_str=date_str,
+        )
 
         hr_email = getattr(settings, "HR_EMAIL", None)
         if hr_email:
@@ -429,6 +456,13 @@ def approve_leave(leave_id: int) -> dict:
         leave.status = LeaveStatus.APPROVED
         db.commit()
 
+        # In-app notification to employee
+        date_str = f"{leave.start_date.date()} to {leave.end_date.date()}"
+        Notifier(db).from_template(
+            NotifKey.LEAVE_APPROVED, emp.id,
+            leave_type=leave.leave_type, date_str=date_str,
+        )
+
         # Prepare email content
         subject = f"Leave Request Approved: {emp.name} ({leave.leave_type})"
         body = f"""
@@ -470,6 +504,14 @@ def reject_leave(leave_id: int, reason: str = "") -> dict:
         leave.status = LeaveStatus.REJECTED
         leave.rejection_reason = reason
         db.commit()
+
+        # In-app notification to employee
+        date_str = f"{leave.start_date.date()} to {leave.end_date.date()}"
+        Notifier(db).from_template(
+            NotifKey.LEAVE_REJECTED, emp.id,
+            leave_type=leave.leave_type, date_str=date_str,
+            reason=reason or "No reason provided",
+        )
 
         subject = f"Leave Request Rejected: {emp.name} ({leave.leave_type})"
         body = f"""
@@ -537,7 +579,7 @@ def get_onboarding_checklist(employee_email: str) -> dict:
         tasks = (
             db.query(OnboardingTask)
             .filter(OnboardingTask.employee_id == emp.id)
-            .order_by(OnboardingTask.order)
+            .order_by(OnboardingTask.id)
             .all()
         )
         if not tasks:
@@ -622,7 +664,8 @@ def get_leave_summary(department: str = None) -> dict:
 def get_department_summary(department: str = None) -> dict:
     """Get department headcount and key metrics."""
     with get_db() as db:
-        query = db.query(Employee).filter(Employee.status == "active")
+        from backend.enums.statuses import EmployeeStatus
+        query = db.query(Employee).filter(Employee.status == EmployeeStatus.ACTIVE)
         if department:
             query = query.filter(Employee.department.ilike(f"%{department}%"))
         employees = query.all()
@@ -761,7 +804,7 @@ def request_profile_update(employee_email: str, field: str, new_value: str) -> d
             existing = db.query(ApprovalRequest).filter(
                 ApprovalRequest.employee_id == emp.id,
                 ApprovalRequest.field_name == field,
-                ApprovalRequest.status == "pending"
+                ApprovalRequest.status == ApprovalStatus.PENDING,
             ).first()
             if existing:
                 return {"answer": f"You already have a pending request to change your {HR_APPROVAL_REQUIRED[field]}. Please wait for HR to review it."}
@@ -775,27 +818,20 @@ def request_profile_update(employee_email: str, field: str, new_value: str) -> d
                 field_name=field,
                 old_value=old_value_str,
                 new_value=str(new_value),
-                status="pending",
+                status=ApprovalStatus.PENDING,
             )
             db.add(req)
             db.commit()
 
             field_label = HR_APPROVAL_REQUIRED[field]
-            # Notify HR
-            hr_roles = db.query(Role).filter(Role.name.in_([RoleName.HR, RoleName.ADMIN])).all()
-            hr_role_ids = [r.id for r in hr_roles]
-            hr_emps = db.query(Employee).filter(
-                Employee.role_id.in_(hr_role_ids),
-                Employee.status == "active",
-            ).all()
-            for hr in hr_emps:
-                db.add(Notification(
-                    employee_id=hr.id,
-                    title=f"📋 Profile Change Request – {emp.name}",
-                    message=f"{emp.name} requested to change {field_label} from '{old_value_str}' to '{new_value}'. Please review.",
-                    is_read=False,
-                ))
-            db.commit()
+            # Notify HR via Notifier (fan-out to all HR + Admin)
+            Notifier(db).to_hr(
+                title=f"📋 Profile Change Request – {emp.name}",
+                message=(
+                    f"{emp.name} requested to change {field_label} "
+                    f"from '{old_value_str}' to '{new_value}'. Please review."
+                ),
+            )
             hr_email = os.getenv("HR_EMAIL", "")
             if hr_email:
                 try:

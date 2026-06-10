@@ -158,7 +158,7 @@ function ProfileEditChat({ token, onClose, onSaved }) {
     const [messages, setMessages] = useState([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
-    const [history, setHistory] = useState([])
+    const [sessionId, setSessionId] = useState(null)   // persistent DB session
     const [resumeFile, setResumeFile] = useState(null)
     const [resumeText, setResumeText] = useState(null)
     const [toast, setToast] = useState(null)
@@ -171,57 +171,65 @@ function ProfileEditChat({ token, onClose, onSaved }) {
         setTimeout(() => setToast(null), 4000)
     }
 
-    // Greet on open
+    // Create a DB session + send opening greeting on mount
     useEffect(() => {
-        const greet = async () => {
+        const init = async () => {
             setLoading(true)
             try {
-                const res = await fetch(`${API}/api/onboarding-profile/chat-self`, {
+                // 1. Create a persistent session so every message is stored and
+                //    the agent receives full conversation history on each turn.
+                const sessRes = await fetch(`${API}/api/chat/sessions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({ message: 'Hello, I want to update my personal details.', history: [] }),
+                })
+                const sessData = await sessRes.json()
+                const sid = sessData.id
+                setSessionId(sid)
+
+                // 2. Opening message through the unified /api/chat endpoint
+                const res = await fetch(`${API}/api/chat/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({
+                        message: 'Hello, I want to update my personal details.',
+                        session_id: sid,
+                    }),
                 })
                 const data = await res.json()
-                const botMsg = { role: 'assistant', content: data.reply }
-                setMessages([botMsg])
-                setHistory([{ role: 'assistant', content: data.reply }])
-                if (data.profile_complete) { if (onSaved) onSaved(); onClose() }
-            } catch { setMessages([{ role: 'assistant', content: "What would you like to update? I can help with your address, emergency contact, gender, or date of birth. Work details like department or designation require HR approval." }]) }
-            finally { setLoading(false) }
+                setMessages([{ role: 'assistant', content: data.answer }])
+            } catch {
+                setMessages([{ role: 'assistant', content: "What would you like to update? I can help with your address, emergency contact, gender, or date of birth. Work details like department or designation require HR approval." }])
+            } finally {
+                setLoading(false)
+            }
         }
-        greet()
+        init()
     }, [])
 
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-    // Main send function
+    // Main send — always uses sessionId so backend loads history from DB
     const send = async (textOverride, resumeOverride = null) => {
         const text = textOverride !== undefined ? textOverride : input.trim()
         if (!text || loading) return
         setInput('')
-        const userMsg = { role: 'user', content: text }
-        const newHistory = [...history, userMsg]
-        if (!textOverride) setMessages(prev => [...prev, userMsg])
-        setHistory(newHistory)
+        if (!textOverride) setMessages(prev => [...prev, { role: 'user', content: text }])
         setLoading(true)
 
         try {
-            const res = await fetch(`${API}/api/onboarding-profile/chat-self`, {
+            const body = { message: text, session_id: sessionId }
+            // Include resume text in the message when uploading so the agent
+            // has the extracted content; it is NOT a separate API field here.
+            if (resumeOverride !== null || resumeText) {
+                body.message = text  // resume content already baked into text by buildResumeMessage
+            }
+            const res = await fetch(`${API}/api/chat/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    message: text,
-                    history: newHistory,
-                    resume_text: resumeOverride !== null ? resumeOverride : resumeText,
-                }),
+                body: JSON.stringify(body),
             })
             const data = await res.json()
-            const botMsg = { role: 'assistant', content: data.reply }
-            setMessages(prev => [...prev, botMsg])
-            setHistory(h => [...h, { role: 'assistant', content: data.reply }])
-            if (data.profile_complete) {
-                setTimeout(() => { if (onSaved) onSaved(); onClose() }, 1800)
-            }
+            setMessages(prev => [...prev, { role: 'assistant', content: data.answer }])
         } catch {
             setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.' }])
         } finally {

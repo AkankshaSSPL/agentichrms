@@ -1,12 +1,57 @@
 # HANDOFF — Agentic HRMS refactor (read this first)
 
-_Last updated: 2026-06-08. Branch: `develop`._
+_Last updated: 2026-06-08 (session end). Active branch: `notification_rbac`._
 
 This document is the single place to resume work from any machine. It records
 **where the code stands**, the **decisions made**, the **next task in flight**,
 and **how to set up a fresh PC**. The deep design docs live in `codereview/`
 (RULES, ARCHITECTURE, STRUCTURAL_REVIEW, EXECUTION) — treat them as a
 **pattern reference, NOT a folder-structure mandate** (see Decision 1).
+
+---
+
+## ⏯ RESUME HERE — where we stopped (2026-06-08)
+
+**The notifications + RBAC work is implemented and cleaned. It has NOT been run /
+tested yet. End-to-end testing is the next action.**
+
+- **`develop`** = integrated trunk (Suraj's refactor + our Phase-0 guardrails +
+  the approved `NOTIFICATIONS_RBAC_PLAN.md` and refreshed handoff).
+- **`notification_rbac`** = `develop` + Suraj's implementation of the plan
+  (commit `5bc96b8` "implemented the notifications, just need to test once") +
+  **our cleanup commit `0ba0cb5`**. This is the branch to test on. Merge into
+  `develop` only once E2E passes.
+
+**What `0ba0cb5` (our cleanup) did** (full detail in `CLEANUP_LOG.md`): re-removed
+`run_migrations()` from `main.py` (no startup migrations); deleted committed junk
+(`backend/api/_backup_before_migration/`, `test.db`, `tests/test.db`,
+`registration_error.txt`); deleted the dead unwired `backend/api/onboarding_profile.py`;
+**linearized the migration chain** (re-pointed `001_rename_pin_code` onto
+`9f3e1a2b4c5d`, deleted redundant `dc375aac3cda` + the `64697194c11e` merge →
+single linear head `001_rename_pin_code`).
+
+**Verified statically only** (no DB/runtime in the work session): `backend`+`agent`
+compile; migration chain is one linear head (parsed). **NOT yet verified:** app
+actually boots (e.g. is `slowapi` installed?), `alembic upgrade head` runs on
+Postgres, notification flows + `tests/test_critical_paths.py` pass.
+
+**To resume → run E2E (the only blockers left are setup):**
+1. `pip install -r requirements.txt`  (slowapi was added this branch)
+2. `.env` must have `DATABASE_URL` + `JWT_SECRET` (app refuses to boot without them).
+3. **Fresh DB**, then `alembic upgrade head` (migrations no longer auto-run).
+   ⚠️ If a DB was already stamped at the deleted `dc375aac3cda`, use a fresh DB
+   or `alembic stamp`. `python scripts/seed_db.py` to seed.
+4. `python -m uvicorn backend.main:app --reload --port 8000` + `cd frontend && npm run dev`.
+5. Walk the 3 flows: (a) employee applies leave via chatbot → HR bell + employee
+   confirmation; (b) employee requests profile change → HR bell; (c) HR
+   approves/rejects leave → employee bell. Also run `pytest`.
+
+**Pre-merge checklist before `notification_rbac` → `develop`:** E2E passes ·
+`alembic upgrade head` clean on fresh DB · decide if the big frontend rewrite
+(App.jsx → hooks/components) rides along or is reviewed separately.
+
+**Repo/push:** `github.com/AkankshaSSPL/agentichrms`, push via the `GuneshSSPL`
+gh account, commits authored as `Gunesh Kulkarni <gkulkarni@sveltoz.com>`.
 
 ---
 
@@ -55,48 +100,27 @@ reconcile deliberately.
 | Phase 0 (safety) | ✅ **Done on develop.** PIN hashed at rest, JWT_SECRET required, dead code gone, single settings source, ruff/CI/.env.example added. Auto-migration **removed** from `backend/main.py`. **`alembic/env.py` AUTHORED** (was missing). Remaining (small): seed scripts still at repo root; drop plaintext `permanent_pin` column. |
 | Phase 1 (foundation) | ✅ **Largely done by Suraj.** `backend/database/models/` is now a per-domain package (auth/employee/leave/chat/rbac/workflow/notification). Enums wired in. ❌ still no base repo/service/exception scaffolding, no request-id middleware, no tests. |
 | Phase 2 (leave) | ✅ **Done.** `LeaveService`/`LeaveRepository` live in `backend/services/` + `backend/repositories/`, wired via `backend/api/leave_router.py`; old `leaves_admin.py` deleted. HR approve/reject/view consolidated. Employee apply/confirm still lives in `agent/tools_registry.py` (creation path). |
-| Phase 3 (notifications) | ⚠️ **NEXT TASK — see §4.** Half-built: `backend/notifications/` templates exist but only cover leave approve/reject; producers are inconsistent and several events emit no in-app notification. Plan approved in `NOTIFICATIONS_RBAC_PLAN.md`. |
-| Phase 4 (RBAC) | ⚠️ **Fragile — folded into the §4 task.** Silent JWT fallback on DB error, NULL-role crashes, unguarded endpoints. `email_settings.py` still uses `require_role` vs `require_permission`. |
+| Phase 3 (notifications) | ✅ **Implemented on `notification_rbac`, pending E2E.** Unified `backend/notifications/notifier.py` (`to_employee`/`to_hr` fan-out/`from_template`); producers wired (leave-apply now notifies HR + employee; `save_profile` fans out to HR). Needs end-to-end verification — see ⏯ RESUME HERE. |
+| Phase 4 (RBAC) | ✅ **Hardened on `notification_rbac`, pending E2E.** `permissions.py` + `security.py` now **fail closed** (503) instead of trusting the JWT on DB error; null-safe role access; `onboarding.py`/`docs.py` guarded; `make_role_id_not_null` migration added. Deferred: collapse 3 guard patterns; drop dead `permissions`/`role_permissions` tables. |
 | Phase 5 (agent runner) | not started. `agent/agent.py` + `agent/tools_registry.py` monolith; executor likely rebuilt per request. |
 | Phase 6/7 (frontend) | not started (all `.jsx`). |
 | Phase 8 (hardening) | not started. |
 
 ---
 
-## 4. NEXT TASK IN FLIGHT — Notifications + RBAC hardening
+## 4. NEXT TASK IN FLIGHT — End-to-end test of notifications + RBAC
 
-**Full approved plan: `NOTIFICATIONS_RBAC_PLAN.md` (read it before starting).**
+The notifications + RBAC plan (`NOTIFICATIONS_RBAC_PLAN.md`) is **implemented**
+(Suraj, commit `5bc96b8`) and **cleaned** (our commit `0ba0cb5`) on the
+`notification_rbac` branch. The remaining work is to **run it end-to-end and
+verify**, then merge to `develop`. Exact steps + pre-merge checklist are in the
+**⏯ RESUME HERE** block at the top of this file.
 
-Two problems, one pass. Do it on a branch:
-`git checkout develop && git checkout -b feat/notifications-rbac`
-
-**Part 1 — make notifications work cleanly (one unified `Notifier`):**
-- Build `backend/notifications/notifier.py` — `to_employee` / `to_hr` (HR+Admin
-  fan-out) / `from_template`. Route **every** producer through it.
-- Fix the real gaps: leave-apply (`agent/tools_registry.py:270`,`:344`) currently
-  emails HR but writes **no in-app notification** → add HR + employee notifications;
-  `save_profile` (`backend/services/onboarding_service.py:260`) notifies the
-  employee only → add the HR fan-out the `self_chat` path already does.
-- Generalize `backend/notifications/notification_templates.py` +
-  `notification_service.py` (decouple from the `Leave` type), then retire the two
-  ad-hoc `save_notification` variants (`approval_repository.py`, `leave_repository.py`).
-- Frontend needs **no change** (`NotificationBell.jsx` already polls correctly).
-
-**Part 2 — fix the critical RBAC fragilities:**
-- Remove the silent JWT-fallback-on-DB-error in `backend/core/permissions.py:147`
-  and `backend/core/security.py:98` → **fail closed** (503).
-- Null-safe every `employee.role.name` access (no 500s on NULL role).
-- Guard the wide-open endpoints: `backend/api/onboarding.py` (self-or-HR) and
-  `backend/api/docs.py` (require auth).
-- Author (do NOT apply) an Alembic migration making `role_id` NOT NULL.
-
-**Deferred (diagnosed, logged in `CLEANUP_LOG.md`):** collapse the 3 guard
-patterns into `require_permission`; remove the dead `permissions`/`role_permissions`
-tables; consolidate the 3 token-extraction copies.
-
-**Verify:** `python -m compileall backend agent` + ruff on changed files +
-grep-gate that no `save_notification(` call sites remain. End-to-end checklist in
-the plan doc.
+What's already done on `notification_rbac` vs the plan: unified `Notifier` ✅,
+leave-apply + `save_profile` HR notifications ✅, RBAC fail-closed ✅, guarded
+endpoints ✅, `make_role_id_not_null` migration ✅. Deferred (diagnosed, in
+`CLEANUP_LOG.md`): collapse the 3 guard patterns into `require_permission`; drop
+the dead `permissions`/`role_permissions` tables; consolidate token extraction.
 
 ---
 

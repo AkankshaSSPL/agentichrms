@@ -10,19 +10,13 @@ from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
 from datetime import datetime
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee, Notification
 from backend.core.security import verify_token
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def get_current_employee(request: Request, db: Session = Depends(get_db)):

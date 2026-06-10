@@ -4,6 +4,8 @@ venv/
 .env
 __pycache__/
 *.pyc
+*.db
+*_error.txt
 data/chroma_db/
 data/hr_database.sqlite
 node_modules/

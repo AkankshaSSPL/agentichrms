@@ -135,3 +135,26 @@ branch as the going-forward base** and re-applied the few things it was missing.
   write-nowhere (PINs live in `permanent_pin_hash`).
 - **Rotate the old secrets** (`JWT_SECRET`, DB password, email creds) on the
   server — they predate these branches.
+
+---
+
+## notification_rbac branch — pre-test cleanup
+
+Suraj's `notification_rbac` branch implemented the approved plan (unified
+`Notifier`, fail-closed RBAC, guarded endpoints, seed scripts → `scripts/`) but
+shipped some regressions/junk. Cleaned up before end-to-end testing so the
+eventual `develop` merge stays clean.
+
+| Change | Why |
+|---|---|
+| Removed `run_migrations()` + lifespan call + `engine,Base` import in `backend/main.py` | Branch reintroduced migrations-at-startup (R16) — a broken schema must not boot silently. Removed the matching `patch("backend.main.run_migrations")` in `tests/conftest.py` (function no longer exists; test schema is built by `Base.metadata.create_all`). |
+| Deleted `backend/api/_backup_before_migration/` (13 files) | Backup copies of routers committed by mistake. |
+| Deleted `test.db`, `tests/test.db`, `registration_error.txt` | 176 KB SQLite binaries + an error log; not source. `conftest.py` recreates the test DB each run. Gitignored `*.db` and `*_error.txt`. |
+| Deleted `backend/api/onboarding_profile.py` | Re-added but unwired duplicate; the live router is `backend/api/onboarding_router.py`. |
+| **Linearized the migration chain** | The branch's pin_hash migrations were broken for a fresh `alembic upgrade head`: `001_rename_pin_code` had `down_revision=None` (a 2nd root that could run before the table existed) and `dc375aac3cda` re-added `pin_hash` that the rename already produced (duplicate-column error). Re-pointed `001_rename_pin_code` onto the real previous head `9f3e1a2b4c5d` (make_role_id_not_null), and deleted `dc375aac3cda` + `64697194c11e_merge_heads`. Verified single linear head = `001_rename_pin_code`, single base = `7064cd011618`. |
+
+**Before E2E:** migrations no longer auto-run — execute `alembic upgrade head`
+once against a **fresh** database. (If a DB was already stamped at the deleted
+`dc375aac3cda`, use a fresh DB or `alembic stamp` to the new head.)
+
+To restore any deleted file: `git checkout <notification_rbac sha> -- <path>`.

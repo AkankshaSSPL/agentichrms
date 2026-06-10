@@ -5,26 +5,44 @@ Onboarding API Routes
 - GET    /api/onboarding/{employee_id}/progress
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Dict, Any
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee, OnboardingTask
+from backend.core.security import verify_token
+from backend.enums import RoleName
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
+
+def _require_self_or_hr(employee_id: int, request: Request, db: Session) -> None:
+    """Allow access only if caller is the employee themselves or an HR/Admin user."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    payload = verify_token(auth.split(" ", 1)[1])
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    caller_id = int(payload.get("sub", 0))
+    # Allow if accessing own data
+    if caller_id == employee_id:
+        return
+    # Allow if HR or Admin — read role fresh from DB
+    caller = db.query(Employee).filter(Employee.id == caller_id).first()
+    if not caller:
+        raise HTTPException(status_code=401, detail="Caller not found")
+    role = caller.role.name if caller.role else None
+    if role not in (RoleName.HR, RoleName.ADMIN):
+        raise HTTPException(status_code=403, detail="Access denied: you can only view your own onboarding data.")
 
 @router.get("/{employee_id}/checklist")
-def get_checklist(employee_id: int, db: Session = Depends(get_db)):
+def get_checklist(employee_id: int, request: Request, db: Session = Depends(get_db)):
     """Get all onboarding tasks for an employee."""
+    _require_self_or_hr(employee_id, request, db)
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -49,8 +67,9 @@ def get_checklist(employee_id: int, db: Session = Depends(get_db)):
     }
 
 @router.post("/{employee_id}/task/{task_id}/complete")
-def complete_task(employee_id: int, task_id: int, db: Session = Depends(get_db)):
+def complete_task(employee_id: int, task_id: int, request: Request, db: Session = Depends(get_db)):
     """Mark a task as completed."""
+    _require_self_or_hr(employee_id, request, db)
     task = db.query(OnboardingTask).filter(
         OnboardingTask.id == task_id,
         OnboardingTask.employee_id == employee_id
@@ -85,8 +104,9 @@ def complete_task(employee_id: int, task_id: int, db: Session = Depends(get_db))
     }
 
 @router.get("/{employee_id}/progress")
-def get_progress(employee_id: int, db: Session = Depends(get_db)):
+def get_progress(employee_id: int, request: Request, db: Session = Depends(get_db)):
     """Get onboarding progress percentage."""
+    _require_self_or_hr(employee_id, request, db)
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")

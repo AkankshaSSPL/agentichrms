@@ -190,10 +190,11 @@ const Login = ({ onSuccess, onRegisterClick }) => {
             const data = await response.json()
             if (!response.ok) throw new Error(data.detail || 'Face not recognized')
 
+            const employee = { id: data.employee_id, name: data.name, email: data.email, role: data.role }
             localStorage.setItem('access_token', data.access_token)
-            localStorage.setItem('hrms_employee', JSON.stringify(data.employee))
+            localStorage.setItem('hrms_employee', JSON.stringify(employee))
             localStorage.setItem('hrms_token', data.access_token)
-            onSuccess(data.access_token, data.employee)
+            onSuccess(data.access_token, employee)
         } catch (err) {
             setError(err.message)
             setTimeout(() => {
@@ -237,11 +238,12 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                 })
                 const data = await res.json()
                 if (!res.ok) throw new Error(data.detail || 'Change failed')
+                const employee = { id: data.employee_id, name: data.name, email: data.email, role: data.role }
                 localStorage.setItem('access_token', data.access_token)
-                localStorage.setItem('hrms_employee', JSON.stringify(data.employee))
+                localStorage.setItem('hrms_employee', JSON.stringify(employee))
                 localStorage.setItem('hrms_token', data.access_token)
                 setMessage('PIN changed successfully!')
-                setTimeout(() => onSuccess(data.access_token, data.employee), 1000)
+                setTimeout(() => onSuccess(data.access_token, employee), 1000)
             } else {
                 const res = await fetch('/api/auth/login-with-pin', {
                     method: 'POST',
@@ -250,10 +252,11 @@ const Login = ({ onSuccess, onRegisterClick }) => {
                 })
                 const data = await res.json()
                 if (!res.ok) throw new Error(data.detail || 'Invalid credentials')
+                const employee = { id: data.employee_id, name: data.name, email: data.email, role: data.role }
                 localStorage.setItem('access_token', data.access_token)
-                localStorage.setItem('hrms_employee', JSON.stringify(data.employee))
+                localStorage.setItem('hrms_employee', JSON.stringify(employee))
                 localStorage.setItem('hrms_token', data.access_token)
-                setTimeout(() => onSuccess(data.access_token, data.employee), 500)
+                setTimeout(() => onSuccess(data.access_token, employee), 500)
             }
         } catch (err) {
             setError(err.message)

@@ -6,30 +6,28 @@ POST /api/auth/request-pin  — Look up employee by ID/email/phone → send SMS 
 
 import logging
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee, PINVerification
 from backend.services.twilio_service import generate_pin, send_pin_sms
-from backend.core.security import get_password_hash
-from backend.enums import EmployeeStatus, PinType, RoleName
 from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest
+from backend.enums import EmployeeStatus, PinType, RoleName
+from backend.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["PIN Authentication"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 class RequestPinRequest(BaseModel):
@@ -89,7 +87,6 @@ def request_pin(
         )
 
     if not employee and payload.phone:
-        # Normalize: strip spaces and try both with/without +91
         raw = payload.phone.strip()
         employee = (
             db.query(Employee)
@@ -173,7 +170,8 @@ class LoginWithPinRequest(BaseModel):
 
 
 @router.post("/login-with-pin")
-def login_with_pin(payload: LoginWithPinRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login_with_pin(request: Request, payload: LoginWithPinRequest, db: Session = Depends(get_db)):
     from backend.core.security import create_access_token, verify_password
     from datetime import timedelta
 
@@ -187,26 +185,26 @@ def login_with_pin(payload: LoginWithPinRequest, db: Session = Depends(get_db)):
     if not emp:
         raise HTTPException(404, "No active employee found with the provided details.")
 
-    # Verify PIN
     if not emp.permanent_pin_hash:
         raise HTTPException(400, "No PIN set. Please use your default PIN or contact HR.")
 
     if not verify_password(payload.pin, emp.permanent_pin_hash):
         raise HTTPException(401, "Incorrect PIN.")
 
+    role_name = emp.role.name if emp.role else RoleName.EMPLOYEE
     token = create_access_token({
         "sub": str(emp.id),
         "email": emp.email,
-        "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
+        "role": role_name,
     }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
 
     return {
         "access_token": token,
-        "employee": {
-            "id": emp.id, "name": emp.name, "email": emp.email,
-            "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
-            "onboarding_completed": emp.onboarding_completed,
-        }
+        "token_type": "bearer",
+        "employee_id": emp.id,
+        "name": emp.name,
+        "email": emp.email,
+        "role": role_name,
     }
 
 
@@ -218,7 +216,8 @@ class VerifyAndChangePinRequest(BaseModel):
 
 
 @router.post("/verify-and-change-pin")
-def verify_and_change_pin(payload: VerifyAndChangePinRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def verify_and_change_pin(request: Request, payload: VerifyAndChangePinRequest, db: Session = Depends(get_db)):
     from backend.core.security import create_access_token, verify_password, get_password_hash
     from datetime import timedelta
 
@@ -232,7 +231,6 @@ def verify_and_change_pin(payload: VerifyAndChangePinRequest, db: Session = Depe
     if not emp:
         raise HTTPException(404, "No active employee found with the provided details.")
 
-    # Verify current PIN
     if not emp.permanent_pin_hash:
         raise HTTPException(400, "No PIN set on this account.")
     if not verify_password(payload.current_pin, emp.permanent_pin_hash):
@@ -247,18 +245,19 @@ def verify_and_change_pin(payload: VerifyAndChangePinRequest, db: Session = Depe
     emp.pin_set_at = datetime.utcnow()
     db.commit()
 
+    role_name = emp.role.name if emp.role else RoleName.EMPLOYEE
     token = create_access_token({
         "sub": str(emp.id),
         "email": emp.email,
-        "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
+        "role": role_name,
     }, expires_delta=timedelta(hours=settings.JWT_EXPIRY_HOURS))
 
     logger.info("PIN changed for employee %s", emp.id)
     return {
         "access_token": token,
-        "employee": {
-            "id": emp.id, "name": emp.name, "email": emp.email,
-            "role": emp.role.name if emp.role else RoleName.EMPLOYEE,
-            "onboarding_completed": emp.onboarding_completed,
-        }
+        "token_type": "bearer",
+        "employee_id": emp.id,
+        "name": emp.name,
+        "email": emp.email,
+        "role": role_name,
     }

@@ -13,8 +13,9 @@ from backend.database.models import Leave, Notification
 from backend.enums import LeaveStatus
 from backend.core.email import send_email
 from backend.repositories.leave_repository import LeaveRepository
+from backend.notifications.notifier import Notifier
 from backend.notifications.notification_templates import NotifKey
-from backend.notifications.notification_service import build_notification, build_email
+from backend.notifications.notification_service import build_email
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +130,12 @@ class LeaveService:
     def _notify_approval(self, leave: Leave) -> None:
         try:
             date_str = _format_date_range(leave)
-            self.repo.save_notification(
-                build_notification(NotifKey.LEAVE_APPROVED, leave, date_str)
+            Notifier(self.db).from_template(
+                NotifKey.LEAVE_APPROVED,
+                leave.employee_id,
+                leave_type=leave.leave_type,
+                date_str=date_str,
+                reason_text="",
             )
             emp = self.repo.get_employee(leave.employee_id)
             if emp:
@@ -147,8 +152,13 @@ class LeaveService:
     def _notify_rejection(self, leave: Leave, reason: str) -> None:
         try:
             date_str = _format_date_range(leave)
-            self.repo.save_notification(
-                build_notification(NotifKey.LEAVE_REJECTED, leave, date_str, reason)
+            reason_text = f" Reason: {reason}" if reason else ""
+            Notifier(self.db).from_template(
+                NotifKey.LEAVE_REJECTED,
+                leave.employee_id,
+                leave_type=leave.leave_type,
+                date_str=date_str,
+                reason_text=reason_text,
             )
             emp = self.repo.get_employee(leave.employee_id)
             if emp:
@@ -161,4 +171,3 @@ class LeaveService:
                 )
         except Exception as e:
             logger.warning("Rejection notification failed: %s", e)
-            

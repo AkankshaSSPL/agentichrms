@@ -22,7 +22,9 @@ class ApprovalRepository:
     def get_all(self, status: Optional[str] = None) -> list[ApprovalRequest]:
         query = self.db.query(ApprovalRequest)
         if status:
-            query = query.filter(ApprovalRequest.status == status)
+            # Normalise to lowercase — DB stores 'pending', 'approved', 'rejected'
+            normalised = status.strip().lower()
+            query = query.filter(ApprovalRequest.status == normalised)
         return query.order_by(ApprovalRequest.id.desc()).all()
 
     def get_by_employee(self, employee_id: int) -> list[ApprovalRequest]:

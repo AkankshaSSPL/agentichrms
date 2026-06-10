@@ -20,6 +20,8 @@ from backend.enums import ChatRole
 from backend.core.config import settings
 from backend.repositories.onboarding_repository import OnboardingRepository
 from backend.repositories.approval_repository import ApprovalRepository
+from backend.notifications.notifier import Notifier
+from backend.notifications.notification_templates import NotifKey
 
 logger = logging.getLogger(__name__)
 
@@ -257,13 +259,18 @@ class OnboardingService:
                     old_value=old_value,
                     new_value=value,
                 )
-                approval_repo.save_notification(
+                notifier = Notifier(self.db)
+                notifier.from_template(
+                    NotifKey.PROFILE_CHANGE_REQUESTED,
                     employee.id,
-                    title="Profile Change Requested",
-                    message=(
-                        f"Your request to update '{HR_APPROVAL_REQUIRED[field]}' "
-                        f"to '{value}' has been submitted to HR for approval."
-                    ),
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=value,
+                )
+                notifier.from_template_to_hr(
+                    NotifKey.PROFILE_CHANGE_REQUESTED_HR,
+                    employee_name=employee.name,
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=value,
                 )
                 pending_approval.append({
                     "field": field,
@@ -309,12 +316,12 @@ class OnboardingService:
                     pass
             else:
                 setattr(employee, key, val)
-        self.repo.save_notification(
+        self.db.commit()
+        Notifier(self.db).to_employee(
             employee.id,
             title="Profile Updated by HR",
             message=f"HR has updated: {', '.join(fields.keys())}. Please review your profile.",
         )
-        self.db.commit()
         return {"message": "Profile updated", "updated_fields": list(fields.keys())}
 
     def build_hr_system_prompt(self, employee: Employee) -> str:
@@ -425,7 +432,7 @@ RULES:
             self.db.commit()
             name_changed = True
             logger.info("HR updated name: %s -> %s (emp %s)", old_name, new_name, employee.id)
-            self.repo.save_notification(
+            Notifier(self.db).to_employee(
                 employee.id,
                 title="Name Updated by HR",
                 message=f"Your name has been updated from {old_name} to {new_name} by HR.",
@@ -452,19 +459,114 @@ RULES:
 
         # If a restricted field is mentioned, check if the message contains a new value
         if field_detected:
-            # Extract potential new value – look for quoted text or after "to"
             new_val_match = re.search(r'(?:to|as|:=|->)\s*["\']?([^"\'\n]{2,50})["\']?', message, re.IGNORECASE)
             if not new_val_match:
-                # Also try catching after the field name like "change name to John"
                 new_val_match = re.search(rf'{field_detected}\s+(?:to|as)\s+([A-Za-z0-9\s]+?)(?:\.|$|\n)', message, re.IGNORECASE)
             if not new_val_match:
-                # No new value provided – ask for it immediately
                 label = HR_APPROVAL_REQUIRED[field_detected]
                 return {
                     "reply": f"Sure! What would you like to change your {label} to?",
                     "profile_complete": False,
                     "approval_requests": []
                 }
+
+        # ── Step 1b: Fallback — detect if last bot message was asking for a new value ──
+        # This catches the case where:
+        #   Bot: "What would you like to change your Full name to?"
+        #   User: "Riya Sharma"  ← no HR field keyword, but it IS the answer
+        pending_field = None
+        pending_label = None
+        if not field_detected and history:
+            last_bot = next(
+                (h["content"] for h in reversed(history) if h.get("role") in ("assistant", "system")),
+                ""
+            )
+            last_bot_lower = last_bot.lower()
+            # Check if last bot message was asking for a value for an HR-approval field
+            for field_key, field_label in HR_APPROVAL_REQUIRED.items():
+                if (
+                    f"change your {field_label.lower()}" in last_bot_lower
+                    or f"update your {field_label.lower()}" in last_bot_lower
+                    or f"new {field_label.lower()}" in last_bot_lower
+                    or (field_label.lower() in last_bot_lower and "what" in last_bot_lower)
+                ):
+                    # The current message is the new value — process directly
+                    new_value = message.strip().rstrip(".,;")
+                    if len(new_value) >= 2:
+                        pending_field = field_key
+                        pending_label = field_label
+                        break
+
+        if pending_field:
+            new_value = message.strip().rstrip(".,;")
+            old_value = getattr(employee, pending_field, None)
+            if str(old_value or "").strip().lower() == new_value.lower():
+                return {
+                    "reply": f"Your {pending_label} is already set to '{new_value}'. No change needed.",
+                    "profile_complete": False,
+                    "approval_requests": []
+                }
+            # Create ApprovalRequest directly — no LLM needed
+            from backend.database.models import ApprovalRequest as _ApprovalRequest
+            approval_repo = ApprovalRepository(self.db)
+            existing = self.db.query(_ApprovalRequest).filter(
+                _ApprovalRequest.employee_id == employee.id,
+                _ApprovalRequest.field_name == pending_field,
+                _ApprovalRequest.status == "pending",
+            ).first()
+            if existing:
+                return {
+                    "reply": f"You already have a pending request to change your {pending_label}. Please wait for HR to review it.",
+                    "profile_complete": False,
+                    "approval_requests": []
+                }
+            apr = approval_repo.create_request(
+                employee_id=employee.id,
+                requested_by_employee_id=employee.id,
+                field_name=pending_field,
+                old_value=str(old_value) if old_value is not None else "",
+                new_value=new_value,
+            )
+            notifier = Notifier(self.db)
+            notifier.from_template(
+                NotifKey.PROFILE_CHANGE_REQUESTED,
+                employee.id,
+                field_label=pending_label,
+                new_value=new_value,
+            )
+            notifier.from_template_to_hr(
+                NotifKey.PROFILE_CHANGE_REQUESTED_HR,
+                employee_name=employee.name,
+                field_label=pending_label,
+                new_value=new_value,
+            )
+            try:
+                from backend.core.email import send_email
+                from backend.core.config import settings as _settings
+                hr_email = getattr(_settings, "HR_EMAIL", None)
+                if hr_email:
+                    send_email(
+                        to=hr_email,
+                        subject=f"Profile Update Request — {employee.name}",
+                        body=(
+                            f"{employee.name} has requested to update "
+                            f"'{pending_label}' to '{new_value}'.\n\n"
+                            f"Please log in to HRMS and review the Approval Requests section."
+                        ),
+                        triggered_by="self_chat_approval",
+                        db=self.db,
+                    )
+            except Exception as e:
+                logger.warning("HR email notification failed: %s", e)
+
+            return {
+                "reply": (
+                    f"Your request to change your {pending_label} to '{new_value}' "
+                    f"has been submitted to HR for approval. You'll be notified once it's reviewed."
+                ),
+                "profile_complete": False,
+                "approval_requests": [{"field": pending_field, "label": pending_label, "request_id": apr.id}],
+            }
 
         # Step 2: If we reach here, either the field is not restricted, or a new value was provided.
         # Build the AI prompt with instruction to emit approval tag.
@@ -518,26 +620,19 @@ RULES:
                     old_value=old_value,
                     new_value=new_value,
                 )
-                # Notify employee
-                approval_repo.save_notification(
+                notifier = Notifier(self.db)
+                notifier.from_template(
+                    NotifKey.PROFILE_CHANGE_REQUESTED,
                     employee.id,
-                    title="Profile Change Requested",
-                    message=(
-                        f"Your request to update '{HR_APPROVAL_REQUIRED[field]}' "
-                        f"to '{new_value}' has been submitted to HR for approval."
-                    ),
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=new_value,
                 )
-                # Notify all HR/Admin staff in-app
-                for hr in approval_repo.get_hr_employees():
-                    approval_repo.save_notification(
-                        hr.id,
-                        title="Profile Update Request",
-                        message=(
-                            f"{employee.name} has requested to update "
-                            f"'{HR_APPROVAL_REQUIRED[field]}' to '{new_value}'. "
-                            f"Please review in the Approval Requests section."
-                        ),
-                    )
+                notifier.from_template_to_hr(
+                    NotifKey.PROFILE_CHANGE_REQUESTED_HR,
+                    employee_name=employee.name,
+                    field_label=HR_APPROVAL_REQUIRED[field],
+                    new_value=new_value,
+                )
                 # Email HR
                 try:
                     from backend.core.email import send_email

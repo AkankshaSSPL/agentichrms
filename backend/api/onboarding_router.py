@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee
 from backend.core.security import verify_token
 from backend.enums import RoleName
@@ -18,12 +18,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding-profile", tags=["Onboarding Profile"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def _get_employee(request: Request, db: Session) -> Employee:
@@ -44,7 +38,10 @@ def _require_hr_payload(request: Request) -> dict:
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "Missing token")
     payload = verify_token(auth.split(" ")[1])
-    if not payload or payload.get("role") not in (RoleName.HR, RoleName.ADMIN):
+    if not payload:
+        raise HTTPException(401, "Invalid token")
+    role = payload.get("role")
+    if not role or role not in (RoleName.HR, RoleName.ADMIN):
         raise HTTPException(403, "Only HR or admin can perform this action")
     return payload
 
@@ -180,7 +177,8 @@ def get_my_profile(request: Request, employee_id: Optional[int] = None, db: Sess
 def get_pending_approval_requests(request: Request, db: Session = Depends(get_db)):
     from backend.services.approval_service import ApprovalService
     employee = _get_employee(request, db)
-    if employee.role.name not in [RoleName.HR, RoleName.ADMIN]:
+    role = employee.role.name if employee.role else None
+    if role not in [RoleName.HR, RoleName.ADMIN]:
         raise HTTPException(403, "Only HR/Admin can view pending requests")
     return ApprovalService(db).list_requests(status="pending", hr_email=employee.email)
 
@@ -189,7 +187,8 @@ def get_pending_approval_requests(request: Request, db: Session = Depends(get_db
 def approve_approval_request(request_id: int, payload: ApproveRejectPayload, request: Request, db: Session = Depends(get_db)):
     from backend.services.approval_service import ApprovalService
     employee = _get_employee(request, db)
-    if employee.role.name not in [RoleName.HR, RoleName.ADMIN]:
+    role = employee.role.name if employee.role else None
+    if role not in [RoleName.HR, RoleName.ADMIN]:
         raise HTTPException(403, "Only HR/Admin can approve requests")
     return ApprovalService(db).process_action(request_id, "approve", employee.id, payload.notes)
 
@@ -198,6 +197,7 @@ def approve_approval_request(request_id: int, payload: ApproveRejectPayload, req
 def reject_approval_request(request_id: int, payload: ApproveRejectPayload, request: Request, db: Session = Depends(get_db)):
     from backend.services.approval_service import ApprovalService
     employee = _get_employee(request, db)
-    if employee.role.name not in [RoleName.HR, RoleName.ADMIN]:
+    role = employee.role.name if employee.role else None
+    if role not in [RoleName.HR, RoleName.ADMIN]:
         raise HTTPException(403, "Only HR/Admin can reject requests")
     return ApprovalService(db).process_action(request_id, "reject", employee.id, payload.notes)

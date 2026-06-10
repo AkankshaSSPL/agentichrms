@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.database.session import SessionLocal
+from backend.database.session import get_db
 from backend.database.models import Employee
 from backend.core.security import verify_token
 from backend.core.permissions import require_permission
@@ -18,12 +18,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/approvals", tags=["Approval Requests"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def _get_employee(request: Request, db: Session) -> Employee:

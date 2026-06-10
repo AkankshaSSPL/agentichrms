@@ -384,7 +384,7 @@ function NameChangeRequests({ token, onAlert }) {
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, maxWidth: 400, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-                            {noteModal.action === 'approve' ? '✅ Approve Request' : noteModal.action === 'reject' ? '❌ Reject Request' : '📎 Request Document'}
+                            {noteModal.action === 'approve' ? ' Approve Request' : noteModal.action === 'reject' ? ' Reject Request' : '📎 Request Document'}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>Add an optional note for the employee (optional)</div>
                         <textarea
@@ -563,7 +563,7 @@ function ApprovalRequests({ token, onAlert }) {
                 <div style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                     <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:14, padding:28, maxWidth:400, width:'90%' }}>
                         <div style={{ fontSize:15, fontWeight:700, color:'var(--text-primary)', marginBottom:6 }}>
-                            {noteModal.action === 'approve' ? '✅ Approve Change' : '❌ Reject Request'}
+                            {noteModal.action === 'approve' ? ' Approve Change' : ' Reject Request'}
                         </div>
                         <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:14 }}>Optional note to the employee</div>
                         <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
