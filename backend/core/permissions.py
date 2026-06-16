@@ -11,13 +11,8 @@ Endpoints declare which permission they need via:
     Depends(require_permission("leave.approve"))
 
 The dependency reads the caller's role fresh from the DB on every request
-so role changes take effect immediately without re-login.
-
-TOKEN EXTRACTION
-----------------
-All three guards (require_permission, require_authenticated, require_role)
-share a single private helper — _resolve_employee — so the Bearer-token
-extraction + DB lookup logic lives in exactly one place.
+(same approach as require_role) so role changes take effect immediately
+without re-login.
 
 PERMISSION STRINGS
 ------------------
@@ -74,6 +69,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "admin.settings",
         "onboarding.view",
         "onboarding.manage",
+        "behavior.view",
+        "behavior.manage",
     },
     RoleName.HR: {
         "leave.view",
@@ -87,6 +84,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "approval.action",
         "onboarding.view",
         "onboarding.manage",
+        "behavior.view",
     },
     RoleName.EMPLOYEE: {
         "leave.apply",
@@ -105,28 +103,88 @@ def has_permission(role_name: str, permission: str) -> bool:
     return permission in get_permissions(role_name)
 
 
-# ── Shared token extraction core ──────────────────────────────────────────────
+# ── FastAPI dependency ────────────────────────────────────────────────────────
 
-def _resolve_employee(request: Request) -> dict:
+def require_permission(permission: str):
     """
-    Extract Bearer token, verify it, and look up the employee's current role
-    from the DB. Returns the enriched payload dict:
+    FastAPI dependency — raises 403 if the caller's role lacks the permission.
 
-        sub   — employee ID (str, from token)
-        role  — role name (str, read fresh from DB)
-        email — employee email (read fresh from DB)
+    Always reads the role fresh from the DB so role changes take effect
+    immediately without requiring re-login.
 
-    Raises:
-        401 — missing/invalid token, employee not found, or NULL role
-        503 — DB error (fail closed)
+    Usage:
+        @router.get("/leaves/pending")
+        def pending(payload=Depends(require_permission("leave.view"))):
+            ...
 
-    This is the single place where token extraction + DB lookup lives.
-    All guards (require_permission, require_authenticated, require_role)
-    call this instead of duplicating the logic.
+    The returned payload dict contains:
+        sub   — employee ID (str)
+        role  — role name (str, read from DB)
+        email — employee email
+    """
+    def _check(request: Request) -> dict:
+        from backend.core.security import verify_token
+        from backend.database.session import SessionLocal
+        from backend.database.models import Employee
+
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+        token = auth.split(" ", 1)[1]
+        payload = verify_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        employee_id = payload.get("sub")
+        if not employee_id:
+            raise HTTPException(status_code=401, detail="Invalid token: missing subject")
+
+        # Read role fresh from DB — role changes take effect on next API call
+        db = SessionLocal()
+        try:
+            emp = db.query(Employee).filter(Employee.id == int(employee_id)).first()
+            if not emp:
+                raise HTTPException(status_code=401, detail="Employee not found")
+            role_name = emp.role.name if emp.role and hasattr(emp.role, "name") else None
+            email = emp.email
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("DB error while verifying permissions for employee %s: %s", employee_id, exc)
+            raise HTTPException(status_code=503, detail="Could not verify permissions, please try again.")
+        finally:
+            db.close()
+
+        if not role_name:
+            raise HTTPException(
+                status_code=401,
+                detail="Your session is outdated. Please log out and log in again.",
+            )
+
+        if not has_permission(role_name, permission):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permission denied. Required: '{permission}'. Your role: '{role_name}'.",
+            )
+
+        payload["role"] = role_name
+        payload["email"] = email
+        return payload
+
+    return _check
+
+
+# -- Authenticated-only dependency (no permission check) ----------------------
+
+def require_authenticated(request: Request) -> dict:
+    """
+    FastAPI dependency -- requires a valid JWT token, but does not check
+    role or permissions. Use for endpoints any logged-in employee can access.
+
+    Returns the decoded token payload (contains 'sub' = employee ID).
     """
     from backend.core.security import verify_token
-    from backend.database.session import SessionLocal
-    from backend.database.models import Employee
 
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -137,94 +195,7 @@ def _resolve_employee(request: Request) -> dict:
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    employee_id = payload.get("sub")
-    if not employee_id:
+    if not payload.get("sub"):
         raise HTTPException(status_code=401, detail="Invalid token: missing subject")
 
-    db = SessionLocal()
-    try:
-        emp = db.query(Employee).filter(Employee.id == int(employee_id)).first()
-        if not emp:
-            raise HTTPException(status_code=401, detail="Employee not found")
-        role_name = emp.role.name if emp.role and hasattr(emp.role, "name") else None
-        email = emp.email
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("DB error resolving employee %s: %s", employee_id, exc)
-        raise HTTPException(status_code=503, detail="Could not verify permissions, please try again.")
-    finally:
-        db.close()
-
-    if not role_name:
-        raise HTTPException(
-            status_code=401,
-            detail="Your session is outdated. Please log out and log in again.",
-        )
-
-    payload["role"] = role_name
-    payload["email"] = email
     return payload
-
-
-# ── FastAPI dependencies ──────────────────────────────────────────────────────
-
-def require_permission(permission: str):
-    """
-    FastAPI dependency — raises 403 if the caller's role lacks the permission.
-
-    Usage:
-        @router.get("/leaves/pending")
-        def pending(payload=Depends(require_permission("leave.view"))):
-            ...
-
-    The returned payload dict contains: sub, role, email.
-    """
-    def _check(request: Request) -> dict:
-        payload = _resolve_employee(request)
-        if not has_permission(payload["role"], permission):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Permission denied. Required: '{permission}'. Your role: '{payload['role']}'.",
-            )
-        return payload
-
-    return _check
-
-
-def require_authenticated(request: Request) -> dict:
-    """
-    FastAPI dependency — verifies the caller has a valid JWT.
-    Does NOT check role or permission; use for endpoints open to all
-    authenticated users (e.g. read-only status endpoints).
-
-    Usage:
-        @router.get("/documents")
-        def list_docs(payload=Depends(require_authenticated)):
-            ...
-    """
-    return _resolve_employee(request)
-
-
-def require_role(allowed_roles: list):
-    """
-    FastAPI dependency — raises 403 if the caller's role is not in allowed_roles.
-
-    Kept for backward compatibility with any remaining callers.
-    Prefer require_permission for new endpoints.
-
-    Usage:
-        @router.get("/admin-only")
-        def admin_only(payload=Depends(require_role(["admin"]))):
-            ...
-    """
-    def _check(request: Request) -> dict:
-        payload = _resolve_employee(request)
-        if payload["role"] not in allowed_roles:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Access denied. Required role: {allowed_roles}. Your role: {payload['role']}",
-            )
-        return payload
-
-    return _check

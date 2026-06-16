@@ -2,16 +2,16 @@
 Admin Endpoints – Role Management (admin only)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import List
-from datetime import datetime
 
-from backend.database.session import get_db
-from backend.database.models import Employee, Role
-from backend.core.permissions import require_permission
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from backend.core.email import send_email
+from backend.core.permissions import require_permission
+from backend.database.models import Employee, Role
+from backend.database.session import get_db
 from backend.enums import RoleName
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -108,8 +108,8 @@ def update_user_role(
                 f"Best regards,\nHRMS System"
             ),
         )
-    except Exception as e:
-        print(f"Role-change email failed for {employee.email}: {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"Role-change email failed for {employee.email}: {e}")  # noqa: T201
 
     return {"message": f"Role for {employee.name} updated to {requested_role.value}"}
 

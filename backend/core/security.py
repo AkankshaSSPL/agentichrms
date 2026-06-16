@@ -4,6 +4,7 @@ JWT Security — token creation, verification, and password hashing
 
 from datetime import datetime, timedelta
 from typing import Optional
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -52,9 +53,3 @@ def verify_token(token: str) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------------------
-# require_role is now defined in backend.core.permissions (consolidated with
-# require_permission and require_authenticated to share a single token-
-# extraction core). Re-exported here so existing imports don't break.
-# New code should import directly from backend.core.permissions.
-# ---------------------------------------------------------------------------
-from backend.core.permissions import require_role  # noqa: F401  re-export

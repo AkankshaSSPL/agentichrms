@@ -16,6 +16,7 @@ Usage:
 """
 
 import logging
+
 from sqlalchemy.orm import Session
 
 from backend.database.models import Employee, Notification, Role
@@ -42,7 +43,7 @@ class Notifier:
                 is_read=False,
             ))
             self.db.commit()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Notification write failed (emp=%s): %s", employee_id, e)
             self.db.rollback()
 
@@ -103,6 +104,6 @@ class Notifier:
                 )
                 .all()
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Could not fetch HR employees for notification: %s", e)
             return []

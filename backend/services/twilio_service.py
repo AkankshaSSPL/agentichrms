@@ -11,9 +11,9 @@ Requirements:
     TWILIO_PHONE_NUMBER=+14782093970
 """
 
+import logging
 import random
 import string
-import logging
 
 from backend.core.config import settings
 
@@ -94,7 +94,7 @@ def send_pin_sms(phone_number: str, employee_name: str, pin: str) -> dict:
             "sid": None,
             "error": "twilio package not installed",
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error("Twilio send failed for %s: %s", _mask_phone(normalized), exc)
         return {
             "success": False,

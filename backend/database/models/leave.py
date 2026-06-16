@@ -1,7 +1,8 @@
 """Leave models — Leave, LeaveBalance."""
 
-from sqlalchemy import Column, Integer, String, DateTime, Float, Text, ForeignKey
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
+
 from backend.database.models.base import BaseModel
 from backend.enums import LeaveStatus
 

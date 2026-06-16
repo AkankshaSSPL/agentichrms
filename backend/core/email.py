@@ -16,13 +16,12 @@ send_email(to="alice@company.com", subject="Leave Approved", html=html, db=db)
 
 import re
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Optional
 
 from backend.core.config import settings
-
 
 # ── Plain-text fallback ───────────────────────────────────────────────────────
 
@@ -69,7 +68,7 @@ def send_email(
     plain_text: str = body or _html_to_plain(html)
 
     if not settings.EMAIL_USER or not settings.EMAIL_PASS:
-        print(
+        print(  # noqa: T201
             f"⚠️  Email not configured (EMAIL_USER/EMAIL_PASS missing). "
             f"Would have sent to {to}: {subject}"
         )
@@ -96,10 +95,10 @@ def send_email(
                 server.login(settings.EMAIL_USER, settings.EMAIL_PASS)
                 server.sendmail(settings.EMAIL_USER, to, msg.as_string())
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             status = "failed"
             error_msg = str(e)
-            print(f"⚠️  Email send failed to {to}: {e}")
+            print(f"⚠️  Email send failed to {to}: {e}")  # noqa: T201
 
     # ── Log to DB if session provided ────────────────────────────────────────
     if db is not None:
@@ -116,8 +115,8 @@ def send_email(
             )
             db.add(log)
             db.commit()
-        except Exception as log_err:
-            print(f"⚠️  EmailLog write failed: {log_err}")
+        except Exception as log_err:  # noqa: BLE001
+            print(f"⚠️  EmailLog write failed: {log_err}")  # noqa: T201
 
     # Raise only when no db is provided and credentials are present (caller decides)
     if status == "failed" and db is None and settings.EMAIL_USER and settings.EMAIL_PASS:

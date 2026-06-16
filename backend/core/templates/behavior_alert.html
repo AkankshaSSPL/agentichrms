@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document Activity Signal</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .header { background: #1a1a2e; padding: 28px 32px; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 600; }
+    .header p { color: #a0a0c0; margin: 4px 0 0; font-size: 13px; }
+    .body { padding: 32px; color: #333333; }
+    .body p { margin: 0 0 16px; line-height: 1.6; font-size: 15px; }
+    .signal-box { background: #fff8e1; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 16px 20px; margin: 20px 0; }
+    .signal-box .label { font-size: 12px; font-weight: 600; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .signal-box .value { font-size: 15px; color: #1a1a2e; font-weight: 500; }
+    .stats { display: flex; gap: 16px; margin: 20px 0; }
+    .stat { flex: 1; background: #f8f9fa; border-radius: 6px; padding: 14px 16px; text-align: center; }
+    .stat .num { font-size: 24px; font-weight: 700; color: #1a1a2e; }
+    .stat .lbl { font-size: 12px; color: #666; margin-top: 4px; }
+    .cta { text-align: center; margin: 28px 0 8px; }
+    .cta a { background: #1a1a2e; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 14px; font-weight: 600; display: inline-block; }
+    .footer { background: #f8f9fa; padding: 20px 32px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>📊 Document Activity Signal</h1>
+      <p>Agentic HRMS — Behavioral Analytics</p>
+    </div>
+    <div class="body">
+      <p>Hi HR Team,</p>
+      <p>
+        An employee has shown repeated access to documents in a category that may
+        warrant a proactive check-in. No action is required — this is informational only.
+      </p>
+
+      <div class="signal-box">
+        <div class="label">Employee</div>
+        <div class="value">{{ employee_name }}</div>
+      </div>
+
+      <div class="signal-box">
+        <div class="label">Document Category</div>
+        <div class="value">{{ category }}</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="num">{{ count }}</div>
+          <div class="lbl">Accesses</div>
+        </div>
+        <div class="stat">
+          <div class="num">{{ window_days }}</div>
+          <div class="lbl">Day window</div>
+        </div>
+      </div>
+
+      <p style="font-size:13px; color:#666;">
+        Only document metadata is tracked — no content is read or stored.
+        Alerts are raised only after the access count crosses the configured threshold.
+      </p>
+
+      <div class="cta">
+        <a href="#">View in HR → Signals</a>
+      </div>
+    </div>
+    <div class="footer">
+      This is an automated signal from Agentic HRMS. Do not reply to this email.
+    </div>
+  </div>
+</body>
+</html>

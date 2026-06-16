@@ -12,9 +12,10 @@ send_email() in backend.core.email. They will be removed in a future phase.
 """
 
 import logging
-from backend.core.render_template import render_template
-from backend.core.email import send_email as _send_email
+
 from backend.core.config import settings
+from backend.core.email import send_email as _send_email
+from backend.core.render_template import render_template
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ def send_pin_email(to_email: str, employee_name: str, pin: str) -> dict:
             triggered_by="onboarding",
         )
         return {"success": True, "error": None}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"send_pin_email failed: {e}")
         return {"success": False, "error": str(e)}
 
@@ -64,6 +65,6 @@ def send_email(to_email: str, subject: str, body: str) -> dict:
     try:
         _send_email(to=to_email, subject=subject, body=body)
         return {"success": True, "error": None}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"send_email failed: {e}")
         return {"success": False, "error": str(e)}

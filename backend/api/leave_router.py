@@ -7,13 +7,14 @@ FILE: save as backend/api/leaves.py
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, validator
-from sqlalchemy.orm import Session
 from typing import Optional
 
-from backend.database.session import get_db
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, validator
+from sqlalchemy.orm import Session
+
 from backend.core.permissions import require_permission
+from backend.database.session import get_db
 from backend.services.leave_service import LeaveService
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,7 @@
 """Shared base model with audit timestamps and soft deletes."""
 
 from sqlalchemy import Column, DateTime, func
+
 from backend.database.session import Base
 
 

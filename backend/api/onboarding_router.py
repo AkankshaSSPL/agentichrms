@@ -3,14 +3,15 @@ Onboarding Profile Router — thin layer, delegates to OnboardingService.
 """
 
 import logging
-from typing import Optional, List
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 
-from backend.database.session import get_db
-from backend.database.models import Employee
 from backend.core.security import verify_token
+from backend.database.models import Employee
+from backend.database.session import get_db
 from backend.enums import RoleName
 from backend.services.onboarding_service import OnboardingService
 
@@ -87,7 +88,7 @@ class ProfileSaveRequest(BaseModel):
     @validator("date_of_birth")
     def dob_not_future(cls, v):
         if v:
-            from datetime import datetime, date
+            from datetime import date, datetime
             try:
                 parsed = datetime.strptime(v, "%Y-%m-%d").date()
             except ValueError:

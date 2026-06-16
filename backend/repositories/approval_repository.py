@@ -2,9 +2,11 @@
 Approval Repository — database operations only.
 """
 import logging
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
 from sqlalchemy.orm import Session
+
 from backend.database.models import ApprovalRequest, Employee, Notification
 from backend.enums import ApprovalStatus
 
@@ -111,8 +113,8 @@ class ApprovalRepository:
 
     def get_hr_employees(self) -> list[Employee]:
         """Return all active HR and Admin employees to notify of pending approvals."""
-        from backend.enums import RoleName
         from backend.database.models import Role
+        from backend.enums import RoleName
         return (
             self.db.query(Employee)
             .join(Role, Employee.role_id == Role.id)
@@ -132,6 +134,6 @@ class ApprovalRepository:
                 is_read=False,
             ))
             self.db.commit()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Notification failed: %s", e)
             self.db.rollback()

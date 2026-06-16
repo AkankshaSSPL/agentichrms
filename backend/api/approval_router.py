@@ -4,14 +4,15 @@ Approval Requests Router — thin layer, delegates to ApprovalService.
 
 import logging
 from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.database.session import get_db
-from backend.database.models import Employee
-from backend.core.security import verify_token
 from backend.core.permissions import require_permission
+from backend.core.security import verify_token
+from backend.database.models import Employee
+from backend.database.session import get_db
 from backend.services.approval_service import ApprovalService
 
 logger = logging.getLogger(__name__)

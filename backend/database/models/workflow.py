@@ -1,10 +1,12 @@
 """Workflow models — ApprovalRequest, Meeting, OnboardingTask, SystemSetting, EmailLog."""
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Text, ForeignKey
-from sqlalchemy.orm import relationship
 from datetime import datetime
-from backend.database.session import Base
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+
 from backend.database.models.base import BaseModel
+from backend.database.session import Base
 from backend.enums import ApprovalStatus, EmailLogStatus
 
 

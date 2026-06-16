@@ -5,17 +5,18 @@ Email Settings API — admin only
 - POST /email-settings/test        → send a test email
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
 
-from backend.database.session import get_db
-from backend.database.models import EmailLog
-from backend.core.permissions import require_permission
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from backend.core.config import settings
 from backend.core.email import send_email
+from backend.core.permissions import require_permission
+from backend.database.models import EmailLog
+from backend.database.session import get_db
 
 router = APIRouter(prefix="/email-settings", tags=["Email Settings"])
 
@@ -62,7 +63,7 @@ def get_email_logs(
             sent_at=l.sent_at.isoformat() if l.sent_at else "",
             triggered_by=l.triggered_by,
         )
-        for l in logs
+        for l in logs  # noqa: E741
     ]
 
 

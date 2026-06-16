@@ -4,9 +4,10 @@ Leave Repository — database operations only, no business logic.
 
 import logging
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from backend.database.models import Leave, Employee
+from backend.database.models import Employee, Leave
 from backend.enums import LeaveStatus
 
 logger = logging.getLogger(__name__)

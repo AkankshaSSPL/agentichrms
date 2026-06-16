@@ -6,7 +6,7 @@ Re-exports every model so all existing imports continue to work unchanged:
 """
 
 # Import order matters — Base models before anything that references them
-from backend.database.models.base import BaseModel
+from backend.database.models.base import BaseModel  # noqa: I001
 from backend.database.models.rbac import Role, Permission, RolePermission
 from backend.database.models.employee import Employee
 from backend.database.models.leave import Leave, LeaveBalance
@@ -20,6 +20,11 @@ from backend.database.models.workflow import (
     EmailLog,
     SystemSetting,
 )
+from backend.database.models.behavior_analytics import (
+    DocumentTag,
+    DocumentAccessLog,
+    BehaviorAlert,
+)
 
 __all__ = [
     "BaseModel",
@@ -30,4 +35,5 @@ __all__ = [
     "FaceLoginAttempt", "PINVerification",
     "Notification",
     "ApprovalRequest", "Meeting", "OnboardingTask", "EmailLog", "SystemSetting",
+    "DocumentTag", "DocumentAccessLog", "BehaviorAlert",
 ]

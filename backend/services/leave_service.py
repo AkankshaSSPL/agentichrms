@@ -7,15 +7,16 @@ No hardcoded notification strings — all text sourced from notification_templat
 
 import logging
 from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from backend.database.models import Leave, Notification
-from backend.enums import LeaveStatus
 from backend.core.email import send_email
-from backend.repositories.leave_repository import LeaveRepository
-from backend.notifications.notifier import Notifier
-from backend.notifications.notification_templates import NotifKey
+from backend.database.models import Leave
+from backend.enums import LeaveStatus
 from backend.notifications.notification_service import build_email
+from backend.notifications.notification_templates import NotifKey
+from backend.notifications.notifier import Notifier
+from backend.repositories.leave_repository import LeaveRepository
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ class LeaveService:
                     db=self.db,
                     **email,
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Approval notification failed: %s", e)
 
     def _notify_rejection(self, leave: Leave, reason: str) -> None:
@@ -169,5 +170,5 @@ class LeaveService:
                     db=self.db,
                     **email,
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Rejection notification failed: %s", e)

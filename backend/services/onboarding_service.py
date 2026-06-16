@@ -3,25 +3,26 @@ Onboarding Service — all business logic for profile collection, AI chat, and f
 No direct DB access — delegates to OnboardingRepository.
 """
 
-import logging
-import json
-import re
 import base64
 import io
+import json
+import logging
+import re
 from datetime import datetime
 from typing import Optional
+
 import httpx
 from fastapi import HTTPException
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
+from backend.core.config import settings
 from backend.database.models import Employee
 from backend.enums import ChatRole
-from backend.core.config import settings
-from backend.repositories.onboarding_repository import OnboardingRepository
-from backend.repositories.approval_repository import ApprovalRepository
-from backend.notifications.notifier import Notifier
 from backend.notifications.notification_templates import NotifKey
+from backend.notifications.notifier import Notifier
+from backend.repositories.approval_repository import ApprovalRepository
+from backend.repositories.onboarding_repository import OnboardingRepository
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ def apply_fields(employee: Employee, fields: dict, db: Session) -> None:
             else:
                 try:
                     setattr(employee, key, datetime.strptime(str(val).strip()[:10], "%Y-%m-%d"))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     pass
         elif key == "base_salary":
             try:
@@ -134,7 +135,7 @@ def _parse_tags(answer: str, employee: Employee, db: Session) -> tuple[str, Opti
                         valid_fields[field] = value
             if valid_fields:
                 apply_fields(employee, valid_fields, db)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Partial save failed: %s", e)
     answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
 
@@ -165,7 +166,7 @@ def _parse_tags(answer: str, employee: Employee, db: Session) -> tuple[str, Opti
                 employee.onboarding_completed = True
                 employee.profile_completed = True
                 db.commit()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error("Profile parse failed: %s", e)
 
     # If any fields were blocked, append error message to reply so the AI re-asks
@@ -186,7 +187,7 @@ async def _call_openai(messages: list, max_tokens: int = 1024) -> str:
                 json={"model": settings.AI_MODEL, "temperature": 0.3, "max_tokens": max_tokens, "messages": messages},
             )
             data = response.json()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error("OpenAI error: %s", e)
         raise HTTPException(500, f"AI service error: {e}")
 
@@ -388,12 +389,12 @@ class OnboardingService:
                 try:
                     parsed = datetime.strptime(val, "%Y-%m-%d").date()
                     setattr(employee, key, parsed)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     pass
             elif key == "base_salary" and val:
                 try:
                     setattr(employee, key, float(val))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     pass
             else:
                 setattr(employee, key, val)
@@ -638,8 +639,8 @@ RULES:
                 new_value=new_value,
             )
             try:
-                from backend.core.email import send_email
                 from backend.core.config import settings as _settings
+                from backend.core.email import send_email
                 hr_email = getattr(_settings, "HR_EMAIL", None)
                 if hr_email:
                     send_email(
@@ -653,7 +654,7 @@ RULES:
                         triggered_by="self_chat_approval",
                         db=self.db,
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("HR email notification failed: %s", e)
 
             return {
@@ -693,7 +694,7 @@ RULES:
                 raw = json.loads(m.group(1).strip())
                 allowed = {k: v for k, v in raw.items() if k in EMPLOYEE_EDITABLE_FIELDS}
                 apply_fields(employee, allowed, self.db)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("Self partial save failed: %s", e)
         answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
 
@@ -737,8 +738,8 @@ RULES:
                 )
                 # Email HR
                 try:
-                    from backend.core.email import send_email
                     from backend.core.config import settings as _settings
+                    from backend.core.email import send_email
                     hr_email = getattr(_settings, "HR_EMAIL", None)
                     if hr_email:
                         send_email(
@@ -752,7 +753,7 @@ RULES:
                             triggered_by="self_chat_approval",
                             db=self.db,
                         )
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning("HR email notification failed: %s", e)
 
                 approval_requests_created.append({
@@ -760,7 +761,7 @@ RULES:
                     "label": HR_APPROVAL_REQUIRED[field],
                     "request_id": apr.id,
                 })
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("Approval request tag parse failed: %s", e)
         answer = re.sub(r"<APPROVAL_REQUEST>.*?</APPROVAL_REQUEST>", "", answer, flags=re.DOTALL).strip()
 
@@ -777,7 +778,7 @@ RULES:
                 if profile_data:
                     allowed = {k: v for k, v in profile_data.items() if k in EMPLOYEE_EDITABLE_FIELDS}
                     apply_fields(employee, allowed, self.db)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error("Self profile parse failed: %s", e)
 
         return {
@@ -797,6 +798,6 @@ RULES:
                 if page_text:
                     text += page_text + "\n"
             return text[:8000]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error("PDF extraction failed: %s", e)
             return ""

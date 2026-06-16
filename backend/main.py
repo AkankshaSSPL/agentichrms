@@ -2,30 +2,32 @@
 Agentic HRMS - Main FastAPI Application
 """
 
+import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-import logging
+from slowapi.util import get_remote_address
 
-from backend.core.config import settings
-
+from backend.api.admin import router as admin_router
+from backend.api.behavior_router import router as behavior_router
+from backend.api.chat import router as chat_router
+from backend.api.docs import router as docs_router
+from backend.api.email_settings import router as email_settings_router
 from backend.api.face_auth import router as face_auth_router
-from backend.api.pin_auth import router as pin_auth_router
-from backend.api.registration import router as registration_router 
+from backend.api.leave_router import router as leaves_router
+from backend.api.meetings import router as meetings_router
+from backend.api.notifications import router as notifications_router
 from backend.api.onboarding import router as onboarding_router
 from backend.api.onboarding_router import router as onboarding_profile_router
-from backend.api.chat import router as chat_router
-from backend.api.docs import router as docs_router   # ✅ ADDED
-from backend.api.meetings import router as meetings_router
-from backend.api.leave_router import router as leaves_router
-from backend.api.notifications import router as notifications_router
-from backend.api.admin import router as admin_router
-from backend.api.email_settings import router as email_settings_router
+from backend.api.pin_auth import router as pin_auth_router
+from backend.api.registration import router as registration_router
+from backend.core.config import settings
+
 try:
     from backend.api.approval_router import router as approval_requests_router
     _has_approvals = True
@@ -86,11 +88,11 @@ API_PREFIX = "/api"
 
 app.include_router(face_auth_router, prefix=API_PREFIX)
 app.include_router(pin_auth_router,  prefix=API_PREFIX)
-app.include_router(registration_router, prefix=API_PREFIX)  
+app.include_router(registration_router, prefix=API_PREFIX)
 app.include_router(onboarding_router, prefix=API_PREFIX)
 app.include_router(onboarding_profile_router, prefix=API_PREFIX)
 app.include_router(chat_router, prefix=API_PREFIX)
-app.include_router(docs_router, prefix=API_PREFIX)   # ✅ ADDED
+app.include_router(docs_router, prefix=API_PREFIX)
 app.include_router(meetings_router, prefix=API_PREFIX)
 app.include_router(leaves_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
@@ -98,6 +100,7 @@ app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(email_settings_router, prefix=API_PREFIX)
 if _has_approvals:
     app.include_router(approval_requests_router, prefix=API_PREFIX)
+app.include_router(behavior_router, prefix=API_PREFIX)
 
 
 @app.get("/")
@@ -113,16 +116,18 @@ async def health():
 @app.get("/debug/face")
 async def debug_face():
     try:
-        import joblib, numpy as np, sklearn
+        import joblib
+        import numpy as np
+        import sklearn
         clf = joblib.load("data/face_models/face_classifier.pkl")
         labels = np.load("data/face_models/labels.npy", allow_pickle=True)
         return {
             "sklearn_version": sklearn.__version__,
             "classifier": str(type(clf).__name__),
             "n_samples": int(len(clf._fit_X)),
-            "unique_labels": sorted(set(str(l) for l in labels))
+            "unique_labels": sorted(set(str(l) for l in labels))  # noqa: E741
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return {"error": str(e)}
 
 

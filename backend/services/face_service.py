@@ -10,13 +10,13 @@ Expected files (created automatically after first enrolment):
 
 import base64
 import logging
-import numpy as np
 import pickle
-import joblib
-from io import BytesIO
-from PIL import Image
-from typing import Optional
 from datetime import datetime
+from io import BytesIO
+
+import joblib
+import numpy as np
+from PIL import Image
 from sklearn.neighbors import KNeighborsClassifier
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class FaceRecognitionService:
 
         import torch
         from facenet_pytorch import MTCNN, InceptionResnetV1
-        from backend.core.config import settings
+
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info("Loading face models on device: %s", device)
@@ -78,7 +78,7 @@ class FaceRecognitionService:
         try:
             self._load_models()
             self._load_classifier()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("Model loading failed: %s", exc)
             return {"recognized": False, "username": None, "distance": None,
                     "failure_reason": f"Model loading error: {exc}"}
@@ -88,13 +88,13 @@ class FaceRecognitionService:
                 image_base64 = image_base64.split(",", 1)[1]
             img_bytes = base64.b64decode(image_base64)
             pil_img = Image.open(BytesIO(img_bytes)).convert("RGB")
-        except Exception as exc:
+        except Exception:  # noqa: BLE001
             return {"recognized": False, "username": None, "distance": None,
                     "failure_reason": "Invalid image data"}
 
         try:
             face_tensor = self._mtcnn(pil_img)
-        except Exception as exc:
+        except Exception:  # noqa: BLE001
             return {"recognized": False, "username": None, "distance": None,
                     "failure_reason": "Face detection error"}
 
@@ -112,7 +112,7 @@ class FaceRecognitionService:
             predicted_label = self._classifier.predict(embedding)[0]
             distances, _ = self._classifier.kneighbors(embedding, n_neighbors=1)
             distance = float(distances[0][0])
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("KNN prediction error: %s", exc)
             return {"recognized": False, "username": None, "distance": None,
                     "failure_reason": "Classifier error"}
@@ -137,13 +137,14 @@ class FaceRecognitionService:
         # Only need MTCNN + ResNet, NOT the classifier file
         try:
             self._load_models()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("Model loading failed for enrolment: %s", exc)
             return {"success": False, "embeddings_stored": 0, "error": str(exc)}
 
-        from backend.database.session import SessionLocal
-        from backend.database.models import Employee
         import torch
+
+        from backend.database.models import Employee
+        from backend.database.session import SessionLocal
 
         embeddings = []
         for idx, b64 in enumerate(images_base64):
@@ -152,7 +153,7 @@ class FaceRecognitionService:
             try:
                 img_bytes = base64.b64decode(b64)
                 pil_img = Image.open(BytesIO(img_bytes)).convert("RGB")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("Image %d decode failed: %s", idx + 1, e)
                 continue
 
@@ -186,7 +187,7 @@ class FaceRecognitionService:
             db.commit()
             logger.info("Stored %d face embeddings for employee %d", len(embeddings), employee_id)
             return {"success": True, "embeddings_stored": len(embeddings), "error": None}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             db.rollback()
             logger.error("DB error during face enrolment: %s", e)
             return {"success": False, "embeddings_stored": 0, "error": str(e)}
@@ -205,9 +206,9 @@ class FaceRecognitionService:
         Safe to call even when only 1 employee exists (n_neighbors is clamped).
         Creates the .pkl / .npy files if they don't exist yet.
         """
-        from backend.database.session import SessionLocal
-        from backend.database.models import Employee
         from backend.core.config import settings
+        from backend.database.models import Employee
+        from backend.database.session import SessionLocal
 
         db = SessionLocal()
         try:
@@ -221,7 +222,7 @@ class FaceRecognitionService:
             for emp in employees:
                 try:
                     stored = pickle.loads(emp.face_embedding)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning("Could not unpickle embeddings for emp %s: %s", emp.id, e)
                     continue
                 label = emp.email  # email is the identifier (no username field)
@@ -242,7 +243,6 @@ class FaceRecognitionService:
             clf.fit(X, y)
 
             # Ensure output directory exists
-            from pathlib import Path
             classifier_path = settings.BASE_DIR / settings.FACE_CLASSIFIER_PATH
             classifier_path.parent.mkdir(parents=True, exist_ok=True)
 

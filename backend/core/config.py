@@ -4,11 +4,12 @@ Loads environment variables and provides app-wide settings.
 Variable names match exactly what is in your .env file.
 """
 
-from pydantic_settings import BaseSettings
-from pydantic import field_validator
-from typing import List, Optional
-from pathlib import Path
 import json
+from pathlib import Path
+from typing import List, Optional
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -114,6 +115,16 @@ class Settings(BaseSettings):
     PIN_LENGTH: int = 6
     PIN_EXPIRY_MINUTES: int = 5
     PIN_MAX_ATTEMPTS: int = 3
+
+    # ── Behavioral Analytics ───────────────────────────────────────────────────
+    BEHAVIOR_ANALYTICS_ENABLED: bool = True
+    BEHAVIOR_WINDOW_DAYS: int = 7
+    BEHAVIOR_ALERT_EMAIL_ENABLED: bool = True
+    BEHAVIOR_THRESHOLD_SENSITIVE: int = 3
+    BEHAVIOR_THRESHOLD_LEAVE_INTENT: int = 5
+    BEHAVIOR_THRESHOLD_EXIT_INTENT: int = 2
+    BEHAVIOR_THRESHOLD_GROWTH: int = 4
+    # GENERAL category is intentionally omitted — never tracked
 
     # ── RAG Models ─────────────────────────────────────────────────────────────
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"

@@ -4,11 +4,11 @@ Onboarding Repository — database operations only.
 
 import logging
 from typing import Optional
-from datetime import datetime
-from sqlalchemy.orm import Session
-from sqlalchemy import inspect as sa_inspect
 
-from backend.database.models import Employee, Notification, ApprovalRequest
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.orm import Session
+
+from backend.database.models import ApprovalRequest, Employee, Notification
 from backend.enums import ApprovalStatus
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class OnboardingRepository:
         return (
             self.db.query(Employee)
             .filter(
-                Employee.onboarding_completed == False,
+                Employee.onboarding_completed == False,  # noqa: E712
                 Employee.deleted_at.is_(None),
             )
             .order_by(Employee.created_at.desc())
@@ -45,7 +45,7 @@ class OnboardingRepository:
                 is_read=False,
             ))
             self.db.commit()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning("Notification failed: %s", e)
             self.db.rollback()
 

@@ -4,13 +4,14 @@ Approval Service — business logic for approval workflow.
 
 import logging
 from typing import Optional
-from sqlalchemy.orm import Session
+
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 from backend.database.models import ApprovalRequest
 from backend.enums import ApprovalStatus
-from backend.repositories.approval_repository import ApprovalRepository
 from backend.notifications.notifier import Notifier
+from backend.repositories.approval_repository import ApprovalRepository
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ class ApprovalService:
                     triggered_by="approval_approve",
                     db=self.repo.db,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("Approval email failed: %s", e)
 
         elif action == "reject":
@@ -150,12 +151,12 @@ class ApprovalService:
                         f"Your request to update '{field_label}' to '{apr.new_value}' "
                         f"could not be approved."
                         + (f"\n\nReason: {reason}" if reason else "")
-                        + f"\n\nIf you have questions, please contact HR.\n\nRegards,\nHR Team"
+                        + "\n\nIf you have questions, please contact HR.\n\nRegards,\nHR Team"
                     ),
                     triggered_by="approval_reject",
                     db=self.repo.db,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("Rejection email failed: %s", e)
 
         else:

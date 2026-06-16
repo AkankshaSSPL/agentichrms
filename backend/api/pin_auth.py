@@ -6,22 +6,26 @@ POST /api/auth/request-pin  — Look up employee by ID/email/phone → send SMS 
 
 import logging
 from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
-from typing import Optional
-from sqlalchemy.orm import Session
+from typing import Optional  # noqa: E402
 
-from backend.core.config import settings
-from backend.database.session import get_db
-from backend.database.models import Employee, PINVerification
-from backend.services.twilio_service import generate_pin, send_pin_sms
-from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest
-from backend.enums import EmployeeStatus, PinType, RoleName
-from backend.core.security import get_password_hash
+from sqlalchemy.orm import Session  # noqa: E402
+
+from backend.core.config import settings  # noqa: E402
+from backend.core.security import get_password_hash  # noqa: E402
+from backend.database.models import Employee, PINVerification  # noqa: E402
+from backend.database.session import get_db  # noqa: E402
+from backend.enums import EmployeeStatus, PinType, RoleName  # noqa: E402
+from backend.schemas.auth import (  # noqa: E402
+    VerifyAndChangePinRequest,
+)
+from backend.services.twilio_service import generate_pin, send_pin_sms  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +118,7 @@ def request_pin(
     # ── 3. Invalidate old unused PINs ──────────────────────────────────────────
     db.query(PINVerification).filter(
         PINVerification.employee_id == employee.id,
-        PINVerification.verified == False,
+        PINVerification.verified == False,  # noqa: E712
     ).update({"verified": True})
 
     # ── 4. Generate + store PIN ────────────────────────────────────────────────
@@ -186,8 +190,9 @@ class LoginWithPinRequest(BaseModel):
 @router.post("/login-with-pin")
 @limiter.limit("10/minute")
 def login_with_pin(request: Request, payload: LoginWithPinRequest, db: Session = Depends(get_db)):
-    from backend.core.security import create_access_token, verify_password
     from datetime import timedelta
+
+    from backend.core.security import create_access_token, verify_password
 
     # Find employee by email or phone
     emp = db.query(Employee).filter(
@@ -223,7 +228,7 @@ def login_with_pin(request: Request, payload: LoginWithPinRequest, db: Session =
 
 
 # ── Verify current PIN and change to new PIN ──────────────────────────────────
-class VerifyAndChangePinRequest(BaseModel):
+class VerifyAndChangePinRequest(BaseModel):  # noqa: F811
     identifier: str   # email or phone
     current_pin: str
     new_pin: str
@@ -246,8 +251,9 @@ class VerifyAndChangePinRequest(BaseModel):
 @router.post("/verify-and-change-pin")
 @limiter.limit("5/minute")
 def verify_and_change_pin(request: Request, payload: VerifyAndChangePinRequest, db: Session = Depends(get_db)):
-    from backend.core.security import create_access_token, verify_password, get_password_hash
     from datetime import timedelta
+
+    from backend.core.security import create_access_token, get_password_hash, verify_password
 
     # Find employee
     emp = db.query(Employee).filter(

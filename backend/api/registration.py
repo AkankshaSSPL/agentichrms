@@ -8,17 +8,18 @@ POST /api/auth/register   — Register a new employee (assigns default 'employee
 import logging
 import traceback
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import List, Optional
 
-from backend.database.session import get_db
-from backend.database.models import Employee, Role, PINVerification
-from backend.enums import RoleName, EmployeeStatus, PinType
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from backend.core.config import settings
 from backend.core.security import get_password_hash
+from backend.database.models import Employee, PINVerification, Role
+from backend.database.session import get_db
+from backend.enums import EmployeeStatus, PinType, RoleName
 from backend.services.face_service import face_service
 from backend.services.twilio_service import generate_pin, send_pin_sms
 
@@ -64,7 +65,7 @@ def register_employee(
         db.rollback()
         logger.error("IntegrityError: %s", exc)
         raise HTTPException(status_code=400, detail=_friendly_integrity_error(exc))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         db.rollback()
         logger.error("Registration error:\n%s", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(exc)}")
@@ -73,14 +74,14 @@ def register_employee(
 def _delete_employee(db: Session, employee_id: int) -> None:
     """Hard-delete a partially registered employee and all related records."""
     try:
-        from backend.database.models import PINVerification, FaceLoginAttempt
+        from backend.database.models import FaceLoginAttempt, PINVerification
         db.query(PINVerification).filter(PINVerification.employee_id == employee_id).delete()
         db.query(FaceLoginAttempt).filter(FaceLoginAttempt.employee_id == employee_id).delete()
         emp = db.query(Employee).filter(Employee.id == employee_id).first()
         if emp:
             db.delete(emp)
         db.commit()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         db.rollback()
         logger.error("Cleanup failed for employee %s: %s", employee_id, e)
 
@@ -164,14 +165,14 @@ def _do_register(payload: EmployeeRegisterRequest, db: Session):
             raise HTTPException(422, enrol_result.get("error", "Face enrolment failed. Please retake your photos."))
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         _delete_employee(db, new_employee.id)
         raise HTTPException(500, f"Face enrolment failed: {str(exc)}")
 
     # 5. Retrain (non-fatal)
     try:
         face_service.retrain_classifier()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error("Classifier retrain failed (non-fatal): %s", exc)
 
     # 6. PIN record

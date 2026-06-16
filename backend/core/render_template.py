@@ -18,7 +18,8 @@ html = render_template(
 """
 
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateNotFound
+
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
 
 # ── Resolve the templates directory relative to this file ────────────────────
 _TEMPLATES_DIR = Path(__file__).parent / "templates"

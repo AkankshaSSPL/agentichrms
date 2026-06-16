@@ -1,8 +1,9 @@
 """
 Documents API — returns document count from ChromaDB for the frontend status bar.
 """
-from fastapi import APIRouter, Depends, HTTPException
 from chromadb import PersistentClient
+from fastapi import APIRouter, Depends, HTTPException
+
 from backend.core.config import settings
 from backend.core.permissions import require_authenticated
 
@@ -36,8 +37,8 @@ async def list_documents(payload: dict = Depends(require_authenticated)):
 
         return {"documents": documents}
 
-    except Exception as e:
-        print(f"ChromaDB error in /documents: {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"ChromaDB error in /documents: {e}")  # noqa: T201
         # Return empty list rather than crashing — sidebar shows "0 docs"
         return {"documents": []}
 

@@ -7,23 +7,26 @@ POST /api/auth/verify-and-change-pin — Verify current PIN & optionally change 
 POST /api/auth/detect-faces         — Return number of faces in an image (for registration validation)
 """
 
-import logging
 import base64
+import logging
 from io import BytesIO
-from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
 from PIL import Image
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from backend.core.config import settings
-from backend.core.security import create_access_token, verify_password, get_password_hash
+from backend.core.security import create_access_token, verify_password
+from backend.database.models import Employee, FaceLoginAttempt
 from backend.database.session import get_db
-from backend.database.models import Employee, FaceLoginAttempt, PINVerification
-from backend.services.face_service import face_service
-from backend.services.twilio_service import generate_pin, send_pin_sms
-from backend.schemas.auth import TokenResponse, FaceLoginRequest, PermanentPinLoginRequest, VerifyAndChangePinRequest, DetectFacesRequest
 from backend.enums import EmployeeStatus, RoleName
+from backend.schemas.auth import (
+    DetectFacesRequest,
+    FaceLoginRequest,
+    PermanentPinLoginRequest,
+    TokenResponse,
+)
+from backend.services.face_service import face_service
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +202,7 @@ def detect_faces(payload: DetectFacesRequest):
             "boxes": boxes_list,
             "primary_box": primary_box
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Face detection error: {e}")
         return {"face_count": 0, "boxes": [], "primary_box": None, "error": str(e)}
 

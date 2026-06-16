@@ -4,15 +4,16 @@ Employees can create, view, and delete their own meetings.
 These meetings are checked against leave requests for conflicts.
 """
 
-from fastapi import APIRouter, HTTPException, Request, Depends
-from pydantic import BaseModel, validator
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 
-from backend.database.session import get_db
-from backend.database.models import Meeting, Employee, User
 from backend.core.security import verify_token
+from backend.database.models import Employee, Meeting
+from backend.database.session import get_db
 
 router = APIRouter(prefix="/meetings", tags=["Meetings"])
 
@@ -50,7 +51,7 @@ class MeetingCreate(BaseModel):
     @validator("meeting_date")
     def date_format(cls, v):
         try:
-            from datetime import datetime, date
+            from datetime import date, datetime
             parsed = datetime.strptime(v, "%Y-%m-%d").date()
             if parsed < date.today():
                 raise ValueError("Meeting date cannot be in the past")

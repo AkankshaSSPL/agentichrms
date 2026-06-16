@@ -1,7 +1,9 @@
 """RBAC models — Role, Permission, RolePermission."""
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from datetime import datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+
 from backend.database.session import Base
 
 

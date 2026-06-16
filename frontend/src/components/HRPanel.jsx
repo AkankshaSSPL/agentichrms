@@ -7,6 +7,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import LeaveRequests from './LeaveRequests'
+import BehaviorAlerts from './BehaviorAlerts'
 
 const API = '/api'
 
@@ -682,9 +683,10 @@ export default function HRPanel({ token: tokenProp }) {
     const removeAlert = useCallback(id => setAlerts(p => p.filter(a => a.id !== id)), [])
 
     const TABS = [
-        { id: 'directory', label: ' Employee Directory' },
-        { id: 'leaves',    label: ' Leave Approvals' },
-        { id: 'approvals', label: ' Update Requests' },
+        { id: 'directory', label: '👥 Employee Directory' },
+        { id: 'leaves',    label: '🌿 Leave Approvals' },
+        { id: 'approvals', label: '✏️ Update Requests' },
+        { id: 'signals',   label: '📊 Signals' },
     ]
 
     return (
@@ -748,6 +750,9 @@ export default function HRPanel({ token: tokenProp }) {
                     )}
                     {activeTab === 'approvals' && (
                         <ApprovalRequests token={token} onAlert={addAlert} />
+                    )}
+                    {activeTab === 'signals' && (
+                        <BehaviorAlerts token={token} onAlert={addAlert} />
                     )}
                 </div>
             </div>

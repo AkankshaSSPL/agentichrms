@@ -5,14 +5,14 @@ Onboarding API Routes
 - GET    /api/onboarding/{employee_id}/progress
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from datetime import datetime
-from typing import List, Dict, Any
 
-from backend.database.session import get_db
-from backend.database.models import Employee, OnboardingTask
 from backend.core.security import verify_token
+from backend.database.models import Employee, OnboardingTask
+from backend.database.session import get_db
 from backend.enums import RoleName
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])

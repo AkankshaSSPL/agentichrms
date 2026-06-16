@@ -1,7 +1,8 @@
 """Notification model."""
 
-from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
+
 from backend.database.models.base import BaseModel
 
 

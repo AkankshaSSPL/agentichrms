@@ -1,8 +1,10 @@
 """Auth models — FaceLoginAttempt, PINVerification."""
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Text, ForeignKey
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+
 from backend.database.models.base import BaseModel
 from backend.enums import PinType
 

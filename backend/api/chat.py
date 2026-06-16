@@ -1,16 +1,18 @@
-from backend.enums import ChatRole
-from fastapi import APIRouter, HTTPException, Depends, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import List, Optional
-from sqlalchemy.orm import Session
+import json
 from datetime import datetime
-from backend.database.session import get_db
-from backend.database.models import ChatSession, ChatMessage, Employee, User, Notification
-from backend.core.security import verify_token
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
+from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from agent.agent import build_agent
-from langchain_core.messages import HumanMessage, AIMessage
-import json, re
+from backend.core.security import verify_token
+from backend.database.models import ChatMessage, ChatSession, Employee, User
+from backend.database.session import get_db
+from backend.enums import ChatRole
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -109,7 +111,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 if isinstance(observation, str):
                     try:
                         observation = json.loads(observation)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         pass
                 if isinstance(observation, dict) and observation.get("conflict") is True:
                     conflict_payload = {
@@ -140,12 +142,25 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
             db.add(assistant_msg)
             db.commit()
 
+        # ── Behavioral analytics hook (non-fatal) ─────────────────────────────
+        # Runs after messages are saved. Errors here must never break the chat
+        # response — the outer try/except is intentionally NOT used for this.
+        try:
+            from backend.services.behavior_service import BehaviorService
+            BehaviorService(db).record_access(
+                employee_id=employee.id,
+                sources=[s if isinstance(s, dict) else s.dict() for s in sources],
+                session_id=payload.session_id,
+            )
+        except Exception as _be:  # noqa: BLE001
+            print(f"behavior analytics skipped: {_be}")  # noqa: T201
+
         return ChatResponse(answer=answer, sources=sources, steps=steps)
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Chat error: {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"❌ Chat error: {e}")  # noqa: T201
         raise HTTPException(status_code=500, detail=str(e))
 
 # ── Session management endpoints (matching your model) ──────────────────────

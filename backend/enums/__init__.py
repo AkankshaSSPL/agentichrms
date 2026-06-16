@@ -7,12 +7,14 @@ Preferred import style (single source of truth):
     from backend.enums import PinType, ChatRole
 """
 
-from .roles import RoleName
-from .leave_status import LeaveStatus
 from .approval_status import ApprovalStatus
-from .statuses import EmployeeStatus, EmailLogStatus
-from .pin_type import PinType
+from .behavior_alert_status import BehaviorAlertStatus
 from .chat_role import ChatRole
+from .document_category import DocumentCategory
+from .leave_status import LeaveStatus
+from .pin_type import PinType
+from .roles import RoleName
+from .statuses import EmailLogStatus, EmployeeStatus
 
 __all__ = [
     "RoleName",
@@ -22,4 +24,6 @@ __all__ = [
     "EmailLogStatus",
     "PinType",
     "ChatRole",
+    "DocumentCategory",
+    "BehaviorAlertStatus",
 ]

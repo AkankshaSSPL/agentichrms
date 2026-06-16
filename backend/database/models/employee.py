@@ -1,7 +1,18 @@
 """Employee model — master HR data, face recognition, PIN, profile fields."""
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Date, Float, LargeBinary
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+)
 from sqlalchemy.orm import relationship
+
 from backend.database.models.base import BaseModel
 from backend.enums import EmployeeStatus, PinType
 

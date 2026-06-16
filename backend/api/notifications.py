@@ -5,14 +5,16 @@ POST /api/notifications/{id}/read    — Mark selected notification as read
 POST /api/notifications/read-all     — Mark all notifications as read
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from typing import List
-from pydantic import BaseModel
 from datetime import datetime
-from backend.database.session import get_db
-from backend.database.models import Employee, Notification
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from backend.core.security import verify_token
+from backend.database.models import Employee, Notification
+from backend.database.session import get_db
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -49,7 +51,7 @@ def get_notifications(request: Request, only_unread: bool = False, db: Session =
     emp = get_current_employee(request, db)
     query = db.query(Notification).filter(Notification.employee_id == emp.id)
     if only_unread:
-        query = query.filter(Notification.is_read == False)
+        query = query.filter(Notification.is_read == False)  # noqa: E712
     return query.order_by(Notification.created_at.desc()).all()
 
 
@@ -73,7 +75,7 @@ def mark_all_as_read(request: Request, db: Session = Depends(get_db)):
     # Bulk update — no need to load each row into memory
     count = db.query(Notification).filter(
         Notification.employee_id == emp.id,
-        Notification.is_read == False,
+        Notification.is_read == False,  # noqa: E712
     ).update({"is_read": True})
     db.commit()
     return {"success": True, "count": count}
