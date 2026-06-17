@@ -280,7 +280,7 @@ export default function App() {
                                 <div key={i} className="msg-assistant">
                                     <div className="answer-card">
                                         <div className="answer-content">{msg.content.split('\n').map((line, j) => <p key={j}>{line || '\u00A0'}</p>)}</div>
-                                        {msg.sources?.length > 0 && <div className="sources-list">{msg.sources.map((s, j) => <span key={j} className="source-tag">📄 {s.source_file} — {s.section}</span>)}</div>}
+                                        {msg.sources?.length > 0 && <div className="sources-list">{msg.sources.map((s, j) => <span key={j} className="source-tag"> {s.source_file} — {s.section}</span>)}</div>}
                                         <div style={actionBarStyle}>
                                             <button className={`msg-action-btn ${speech.playingMsgIndex === i ? 'active-btn' : ''}`} style={btnBase} onClick={() => speech.speakText(msg.content, i)}><SpeakerIcon /></button>
                                             <button className={`msg-action-btn ${likedMsgs[i] ? 'liked' : ''}`} style={btnBase} onClick={() => handleLike(i)}><ThumbUpIcon /></button>
@@ -328,7 +328,7 @@ export default function App() {
             <aside className="preview-panel" style={{ display: (['admin', 'leaveRequests', 'profile', 'documents'].includes(view)) ? 'none' : undefined }}>
                 <div className="preview-header"><span>Source Preview</span></div>
                 {latestSources.length === 0 ? (
-                    <div className="preview-empty"><div className="icon">📋</div><p>Source documents appear here when the assistant cites them.</p></div>
+                    <div className="preview-empty"><div className="icon"></div><p>Source documents appear here when the assistant cites them.</p></div>
                 ) : (
                     <div className="preview-list">
                         {latestSources.map((src, idx) => {
@@ -338,7 +338,7 @@ export default function App() {
                                 <div key={idx} className={`source-card${(!src.content && !src.full_content && ['pdf', 'docx'].includes(ext)) ? ' source-card-missing' : ''}`}>
                                     <div className="source-card-header">
                                         <div className="source-card-info">
-                                            <div className="source-card-name">{ext === 'pdf' ? '📕' : ext === 'md' ? '📘' : ext === 'docx' ? '📝' : '📄'} {src.source_file}</div>
+                                            <div className="source-card-name">{ext === 'pdf' ? '' : ext === 'md' ? '' : ext === 'docx' ? '' : ''} {src.source_file}</div>
                                             <div className="source-card-loc">📍 {src.section || 'General'}</div>
                                         </div>
                                         <button className={`source-card-toggle${isExpanded ? ' active' : ''}`} onClick={() => togglePreview(idx, src)}>{isExpanded ? 'Close' : 'Open'}</button>

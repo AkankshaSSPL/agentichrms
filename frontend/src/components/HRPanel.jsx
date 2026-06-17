@@ -683,10 +683,10 @@ export default function HRPanel({ token: tokenProp }) {
     const removeAlert = useCallback(id => setAlerts(p => p.filter(a => a.id !== id)), [])
 
     const TABS = [
-        { id: 'directory', label: '👥 Employee Directory' },
-        { id: 'leaves',    label: '🌿 Leave Approvals' },
-        { id: 'approvals', label: '✏️ Update Requests' },
-        { id: 'signals',   label: '📊 Signals' },
+        { id: 'directory', label: ' Employee Directory' },
+        { id: 'leaves',    label: ' Leave Approvals' },
+        { id: 'approvals', label: ' Update Requests' },
+        { id: 'signals',   label: ' Signals' },
     ]
 
     return (

@@ -11,7 +11,7 @@ import DocumentViewer from './DocumentViewer'
 
 function fileIcon(filename) {
     const ext = filename.split('.').pop().toLowerCase()
-    return { pdf: '📕', md: '📘', docx: '📝', txt: '📄' }[ext] || '📄'
+    return { pdf: '', md        : '', docx: '', txt: '' }[ext] || ''
 }
 
 function fileLabel(filename) {
@@ -76,7 +76,7 @@ export default function DocumentLibrary({ onBack }) {
 
                 {!loading && documents.length === 0 && !error && (
                     <div style={{ textAlign: 'center', marginTop: 80 }}>
-                        <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
+                        <div style={{ fontSize: 48, marginBottom: 16 }}></div>
                         <div style={{ fontSize: 15, color: 'var(--text-secondary, #94a3b8)' }}>
                             No documents have been ingested yet.
                         </div>

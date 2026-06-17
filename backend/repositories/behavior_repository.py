@@ -130,6 +130,7 @@ class BehaviorRepository:
         category: str,
         score: int,
         window_days: int,
+        last_filename: Optional[str] = None,
     ) -> BehaviorAlert:
         alert = BehaviorAlert(
             employee_id=employee_id,
@@ -140,13 +141,14 @@ class BehaviorRepository:
             window_days=window_days,
             first_triggered_at=datetime.utcnow(),
             last_triggered_at=datetime.utcnow(),
+            last_filename=last_filename,
         )
         self.db.add(alert)
         self.db.commit()
         self.db.refresh(alert)
         logger.info(
-            "BehaviorAlert created: emp=%d category=%s score=%d",
-            employee_id, category, score,
+            "BehaviorAlert created: emp=%d category=%s score=%d filename=%s",
+            employee_id, category, score, last_filename,
         )
         return alert
 
@@ -192,5 +194,93 @@ class BehaviorRepository:
                 Role.name.in_([RoleName.HR, RoleName.ADMIN]),
                 Employee.deleted_at.is_(None),
             )
+            .all()
+        )
+
+    # ── Analytics aggregation (read-only, dashboard) ───────────────────────────
+
+    def count_alerts_by_category(self, status: Optional[str] = None) -> list[tuple[str, int]]:
+        """Return [(category, count), ...] for alerts, optionally filtered by status."""
+        from sqlalchemy import func
+        query = self.db.query(BehaviorAlert.category, func.count(BehaviorAlert.id))
+        if status and status != "all":
+            query = query.filter(BehaviorAlert.status == status.upper())
+        return query.group_by(BehaviorAlert.category).all()
+
+    def count_alerts_resolved_since(self, since: datetime) -> int:
+        return (
+            self.db.query(BehaviorAlert)
+            .filter(
+                BehaviorAlert.status == BehaviorAlertStatus.RESOLVED,
+                BehaviorAlert.resolved_at >= since,
+            )
+            .count()
+        )
+
+    def count_open_alerts(self) -> int:
+        return (
+            self.db.query(BehaviorAlert)
+            .filter(BehaviorAlert.status == BehaviorAlertStatus.OPEN)
+            .count()
+        )
+
+    def avg_resolution_seconds(self, since: datetime) -> Optional[float]:
+        """Average seconds between first_triggered_at and resolved_at for alerts resolved since `since`."""
+        from sqlalchemy import func
+        rows = (
+            self.db.query(BehaviorAlert.first_triggered_at, BehaviorAlert.resolved_at)
+            .filter(
+                BehaviorAlert.status == BehaviorAlertStatus.RESOLVED,
+                BehaviorAlert.resolved_at >= since,
+                BehaviorAlert.resolved_at.isnot(None),
+                BehaviorAlert.first_triggered_at.isnot(None),
+            )
+            .all()
+        )
+        if not rows:
+            return None
+        deltas = [(resolved - triggered).total_seconds() for triggered, resolved in rows]
+        return sum(deltas) / len(deltas)
+
+    def count_access_in_window_total(self, since: datetime) -> int:
+        """Total access log rows (chat + viewer, all employees) since `since`."""
+        return (
+            self.db.query(DocumentAccessLog)
+            .filter(DocumentAccessLog.accessed_at >= since)
+            .count()
+        )
+
+    def count_access_by_day(self, since: datetime) -> list[tuple]:
+        """
+        Return [(date, access_source, count), ...] for daily volume,
+        split by access_source so the dashboard can show chat vs viewer.
+        """
+        from sqlalchemy import func, cast, Date
+        return (
+            self.db.query(
+                cast(DocumentAccessLog.accessed_at, Date).label("day"),
+                DocumentAccessLog.access_source,
+                func.count(DocumentAccessLog.id),
+            )
+            .filter(DocumentAccessLog.accessed_at >= since)
+            .group_by("day", DocumentAccessLog.access_source)
+            .order_by("day")
+            .all()
+        )
+
+    def top_employees_by_access(self, since: datetime, limit: int = 5) -> list[tuple]:
+        """Return [(employee_id, employee_name, count), ...] ordered by access count desc."""
+        from sqlalchemy import func
+        return (
+            self.db.query(
+                Employee.id,
+                Employee.name,
+                func.count(DocumentAccessLog.id).label("cnt"),
+            )
+            .join(DocumentAccessLog, DocumentAccessLog.employee_id == Employee.id)
+            .filter(DocumentAccessLog.accessed_at >= since)
+            .group_by(Employee.id, Employee.name)
+            .order_by(func.count(DocumentAccessLog.id).desc())
+            .limit(limit)
             .all()
         )

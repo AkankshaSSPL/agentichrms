@@ -9,6 +9,11 @@ Three tables:
 Changes vs 002_add_behavioral_analytics:
   DocumentAccessLog gains access_source String(20) server_default="chat"
   so existing chat rows are automatically backfilled — no data loss.
+
+Changes vs 003_add_access_source:
+  BehaviorAlert gains last_filename String, nullable — records the most
+  recently accessed document that contributed to this alert's category,
+  so HR can see *which* document triggered the signal, not just the category.
 """
 
 from sqlalchemy import (
@@ -79,6 +84,7 @@ class BehaviorAlert(BaseModel):
     id                      = Column(Integer, primary_key=True, index=True)
     employee_id             = Column(Integer, ForeignKey("employees.id"), index=True, nullable=False)
     category                = Column(String(30), nullable=False)
+    last_filename           = Column(String, nullable=True)
     status                  = Column(String(20), default=BehaviorAlertStatus.OPEN, index=True, nullable=False)
     score                   = Column(Integer, nullable=False)
     trigger_count           = Column(Integer, default=1, nullable=False)

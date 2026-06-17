@@ -56,7 +56,7 @@ NOTIFICATION_TEMPLATES = {
     },
     NotifKey.BEHAVIOR_ALERT_HR: {
         "title": "Document Activity Signal",
-        "message": "{employee_name} shows repeated interest in {category} documents. Review in HR → Signals.",
+        "message": "{employee_name} shows repeated interest in {category} documents (most recent: {filename}). Review in HR → Signals.",
     },
 }
 

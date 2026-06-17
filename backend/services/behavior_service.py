@@ -72,7 +72,7 @@ class BehaviorService:
                     employee_id, fname, category, session_id,
                     access_source=AccessSource.CHAT,    # explicit — never ambiguous
                 )
-                self._evaluate(employee_id, category)
+                self._evaluate(employee_id, category, fname)
 
         except Exception as e:  # noqa: BLE001
             logger.warning("behavior_analytics skipped for emp=%s: %s", employee_id, e)
@@ -115,14 +115,14 @@ class BehaviorService:
             )
 
             # Same evaluation path as chat — chat + viewer counts combine
-            self._evaluate(employee_id, category)
+            self._evaluate(employee_id, category, filename)
 
         except Exception as e:  # noqa: BLE001
             logger.warning("record_view skipped for emp=%d file=%s: %s", employee_id, filename, e)
 
     # ── Alert evaluation ───────────────────────────────────────────────────────
 
-    def _evaluate(self, employee_id: int, category: str) -> None:
+    def _evaluate(self, employee_id: int, category: str, filename: Optional[str] = None) -> None:
         thresholds = _thresholds()
         try:
             cat_enum = DocumentCategory(category)
@@ -146,27 +146,30 @@ class BehaviorService:
                 score=count,
                 trigger_count=existing.trigger_count + 1,
                 last_triggered_at=datetime.utcnow(),
+                last_filename=filename or existing.last_filename,
             )
-            logger.info("BehaviorAlert updated: emp=%d category=%s count=%d", employee_id, category, count)
+            logger.info("BehaviorAlert updated: emp=%d category=%s count=%d filename=%s", employee_id, category, count, filename)
         else:
             self.repo.create_alert(
                 employee_id=employee_id,
                 category=category,
                 score=count,
                 window_days=settings.BEHAVIOR_WINDOW_DAYS,
+                last_filename=filename,
             )
             employee = self.db.query(Employee).filter_by(id=employee_id).first()
             if employee:
-                self._notify_hr(employee, category, count)
+                self._notify_hr(employee, category, count, filename)
 
     # ── HR notification ────────────────────────────────────────────────────────
 
-    def _notify_hr(self, employee, category: str, count: int) -> None:
+    def _notify_hr(self, employee, category: str, count: int, filename: Optional[str] = None) -> None:
         try:
             Notifier(self.db).from_template_to_hr(
                 NotifKey.BEHAVIOR_ALERT_HR,
                 employee_name=employee.name,
                 category=category,
+                filename=filename or "an unspecified document",
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("Behavior in-app notification failed: %s", e)
@@ -182,6 +185,7 @@ class BehaviorService:
                 category=category,
                 count=count,
                 window_days=settings.BEHAVIOR_WINDOW_DAYS,
+                filename=filename or "an unspecified document",
             )
             for hr in hr_employees:
                 try:
@@ -208,6 +212,7 @@ class BehaviorService:
                 "employee_name": emp.name,
                 "employee_email": emp.email,
                 "category": alert.category,
+                "last_filename": alert.last_filename,
                 "status": alert.status,
                 "score": alert.score,
                 "trigger_count": alert.trigger_count,
@@ -248,3 +253,60 @@ class BehaviorService:
             )
         tag = self.repo.upsert_tag(filename, category)
         return {"id": tag.id, "filename": tag.filename, "category": tag.category}
+
+    # ── Analytics dashboard ────────────────────────────────────────────────────
+
+    def get_analytics_summary(self, window_days: int = 14, top_n: int = 5) -> dict:
+        """
+        Aggregate data for the HR analytics dashboard.
+        Read-only — never mutates state, safe to call on every dashboard load.
+        """
+        now = datetime.now(tz=timezone.utc)
+        window_since = now - timedelta(days=window_days)
+        thirty_days_ago = now - timedelta(days=30)
+
+        # Stat cards
+        open_alerts = self.repo.count_open_alerts()
+        resolved_30d = self.repo.count_alerts_resolved_since(thirty_days_ago)
+        total_accesses = self.repo.count_access_in_window_total(window_since)
+        avg_resolution_seconds = self.repo.avg_resolution_seconds(thirty_days_ago)
+        avg_resolution_days = (
+            round(avg_resolution_seconds / 86400, 1) if avg_resolution_seconds is not None else None
+        )
+
+        # Category breakdown (open alerts only — what HR needs to act on)
+        category_rows = self.repo.count_alerts_by_category(status="open")
+        by_category = [{"category": cat, "count": count} for cat, count in category_rows]
+
+        # Daily access volume, split by source
+        daily_rows = self.repo.count_access_by_day(window_since)
+        daily_map: dict[str, dict[str, int]] = {}
+        for day, source, count in daily_rows:
+            day_str = day.isoformat() if hasattr(day, "isoformat") else str(day)
+            daily_map.setdefault(day_str, {"chat": 0, "viewer": 0})
+            key = "viewer" if source == AccessSource.VIEWER else "chat"
+            daily_map[day_str][key] = count
+        daily_volume = [
+            {"date": day_str, "chat": vals["chat"], "viewer": vals["viewer"]}
+            for day_str, vals in sorted(daily_map.items())
+        ]
+
+        # Top employees by access count
+        top_rows = self.repo.top_employees_by_access(window_since, limit=top_n)
+        top_employees = [
+            {"employee_id": emp_id, "employee_name": name, "count": count}
+            for emp_id, name, count in top_rows
+        ]
+
+        return {
+            "stats": {
+                "open_alerts": open_alerts,
+                "resolved_30d": resolved_30d,
+                "total_accesses": total_accesses,
+                "window_days": window_days,
+                "avg_resolution_days": avg_resolution_days,
+            },
+            "by_category": by_category,
+            "daily_volume": daily_volume,
+            "top_employees": top_employees,
+        }

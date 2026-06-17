@@ -6,13 +6,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useBehaviorAlerts } from '../hooks/useBehaviorAlerts'
+import AnalyticsOverview from './AnalyticsOverview'
 
 const CATEGORY_META = {
-    SENSITIVE:    { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)',   icon: '🔒', label: 'Sensitive' },
-    LEAVE_INTENT: { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)',  icon: '🏖️', label: 'Leave Intent' },
-    EXIT_INTENT:  { color: '#f97316', bg: 'rgba(249,115,22,0.12)',  border: 'rgba(249,115,22,0.3)',  icon: '🚪', label: 'Exit Intent' },
-    GROWTH:       { color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)',  icon: '📈', label: 'Growth' },
-    GENERAL:      { color: '#94a3b8', bg: 'rgba(100,116,139,0.12)', border: 'rgba(100,116,139,0.3)', icon: '📄', label: 'General' },
+    SENSITIVE:    { color: '#f87171', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)',   icon: '', label: 'Sensitive' },
+    LEAVE_INTENT: { color: '#fbbf24', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)',  icon: '', label: 'Leave Intent' },
+    EXIT_INTENT:  { color: '#f97316', bg: 'rgba(249,115,22,0.12)',  border: 'rgba(249,115,22,0.3)',  icon: '', label: 'Exit Intent' },
+    GROWTH:       { color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)',  icon: '', label: 'Growth' },
+    GENERAL:      { color: '#94a3b8', bg: 'rgba(100,116,139,0.12)', border: 'rgba(100,116,139,0.3)', icon: '', label: 'General' },
 }
 
 function CategoryBadge({ category }) {
@@ -46,13 +47,18 @@ function StatusBadge({ status }) {
 }
 
 export default function BehaviorAlerts({ token, onAlert }) {
-    const { alerts, loading, error, loadAlerts, resolveAlert } = useBehaviorAlerts()
+    const {
+        alerts, loading, error, loadAlerts, resolveAlert,
+        analytics, analyticsLoading, analyticsError, loadAnalytics,
+    } = useBehaviorAlerts()
     const [filter, setFilter]       = useState('open')
+    const [tab, setTab]             = useState('alerts')   // 'alerts' | 'overview'
     const [noteModal, setNoteModal] = useState(null)  // alert being resolved
     const [noteText, setNoteText]   = useState('')
     const [resolving, setResolving] = useState(null)
 
     useEffect(() => { loadAlerts(filter) }, [filter])
+    useEffect(() => { if (tab === 'overview') loadAnalytics() }, [tab])
 
     const openCount = alerts.filter(a => a.status === 'OPEN').length
 
@@ -108,7 +114,7 @@ export default function BehaviorAlerts({ token, onAlert }) {
             )}
 
             {/* Header */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:10 }}>
                 <div>
                     <h2 style={{ margin:0, fontSize:17, fontWeight:700, color:'var(--text-primary)' }}>
                         Document Activity Signals
@@ -119,7 +125,7 @@ export default function BehaviorAlerts({ token, onAlert }) {
                     </p>
                 </div>
                 <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                    {[
+                    {tab === 'alerts' && [
                         { id:'open',     label: openCount ? `Open (${openCount})` : 'Open' },
                         { id:'resolved', label: 'Resolved' },
                         { id:'all',      label: 'All' },
@@ -132,15 +138,35 @@ export default function BehaviorAlerts({ token, onAlert }) {
                         }}>{f.label}</button>
                     ))}
                     <button
-                        onClick={() => loadAlerts(filter)}
+                        onClick={() => tab === 'alerts' ? loadAlerts(filter) : loadAnalytics()}
                         style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--text-muted)', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}
                     >↻ Refresh</button>
                 </div>
             </div>
 
+            {/* Alerts / Overview tab toggle */}
+            <div style={{ display:'flex', gap:4, marginBottom:18, background:'var(--bg-secondary)', borderRadius:10, padding:4, width:'fit-content' }}>
+                {[
+                    { id:'alerts',   label: ' Alerts' },
+                    { id:'overview', label: ' Overview' },
+                ].map(t => (
+                    <button key={t.id} onClick={() => setTab(t.id)} style={{
+                        padding:'6px 16px', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
+                        border:'none',
+                        background: tab === t.id ? 'var(--bg-card)' : 'transparent',
+                        color: tab === t.id ? 'var(--text-primary)' : 'var(--text-muted)',
+                        boxShadow: tab === t.id ? '0 1px 4px rgba(0,0,0,0.15)' : 'none',
+                    }}>{t.label}</button>
+                ))}
+            </div>
+
+            {tab === 'overview' ? (
+                <AnalyticsOverview analytics={analytics} loading={analyticsLoading} error={analyticsError} />
+            ) : (
+            <>
             {/* Content */}
             {loading ? (
-                <div style={{ textAlign:'center', padding:60, color:'var(--text-muted)', fontSize:13 }}>⏳ Loading signals…</div>
+                <div style={{ textAlign:'center', padding:60, color:'var(--text-muted)', fontSize:13 }}> Loading signals…</div>
             ) : error ? (
                 <div style={{ textAlign:'center', padding:60, color:'#f87171', fontSize:13 }}>❌ {error}</div>
             ) : alerts.length === 0 ? (
@@ -186,6 +212,17 @@ export default function BehaviorAlerts({ token, onAlert }) {
                                         </span>
                                     </div>
 
+                                    <div style={{ marginTop:6, fontSize:12, display:'flex', alignItems:'center', gap:6 }}>
+                                        <span style={{ color:'var(--text-muted)' }}>Document:</span>
+                                        <span style={{
+                                            color: a.last_filename ? 'var(--text-primary)' : 'var(--text-muted)',
+                                            fontWeight: a.last_filename ? 600 : 400,
+                                            fontStyle: a.last_filename ? 'normal' : 'italic',
+                                        }}>
+                                            {a.last_filename || 'Unknown document'}
+                                        </span>
+                                    </div>
+
                                     {a.hr_note && (
                                         <div style={{ marginTop:8, fontSize:11, color:'var(--text-muted)', background:'var(--bg-secondary)', padding:'5px 10px', borderRadius:6, borderLeft:'3px solid var(--border)' }}>
                                             Note: {a.hr_note}
@@ -211,6 +248,8 @@ export default function BehaviorAlerts({ token, onAlert }) {
                         </div>
                     ))}
                 </div>
+            )}
+            </>
             )}
         </div>
     )

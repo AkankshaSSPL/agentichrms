@@ -188,7 +188,7 @@ HRPanel modal style: `var(--bg-secondary)`, `var(--border)`, rounded, `boxShadow
 - add `'documents'` as a `view` value (`App.jsx:50`); render
   `{view === 'documents' && <DocumentLibrary />}` alongside the chat/admin blocks,
   with a back-to-chat control.
-- add a **"📄 Documents"** nav button in `SessionSidebar.jsx` (near the existing
+- add a **" Documents"** nav button in `SessionSidebar.jsx` (near the existing
   "Knowledge base · {docCount} docs" status line) that calls `setView('documents')`.
   The employee side shows **no** analytics — viewing looks like an ordinary library.
 

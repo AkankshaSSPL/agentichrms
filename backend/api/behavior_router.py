@@ -42,6 +42,21 @@ def list_alerts(
     return BehaviorService(db).list_alerts(status)
 
 
+@router.get("/analytics/summary")
+def get_analytics_summary(
+    window_days: int = Query(default=14, ge=1, le=90, description="Days of access-volume history to include"),
+    top_n: int = Query(default=5, ge=1, le=20, description="Number of top employees to return"),
+    payload: dict = Depends(require_permission("behavior.view")),
+    db: Session = Depends(get_db),
+):
+    """
+    Aggregated data for the HR analytics dashboard:
+    stat cards, alert-by-category breakdown, daily access volume (chat vs viewer),
+    and top employees by access count. Read-only.
+    """
+    return BehaviorService(db).get_analytics_summary(window_days=window_days, top_n=top_n)
+
+
 @router.patch("/alerts/{alert_id}/resolve")
 def resolve_alert(
     alert_id: int,

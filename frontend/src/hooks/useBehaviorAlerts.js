@@ -16,6 +16,10 @@ export function useBehaviorAlerts() {
     const [loading, setLoading] = useState(false)
     const [error, setError]     = useState(null)
 
+    const [analytics, setAnalytics]             = useState(null)
+    const [analyticsLoading, setAnalyticsLoading] = useState(false)
+    const [analyticsError, setAnalyticsError]     = useState(null)
+
     const loadAlerts = useCallback(async (status = 'open') => {
         setLoading(true)
         setError(null)
@@ -53,5 +57,25 @@ export function useBehaviorAlerts() {
         }
     }, [])
 
-    return { alerts, loading, error, loadAlerts, resolveAlert }
+    const loadAnalytics = useCallback(async (windowDays = 14, topN = 5) => {
+        setAnalyticsLoading(true)
+        setAnalyticsError(null)
+        try {
+            const res = await fetch(`${API}/behavior/analytics/summary?window_days=${windowDays}&top_n=${topN}`, {
+                headers: { Authorization: `Bearer ${getToken()}` },
+            })
+            if (!res.ok) throw new Error(`Server ${res.status}`)
+            setAnalytics(await res.json())
+        } catch (err) {
+            console.error('Failed to load behavior analytics', err)
+            setAnalyticsError(err.message)
+        } finally {
+            setAnalyticsLoading(false)
+        }
+    }, [])
+
+    return {
+        alerts, loading, error, loadAlerts, resolveAlert,
+        analytics, analyticsLoading, analyticsError, loadAnalytics,
+    }
 }
