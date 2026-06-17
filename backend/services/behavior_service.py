@@ -1,7 +1,11 @@
 """
 Behavior Service — business logic for behavioral analytics.
-Entry point: record_access() called from chat.py after every AI response.
-Never raises — all errors are caught and logged so chat is never blocked.
+
+Entry points:
+  record_access() — called from chat.py after every AI response (chat source)
+  record_view()   — called from docs.py when employee opens a doc in the viewer
+
+Never raises — all errors caught and logged so chat/viewer are never blocked.
 """
 
 import logging
@@ -13,14 +17,15 @@ from sqlalchemy.orm import Session
 from backend.core.config import settings
 from backend.core.email import send_email
 from backend.core.render_template import render_template
-from backend.enums import DocumentCategory
+from backend.database.models import Employee
+from backend.enums import DocumentCategory, AccessSource
 from backend.notifications.notification_templates import NotifKey
 from backend.notifications.notifier import Notifier
 from backend.repositories.behavior_repository import BehaviorRepository
 
 logger = logging.getLogger(__name__)
 
-# Category → threshold setting. GENERAL is deliberately absent (never tracked).
+
 def _thresholds() -> dict[str, int]:
     return {
         DocumentCategory.SENSITIVE:    settings.BEHAVIOR_THRESHOLD_SENSITIVE,
@@ -36,7 +41,7 @@ class BehaviorService:
         self.repo = BehaviorRepository(db)
         self.db = db
 
-    # ── Public entry point (called from chat.py) ───────────────────────────────
+    # ── Chat entry point ───────────────────────────────────────────────────────
 
     def record_access(
         self,
@@ -45,45 +50,80 @@ class BehaviorService:
         session_id: Optional[int] = None,
     ) -> None:
         """
-        Log document accesses from a chat response and evaluate alert thresholds.
-        Wraps everything in try/except — must never break the chat response.
+        Log document accesses surfaced in a chat response.
+        access_source is always "chat" here.
         """
         try:
             if not settings.BEHAVIOR_ANALYTICS_ENABLED:
                 return
 
-            # Dedupe by filename — one answer may cite many chunks of the same doc
             seen: set[str] = set()
-            unique_sources: list[dict] = []
             for src in sources:
                 fname = src.get("source_file") or src.get("source") or ""
-                if fname and fname not in seen:
-                    seen.add(fname)
-                    unique_sources.append(src)
-
-            for src in unique_sources:
-                fname = src.get("source_file") or src.get("source") or ""
-                if not fname:
+                if not fname or fname in seen:
                     continue
+                seen.add(fname)
 
                 category = self.repo.get_category_for(fname)
                 if not category:
-                    continue  # untagged doc — skip entirely
+                    continue
 
-                # Always log the access for the audit trail
-                self.repo.log_access(employee_id, fname, category, session_id)
-
-                # Evaluate threshold only for tracked categories
+                self.repo.log_access(
+                    employee_id, fname, category, session_id,
+                    access_source=AccessSource.CHAT,    # explicit — never ambiguous
+                )
                 self._evaluate(employee_id, category)
 
         except Exception as e:  # noqa: BLE001
             logger.warning("behavior_analytics skipped for emp=%s: %s", employee_id, e)
 
+    # ── Viewer entry point ─────────────────────────────────────────────────────
+
+    def record_view(
+        self,
+        employee_id: int,
+        filename: str,
+        session_id: Optional[int] = None,
+    ) -> None:
+        """
+        Log a document open from the Document Library viewer.
+        Guarded by a per-(employee, file) cooldown to prevent rapid re-open spam.
+        Reuses the same _evaluate() → alert → notify pipeline as chat accesses.
+        """
+        try:
+            if not settings.BEHAVIOR_ANALYTICS_ENABLED:
+                return
+
+            category = self.repo.get_category_for(filename)
+            if not category:
+                return  # untagged doc — viewable but not tracked
+
+            # Cooldown: skip if this employee already opened this file recently via viewer
+            since = datetime.now(tz=timezone.utc) - timedelta(
+                minutes=settings.BEHAVIOR_VIEW_COOLDOWN_MINUTES
+            )
+            if self.repo.recent_view_exists(employee_id, filename, since):
+                logger.debug(
+                    "view cooldown active: emp=%d file=%s — skipping log",
+                    employee_id, filename,
+                )
+                return
+
+            self.repo.log_access(
+                employee_id, filename, category, session_id,
+                access_source=AccessSource.VIEWER,
+            )
+
+            # Same evaluation path as chat — chat + viewer counts combine
+            self._evaluate(employee_id, category)
+
+        except Exception as e:  # noqa: BLE001
+            logger.warning("record_view skipped for emp=%d file=%s: %s", employee_id, filename, e)
+
     # ── Alert evaluation ───────────────────────────────────────────────────────
 
     def _evaluate(self, employee_id: int, category: str) -> None:
         thresholds = _thresholds()
-        # Normalise to enum for dict lookup
         try:
             cat_enum = DocumentCategory(category)
         except ValueError:
@@ -91,7 +131,7 @@ class BehaviorService:
 
         threshold = thresholds.get(cat_enum)
         if threshold is None:
-            return  # GENERAL or unknown — never alert
+            return
 
         since = datetime.now(tz=timezone.utc) - timedelta(days=settings.BEHAVIOR_WINDOW_DAYS)
         count = self.repo.count_access_in_window(employee_id, category, since)
@@ -107,28 +147,21 @@ class BehaviorService:
                 trigger_count=existing.trigger_count + 1,
                 last_triggered_at=datetime.utcnow(),
             )
-            logger.info(
-                "BehaviorAlert updated: emp=%d category=%s count=%d",
-                employee_id, category, count,
-            )
+            logger.info("BehaviorAlert updated: emp=%d category=%s count=%d", employee_id, category, count)
         else:
-            alert = self.repo.create_alert(
+            self.repo.create_alert(
                 employee_id=employee_id,
                 category=category,
                 score=count,
                 window_days=settings.BEHAVIOR_WINDOW_DAYS,
             )
-            # Notify HR only on first creation
-            employee = self.repo.db.query(
-                __import__("backend.database.models", fromlist=["Employee"]).Employee
-            ).filter_by(id=employee_id).first()
+            employee = self.db.query(Employee).filter_by(id=employee_id).first()
             if employee:
                 self._notify_hr(employee, category, count)
 
     # ── HR notification ────────────────────────────────────────────────────────
 
     def _notify_hr(self, employee, category: str, count: int) -> None:
-        # In-app bell notification to all HR/Admin
         try:
             Notifier(self.db).from_template_to_hr(
                 NotifKey.BEHAVIOR_ALERT_HR,
@@ -138,7 +171,6 @@ class BehaviorService:
         except Exception as e:  # noqa: BLE001
             logger.warning("Behavior in-app notification failed: %s", e)
 
-        # Email to all HR/Admin (if enabled)
         if not settings.BEHAVIOR_ALERT_EMAIL_ENABLED:
             return
 
@@ -197,8 +229,6 @@ class BehaviorService:
             raise HTTPException(400, "Alert is already resolved")
         self.repo.resolve_alert(alert, hr_id, note)
         return {"message": "Alert resolved", "alert_id": alert_id}
-
-    # ── Admin tag management ───────────────────────────────────────────────────
 
     def list_tags(self) -> list[dict]:
         return [

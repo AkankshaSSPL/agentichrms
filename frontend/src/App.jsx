@@ -13,6 +13,7 @@ import ProfileView from './components/ProfileView'
 import ConflictPopup from './components/ConflictPopup'
 import NameChangePopup from './components/NameChangePopup'
 import SessionSidebar from './components/SessionSidebar'
+import DocumentLibrary from './components/DocumentLibrary'
 
 import { useAuth } from './hooks/useAuth'
 import { useChatSessions } from './hooks/useChatSessions'
@@ -228,6 +229,7 @@ export default function App() {
                 onClearMessages={() => { chat.clearMessages(); setExpandedIdx(null); setPreviewData(null) }}
                 onLogout={onLogout}
                 onProfileClick={() => setView('profile')}
+                onDocumentsClick={() => setView('documents')}
             />
 
             {/* ── Main content ── */}
@@ -309,6 +311,10 @@ export default function App() {
                         </div>
                     </div>
                 </main>
+            ) : view === 'documents' ? (
+                <main style={{ gridColumn: '2 / -1', overflow: 'auto', background: 'var(--bg-primary)', minHeight: '100vh' }}>
+                    <DocumentLibrary onBack={() => setView('chat')} />
+                </main>
             ) : (
                 <main className="dashboard-panel">
                     {view === 'profile'
@@ -319,7 +325,7 @@ export default function App() {
             )}
 
             {/* ── Source preview panel ── */}
-            <aside className="preview-panel" style={{ display: (['admin', 'leaveRequests', 'profile'].includes(view)) ? 'none' : undefined }}>
+            <aside className="preview-panel" style={{ display: (['admin', 'leaveRequests', 'profile', 'documents'].includes(view)) ? 'none' : undefined }}>
                 <div className="preview-header"><span>Source Preview</span></div>
                 {latestSources.length === 0 ? (
                     <div className="preview-empty"><div className="icon">📋</div><p>Source documents appear here when the assistant cites them.</p></div>

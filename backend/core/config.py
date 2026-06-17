@@ -124,6 +124,8 @@ class Settings(BaseSettings):
     BEHAVIOR_THRESHOLD_LEAVE_INTENT: int = 5
     BEHAVIOR_THRESHOLD_EXIT_INTENT: int = 2
     BEHAVIOR_THRESHOLD_GROWTH: int = 4
+    DOCUMENT_VIEWER_ENABLED: bool = True
+    BEHAVIOR_VIEW_COOLDOWN_MINUTES: int = 5
     # GENERAL category is intentionally omitted — never tracked
 
     # ── RAG Models ─────────────────────────────────────────────────────────────

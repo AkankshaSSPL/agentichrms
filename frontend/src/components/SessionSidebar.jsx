@@ -13,6 +13,7 @@ export default function SessionSidebar({
     employee, view, docCount, sessions, currentSessionId, loadingSessions, menuOpen,
     onNewSession, onSelectSession, onRename, onTogglePin, onDelete, onSetMenuOpen,
     onClearMessages, onLogout, onProfileClick,
+    onDocumentsClick,   // ← new prop
 }) {
     const groups = { Today: [], Yesterday: [], 'Previous 7 Days': [], Older: [] }
     sessions.forEach(s => { const key = getSessionGroupKey(s.created_at); groups[key].push(s) })
@@ -48,7 +49,25 @@ export default function SessionSidebar({
                 </div>
             )}
 
+            {/* ── Knowledge base status + Documents nav ── */}
             <div className="sidebar-status"><span className="dot" />Knowledge base · {docCount} docs</div>
+            <button
+                onClick={onDocumentsClick}
+                style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    width: '100%', padding: '8px 10px', marginBottom: 8,
+                    background: view === 'documents' ? 'rgba(79,142,247,0.15)' : 'transparent',
+                    border: `1px solid ${view === 'documents' ? 'rgba(79,142,247,0.4)' : 'transparent'}`,
+                    borderRadius: 8, cursor: 'pointer',
+                    color: view === 'documents' ? 'var(--accent)' : 'var(--text-muted)',
+                    fontSize: 13, fontWeight: view === 'documents' ? 600 : 400,
+                    transition: 'all 0.15s',
+                    textAlign: 'left',
+                }}
+            >
+                <span></span> Document Library
+            </button>
+
             <div className="sidebar-section">Your Conversations</div>
 
             {loadingSessions ? (

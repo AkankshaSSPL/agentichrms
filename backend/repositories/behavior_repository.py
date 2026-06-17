@@ -13,9 +13,8 @@ from backend.database.models.behavior_analytics import (
     DocumentAccessLog,
     DocumentTag,
 )
-from backend.enums import BehaviorAlertStatus
+from backend.enums import BehaviorAlertStatus, RoleName, AccessSource
 from backend.database.models import Role
-from backend.enums import RoleName
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +55,7 @@ class BehaviorRepository:
         filename: str,
         category: str,
         session_id: Optional[int],
+        access_source: str = AccessSource.CHAT,   # ← new param, default preserves chat behaviour
     ) -> DocumentAccessLog:
         """Append a new access log entry — never updated or deleted."""
         entry = DocumentAccessLog(
@@ -63,11 +63,33 @@ class BehaviorRepository:
             filename=filename,
             category=category,
             chat_session_id=session_id,
+            access_source=access_source,
         )
         self.db.add(entry)
         self.db.commit()
         self.db.refresh(entry)
         return entry
+
+    def recent_view_exists(
+        self,
+        employee_id: int,
+        filename: str,
+        since: datetime,
+    ) -> bool:
+        """
+        Return True if this employee already opened this file via the viewer
+        within the cooldown window — used to de-spam rapid re-opens.
+        """
+        return (
+            self.db.query(DocumentAccessLog)
+            .filter(
+                DocumentAccessLog.employee_id == employee_id,
+                DocumentAccessLog.filename == filename,
+                DocumentAccessLog.access_source == AccessSource.VIEWER,
+                DocumentAccessLog.accessed_at >= since,
+            )
+            .first()
+        ) is not None
 
     def count_access_in_window(
         self,
@@ -75,7 +97,10 @@ class BehaviorRepository:
         category: str,
         since: datetime,
     ) -> int:
-        """Count distinct document accesses for an employee+category within the window."""
+        """
+        Count all accesses (chat + viewer) for an employee+category within the window.
+        Both access sources count toward the same threshold — no separate models.
+        """
         return (
             self.db.query(DocumentAccessLog)
             .filter(
@@ -89,7 +114,6 @@ class BehaviorRepository:
     # ── Alert operations ───────────────────────────────────────────────────────
 
     def get_open_alert(self, employee_id: int, category: str) -> Optional[BehaviorAlert]:
-        """Return the existing OPEN alert for this employee+category, or None."""
         return (
             self.db.query(BehaviorAlert)
             .filter(
@@ -134,7 +158,6 @@ class BehaviorRepository:
         return alert
 
     def list_alerts(self, status: Optional[str] = None) -> list[tuple[BehaviorAlert, Employee]]:
-        """Return (alert, employee) pairs, optionally filtered by status."""
         query = (
             self.db.query(BehaviorAlert, Employee)
             .join(Employee, BehaviorAlert.employee_id == Employee.id)
@@ -161,10 +184,7 @@ class BehaviorRepository:
         logger.info("BehaviorAlert resolved: id=%d by emp=%d", alert.id, resolved_by_id)
         return alert
 
-    # ── HR employee lookup (for notifications) ─────────────────────────────────
-
     def get_hr_employees(self) -> list[Employee]:
-        """Return all active HR and Admin employees."""
         return (
             self.db.query(Employee)
             .join(Role, Employee.role_id == Role.id)
