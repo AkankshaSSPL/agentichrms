@@ -1,7 +1,7 @@
 """
 Documents API
 
-GET  /documents              — list unique source documents from ChromaDB
+GET  /documents               — list viewable documents from DOCS_DIR on disk
 GET  /documents/{filename}   — check existence in DOCS_DIR
 GET  /documents/{filename}/raw  — stream the file (auth required, path-traversal guarded)
 POST /documents/{filename}/view — log a viewer open into the analytics pipeline (non-fatal)
@@ -11,7 +11,6 @@ import logging
 import os
 from pathlib import Path
 
-from chromadb import PersistentClient
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -68,27 +67,38 @@ def _safe_resolve(filename: str) -> Path:
 
 # ── List documents ─────────────────────────────────────────────────────────────
 
+# Extensions the viewer can actually serve/render
+_VIEWABLE_EXTENSIONS = set(_MIME.keys())  # .pdf, .md, .txt, .docx
+
+
 @router.get("/documents")
 async def list_documents(payload: dict = Depends(require_authenticated)):
     """
-    Return one entry per unique source document from ChromaDB.
-    Frontend uses d.documents.length for the sidebar doc count.
+    Return one entry per document file in settings.DOCS_DIR.
+
+    Previously this read from ChromaDB metadata only, which meant any file
+    not yet ingested/chunked for RAG (e.g. PDFs/DOCX added after the last
+    ingest run) was invisible in the Document Library even though the file
+    existed on disk and was viewable. Listing directly from DOCS_DIR fixes
+    this — the library now shows everything a user can actually open,
+    independent of RAG ingestion state.
     """
     try:
-        client = PersistentClient(path=str(settings.CHROMA_DIR))
-        collection = client.get_collection(settings.CHROMA_COLLECTION_NAME)
-        result = collection.get(include=["metadatas"])
-        metadatas = result.get("metadatas") or []
-        seen: set[str] = set()
+        docs_dir = Path(settings.DOCS_DIR)
+        if not docs_dir.exists():
+            return {"documents": []}
+
         documents = []
-        for meta in metadatas:
-            source = meta.get("source", "unknown")
-            if source not in seen:
-                seen.add(source)
-                documents.append({"filename": source})
+        for entry in sorted(docs_dir.iterdir()):
+            if not entry.is_file():
+                continue
+            if entry.suffix.lower() not in _VIEWABLE_EXTENSIONS:
+                continue  # skip non-viewable files (e.g. .sqlite, hidden files)
+            documents.append({"filename": entry.name})
+
         return {"documents": documents}
     except Exception as e:  # noqa: BLE001
-        logger.warning("ChromaDB error in /documents: %s", e)
+        logger.warning("Error listing documents from DOCS_DIR: %s", e)
         return {"documents": []}
 
 
