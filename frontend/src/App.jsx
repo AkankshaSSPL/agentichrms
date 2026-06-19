@@ -19,6 +19,7 @@ import { useAuth } from './hooks/useAuth'
 import { useChatSessions } from './hooks/useChatSessions'
 import { useChatMessages } from './hooks/useChatMessages'
 import { useSpeech } from './hooks/useSpeech'
+import { useNudges } from './hooks/useNudges'
 
 const API = '/api'
 
@@ -71,6 +72,10 @@ export default function App() {
     const chat = useChatMessages()
     const welcomedSessions = useRef(new Set())
 
+    // ── Nudges ─────────────────────────────────────────────────────────────────
+    const nudge = useNudges()
+    const nudgeInserted = useRef(false)
+
     // ── Speech ────────────────────────────────────────────────────────────────
     const speech = useSpeech()
     const [likedMsgs, setLikedMsgs] = useState({})
@@ -101,6 +106,7 @@ export default function App() {
             sessions.clearSessions()
             chat.clearMessages()
             welcomedSessions.current.clear()
+            nudgeInserted.current = false
         }
     }, [authed])
 
@@ -121,6 +127,31 @@ export default function App() {
         }
     }, [sessions.currentSessionId, chat.messages.length, employee, sessions.loadingSessions])
 
+    // ── Nudge fetch effect ──────────────────────────────────────────────────
+    useEffect(() => {
+        if (!authed || !sessions.currentSessionId) return
+        if (nudgeInserted.current) return
+        if (chat.loadingMsgs.current) return
+        const token = localStorage.getItem('hrms_token')
+        if (!token) return
+        nudge.fetchPendingNudge(token).then((data) => {
+            if (data && data.id && data.nudge_text) {
+                const already = chat.messages.some(m => m.nudgeId === data.id)
+                if (!already) {
+                    chat.setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: data.nudge_text,
+                        isNudge: true,
+                        nudgeId: data.id,
+                        sources: [],
+                        steps: [],
+                    }])
+                }
+                nudgeInserted.current = true
+            }
+        })
+    }, [authed, sessions.currentSessionId, chat.loadingMsgs.current])
+
     // ── Handlers ──────────────────────────────────────────────────────────────
     const onLogout = () => { handleLogout(); setView('chat') }
 
@@ -128,12 +159,14 @@ export default function App() {
         sessions.setCurrentSessionId(id)
         chat.loadMessages(id)
         sessions.setMenuOpen(null)
+        nudgeInserted.current = false
     }
 
     const onDeleteSession = (id) => {
         sessions.deleteSession(id, sessions.currentSessionId, (wasActive) => {
             if (wasActive) sessions.createNewSession().then(newId => { if (newId) chat.loadMessages(newId) })
         })
+        nudgeInserted.current = false
     }
 
     const sendMsg = (text) => {
@@ -209,6 +242,8 @@ export default function App() {
                 .msg-user:hover .user-msg-actions { opacity: 1 !important; }
                 .theme-toggle-icon { background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-secondary); transition: all 0.2s; }
                 .theme-toggle-icon:hover { background: var(--accent-dim); color: var(--accent); }
+                .nudge-dismiss-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px; transition: background 0.15s, color 0.15s; }
+                .nudge-dismiss-btn:hover { background: rgba(239,68,68,0.15); color: var(--red); }
             `}</style>
 
             {/* ── Sidebar ── */}
@@ -220,13 +255,13 @@ export default function App() {
                 currentSessionId={sessions.currentSessionId}
                 loadingSessions={sessions.loadingSessions}
                 menuOpen={sessions.menuOpen}
-                onNewSession={() => sessions.createNewSession().then(id => { if (id) { chat.clearMessages(); sessions.setCurrentSessionId(id) } })}
+                onNewSession={() => sessions.createNewSession().then(id => { if (id) { chat.clearMessages(); sessions.setCurrentSessionId(id); nudgeInserted.current = false } })}
                 onSelectSession={selectSession}
                 onRename={sessions.renameSession}
                 onTogglePin={sessions.togglePinSession}
                 onDelete={onDeleteSession}
                 onSetMenuOpen={sessions.setMenuOpen}
-                onClearMessages={() => { chat.clearMessages(); setExpandedIdx(null); setPreviewData(null) }}
+                onClearMessages={() => { chat.clearMessages(); setExpandedIdx(null); setPreviewData(null); nudgeInserted.current = false }}
                 onLogout={onLogout}
                 onProfileClick={() => setView('profile')}
                 onDocumentsClick={() => setView('documents')}
@@ -279,9 +314,21 @@ export default function App() {
                             ) : (
                                 <div key={i} className="msg-assistant">
                                     <div className="answer-card">
-                                        <div className="answer-content">{msg.content.split('\n').map((line, j) => <p key={j}>{line || '\u00A0'}</p>)}</div>
+                                        <div className="answer-content">{(msg.content || '').split('\n').map((line, j) => <p key={j}>{line || '\u00A0'}</p>)}</div>
                                         {msg.sources?.length > 0 && <div className="sources-list">{msg.sources.map((s, j) => <span key={j} className="source-tag"> {s.source_file} — {s.section}</span>)}</div>}
                                         <div style={actionBarStyle}>
+                                            {msg.isNudge && (
+                                                <button
+                                                    className="nudge-dismiss-btn"
+                                                    onClick={() => {
+                                                        nudge.dismissNudge(msg.nudgeId, localStorage.getItem('hrms_token'))
+                                                        chat.setMessages(prev => prev.filter(m => m.nudgeId !== msg.nudgeId))
+                                                    }}
+                                                    title="Dismiss nudge"
+                                                >
+                                                    ✕ Dismiss
+                                                </button>
+                                            )}
                                             <button className={`msg-action-btn ${speech.playingMsgIndex === i ? 'active-btn' : ''}`} style={btnBase} onClick={() => speech.speakText(msg.content, i)}><SpeakerIcon /></button>
                                             <button className={`msg-action-btn ${likedMsgs[i] ? 'liked' : ''}`} style={btnBase} onClick={() => handleLike(i)}><ThumbUpIcon /></button>
                                             <button className={`msg-action-btn ${dislikedMsgs[i] ? 'disliked' : ''}`} style={btnBase} onClick={() => handleDislike(i)}><ThumbDownIcon /></button>

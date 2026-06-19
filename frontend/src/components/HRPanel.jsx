@@ -7,7 +7,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import LeaveRequests from './LeaveRequests'
-import BehaviorAlerts from './BehaviorAlerts'
+// import BehaviorAlerts from './BehaviorAlerts'  // removed — HR signals tab is deleted
 
 const API = '/api'
 
@@ -686,7 +686,7 @@ export default function HRPanel({ token: tokenProp }) {
         { id: 'directory', label: ' Employee Directory' },
         { id: 'leaves',    label: ' Leave Approvals' },
         { id: 'approvals', label: ' Update Requests' },
-        { id: 'signals',   label: ' Signals' },
+        // 'signals' tab removed — HR no longer sees behavioral signals
     ]
 
     return (
@@ -751,9 +751,7 @@ export default function HRPanel({ token: tokenProp }) {
                     {activeTab === 'approvals' && (
                         <ApprovalRequests token={token} onAlert={addAlert} />
                     )}
-                    {activeTab === 'signals' && (
-                        <BehaviorAlerts token={token} onAlert={addAlert} />
-                    )}
+                    {/* Signals tab removed */}
                 </div>
             </div>
         </>

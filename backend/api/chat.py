@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -12,9 +12,11 @@ from agent.agent import build_agent
 from backend.core.security import verify_token
 from backend.database.models import ChatMessage, ChatSession, Employee, User
 from backend.database.session import get_db
-from backend.enums import ChatRole
+from backend.enums import ChatRole, DocumentCategory
+from backend.services.behavior_service import BehaviorService, NUDGE_PLAYBOOK
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
 
 @router.get("/ping")
 async def ping():
@@ -35,20 +37,24 @@ def get_current_employee(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(404, "Employee not found")
     return employee
 
+
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[int] = None
     history: Optional[List[dict]] = []
+
 
 class Source(BaseModel):
     source_file: str
     section: str
     content: str = ""
 
+
 class ChatResponse(BaseModel):
     answer: str
     sources: List[Source] = []
     steps: List[dict] = []
+
 
 # ── Chat endpoint ─────────────────────────────────────────────────────────────
 @router.post("/", response_model=ChatResponse)
@@ -58,7 +64,6 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
 
         chat_history = []
         if payload.session_id:
-            # Load last 20 messages from DB — authoritative source of truth
             db_messages = db.query(ChatMessage).filter(
                 ChatMessage.session_id == payload.session_id
             ).order_by(ChatMessage.created_at).limit(20).all()
@@ -68,18 +73,16 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 elif msg.role == ChatRole.ASSISTANT:
                     chat_history.append({"role": ChatRole.ASSISTANT, "content": msg.content})
         elif payload.history:
-            # Fallback: use frontend-supplied history when no session_id present
             for m in payload.history:
                 role = m.get("role", "")
                 if role in (ChatRole.USER, ChatRole.ASSISTANT):
                     chat_history.append({"role": role, "content": m.get("content", "")})
 
         safe_name = str(employee.name).replace('{', '(').replace('}', ')')
+
         def sanitize(text: str) -> str:
             return text.replace('{', '{{').replace('}', '}}')
 
-        # LangChain requires message objects — raw dicts are silently ignored,
-        # which caused the agent to lose context on every turn.
         lc_history = []
         for m in chat_history:
             text = sanitize(m["content"])
@@ -87,6 +90,23 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
                 lc_history.append(HumanMessage(content=text))
             elif m["role"] == ChatRole.ASSISTANT:
                 lc_history.append(AIMessage(content=text))
+
+        # ── Nudge system instruction injection ────────────────────────────────
+        behavior_svc = BehaviorService(db)
+        pending_nudges = behavior_svc.get_pending_nudges(employee.id)
+        if pending_nudges:
+            top_nudge = pending_nudges[0]
+            category = top_nudge["category"]
+            playbook_entry = NUDGE_PLAYBOOK.get(category)
+            if playbook_entry:
+                instruction = playbook_entry.get("agent_instruction", "")
+                tone = (
+                    "You are a supportive, private, and non‑accusatory assistant. "
+                    "Never imply that you are monitoring the employee. "
+                    "Respond with empathy and confidentiality."
+                )
+                system_text = f"{tone}\n\n{instruction}"
+                lc_history.insert(0, SystemMessage(content=system_text))
 
         executor = build_agent(
             employee_email=employee.email,
@@ -143,10 +163,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
             db.commit()
 
         # ── Behavioral analytics hook (non-fatal) ─────────────────────────────
-        # Runs after messages are saved. Errors here must never break the chat
-        # response — the outer try/except is intentionally NOT used for this.
         try:
-            from backend.services.behavior_service import BehaviorService
             BehaviorService(db).record_access(
                 employee_id=employee.id,
                 sources=[s if isinstance(s, dict) else s.dict() for s in sources],
@@ -163,7 +180,55 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         print(f"❌ Chat error: {e}")  # noqa: T201
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── Session management endpoints (matching your model) ──────────────────────
+
+# ── Nudge endpoints ───────────────────────────────────────────────────────────
+
+@router.get("/pending-nudge")
+async def get_pending_nudge(request: Request, db: Session = Depends(get_db)):
+    """Fetch the top-priority pending nudge for the current employee."""
+    employee = get_current_employee(request, db)
+    behavior_svc = BehaviorService(db)
+    pending = behavior_svc.get_pending_nudges(employee.id)
+    if not pending:
+        return {}
+
+    nudge = pending[0]
+    nudge_id = nudge["id"]
+    nudge_text = nudge["nudge_text"]
+
+    behavior_svc.mark_nudge_delivered(nudge_id)
+
+    user = db.query(User).filter(User.employee_id == employee.id).first()
+    if user:
+        session = db.query(ChatSession).filter(
+            ChatSession.user_id == user.id,
+            ChatSession.deleted_at.is_(None)
+        ).order_by(ChatSession.created_at.desc()).first()
+        if session:
+            assistant_msg = ChatMessage(
+                session_id=session.id,
+                role=ChatRole.ASSISTANT,
+                content=nudge_text,
+            )
+            db.add(assistant_msg)
+            db.commit()
+
+    return {"id": nudge_id, "nudge_text": nudge_text}
+
+
+@router.post("/nudge/{nudge_id}/dismiss")
+async def dismiss_nudge(nudge_id: int, request: Request, db: Session = Depends(get_db)):
+    """Dismiss a nudge (mark DISMISSED). Only the owner can dismiss."""
+    employee = get_current_employee(request, db)
+    behavior_svc = BehaviorService(db)
+    success = behavior_svc.dismiss_nudge(nudge_id, employee.id)
+    if not success:
+        raise HTTPException(404, "Nudge not found or not owned by you")
+    return {"message": "Nudge dismissed"}
+
+
+# ── Session management endpoints ──────────────────────────────────────────────
+
 @router.get("/sessions")
 def list_sessions(request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
@@ -172,17 +237,18 @@ def list_sessions(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(404, "User not found")
     sessions = db.query(ChatSession).filter(
         ChatSession.user_id == user.id,
-        ChatSession.deleted_at.is_(None)  # soft delete filter
+        ChatSession.deleted_at.is_(None)
     ).order_by(ChatSession.is_pinned.desc(), ChatSession.created_at.desc()).all()
     return [
         {
             "id": s.id,
-            "title": s.session_title,       # use session_title, not title
+            "title": s.session_title,
             "is_pinned": s.is_pinned,
             "created_at": s.created_at,
         }
         for s in sessions
     ]
+
 
 @router.post("/sessions")
 def create_session(request: Request, db: Session = Depends(get_db)):
@@ -206,6 +272,7 @@ def create_session(request: Request, db: Session = Depends(get_db)):
         "created_at": new_session.created_at,
     }
 
+
 @router.get("/sessions/{session_id}/messages")
 def get_session_messages(session_id: int, request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
@@ -227,6 +294,7 @@ def get_session_messages(session_id: int, request: Request, db: Session = Depend
         for m in messages
     ]
 
+
 @router.patch("/sessions/{session_id}/title")
 def update_session_title(session_id: int, payload: dict, request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
@@ -246,6 +314,7 @@ def update_session_title(session_id: int, payload: dict, request: Request, db: S
         db.commit()
     return {"title": session.session_title}
 
+
 @router.patch("/sessions/{session_id}/pin")
 def toggle_pin_session(session_id: int, payload: dict, request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
@@ -264,6 +333,7 @@ def toggle_pin_session(session_id: int, payload: dict, request: Request, db: Ses
     db.commit()
     return {"is_pinned": session.is_pinned}
 
+
 @router.delete("/sessions/{session_id}")
 def delete_session(session_id: int, request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
@@ -277,7 +347,6 @@ def delete_session(session_id: int, request: Request, db: Session = Depends(get_
     ).first()
     if not session:
         raise HTTPException(404, "Session not found")
-    # Soft delete
     session.deleted_at = datetime.utcnow()
     db.commit()
     return {"message": "Session deleted"}

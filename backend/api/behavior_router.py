@@ -1,8 +1,7 @@
 """
-Behavioral Analytics Router — HR/Admin only.
+Behavioral Analytics Router — Admin only (tag management).
 Thin layer: receives request, delegates to BehaviorService, returns response.
 """
-
 import logging
 from typing import Optional
 
@@ -21,52 +20,9 @@ router = APIRouter(prefix="/behavior", tags=["Behavioral Analytics"])
 
 # ── Request schemas ───────────────────────────────────────────────────────────
 
-class ResolveRequest(BaseModel):
-    hr_note: Optional[str] = None
-
-
 class TagRequest(BaseModel):
     filename: str
     category: str
-
-
-# ── Alert endpoints (HR + Admin) ──────────────────────────────────────────────
-
-@router.get("/alerts")
-def list_alerts(
-    status: Optional[str] = Query(default="open", description="open | resolved | all"),
-    payload: dict = Depends(require_permission("behavior.view")),
-    db: Session = Depends(get_db),
-):
-    """List behavior alerts, optionally filtered by status."""
-    return BehaviorService(db).list_alerts(status)
-
-
-@router.get("/analytics/summary")
-def get_analytics_summary(
-    window_days: int = Query(default=14, ge=1, le=90, description="Days of access-volume history to include"),
-    top_n: int = Query(default=5, ge=1, le=20, description="Number of top employees to return"),
-    payload: dict = Depends(require_permission("behavior.view")),
-    db: Session = Depends(get_db),
-):
-    """
-    Aggregated data for the HR analytics dashboard:
-    stat cards, alert-by-category breakdown, daily access volume (chat vs viewer),
-    and top employees by access count. Read-only.
-    """
-    return BehaviorService(db).get_analytics_summary(window_days=window_days, top_n=top_n)
-
-
-@router.patch("/alerts/{alert_id}/resolve")
-def resolve_alert(
-    alert_id: int,
-    req: ResolveRequest = ResolveRequest(),
-    payload: dict = Depends(require_permission("behavior.view")),
-    db: Session = Depends(get_db),
-):
-    """Resolve an open behavior alert. Optionally attach an HR note."""
-    hr_id = int(payload["sub"])
-    return BehaviorService(db).resolve_alert(alert_id, hr_id, req.hr_note)
 
 
 # ── Tag endpoints (Admin only) ────────────────────────────────────────────────

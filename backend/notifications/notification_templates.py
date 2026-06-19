@@ -13,7 +13,7 @@ class NotifKey(Enum):
     LEAVE_SUBMITTED_HR = "LEAVE_SUBMITTED_HR"
     PROFILE_CHANGE_REQUESTED = "PROFILE_CHANGE_REQUESTED"
     PROFILE_CHANGE_REQUESTED_HR = "PROFILE_CHANGE_REQUESTED_HR"
-    BEHAVIOR_ALERT_HR = "BEHAVIOR_ALERT_HR"
+    # BEHAVIOR_ALERT_HR removed — HR no longer receives behavioral alerts
 
 
 NOTIFICATION_TEMPLATES = {
@@ -53,10 +53,6 @@ NOTIFICATION_TEMPLATES = {
     NotifKey.PROFILE_CHANGE_REQUESTED_HR: {
         "title": "Profile Update Request",
         "message": "{employee_name} has requested to update '{field_label}' to '{new_value}'. Please review in the Approval Requests section.",
-    },
-    NotifKey.BEHAVIOR_ALERT_HR: {
-        "title": "Document Activity Signal",
-        "message": "{employee_name} shows repeated interest in {category} documents (most recent: {filename}). Review in HR → Signals.",
     },
 }
 

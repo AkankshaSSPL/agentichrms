@@ -2,8 +2,8 @@
 Behavior Repository — database operations only for behavioral analytics.
 """
 import logging
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Optional, List
 
 from sqlalchemy.orm import Session
 
@@ -13,8 +13,7 @@ from backend.database.models.behavior_analytics import (
     DocumentAccessLog,
     DocumentTag,
 )
-from backend.enums import BehaviorAlertStatus, RoleName, AccessSource
-from backend.database.models import Role
+from backend.enums import BehaviorAlertStatus, AccessSource, NudgeStatus, DocumentCategory
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +54,7 @@ class BehaviorRepository:
         filename: str,
         category: str,
         session_id: Optional[int],
-        access_source: str = AccessSource.CHAT,   # ← new param, default preserves chat behaviour
+        access_source: str = AccessSource.CHAT,
     ) -> DocumentAccessLog:
         """Append a new access log entry — never updated or deleted."""
         entry = DocumentAccessLog(
@@ -111,176 +110,121 @@ class BehaviorRepository:
             .count()
         )
 
-    # ── Alert operations ───────────────────────────────────────────────────────
+    # ── Nudge ledger operations (replaces alert methods) ──────────────────────
 
-    def get_open_alert(self, employee_id: int, category: str) -> Optional[BehaviorAlert]:
+    def get_active_nudge(
+        self,
+        employee_id: int,
+        category: str,
+    ) -> Optional[BehaviorAlert]:
+        """
+        Return an existing nudge that is still active (PENDING or DELIVERED)
+        for this employee+category.
+        """
         return (
             self.db.query(BehaviorAlert)
             .filter(
                 BehaviorAlert.employee_id == employee_id,
                 BehaviorAlert.category == category,
-                BehaviorAlert.status == BehaviorAlertStatus.OPEN,
+                BehaviorAlert.status.in_([NudgeStatus.PENDING, NudgeStatus.DELIVERED]),
             )
             .first()
         )
 
-    def create_alert(
+    def create_nudge(
         self,
         employee_id: int,
         category: str,
         score: int,
         window_days: int,
+        nudge_text: str,
         last_filename: Optional[str] = None,
     ) -> BehaviorAlert:
+        """
+        Create a new nudge with status PENDING.
+        """
         alert = BehaviorAlert(
             employee_id=employee_id,
             category=category,
-            status=BehaviorAlertStatus.OPEN,
+            status=NudgeStatus.PENDING,
             score=score,
             trigger_count=1,
             window_days=window_days,
-            first_triggered_at=datetime.utcnow(),
-            last_triggered_at=datetime.utcnow(),
+            first_triggered_at=datetime.now(timezone.utc),
+            last_triggered_at=datetime.now(timezone.utc),
             last_filename=last_filename,
+            nudge_text=nudge_text,
+            # delivered_at/dismissed_at remain None
         )
         self.db.add(alert)
         self.db.commit()
         self.db.refresh(alert)
         logger.info(
-            "BehaviorAlert created: emp=%d category=%s score=%d filename=%s",
+            "Nudge created: emp=%d category=%s score=%d filename=%s",
             employee_id, category, score, last_filename,
         )
         return alert
 
-    def update_alert(self, alert: BehaviorAlert, **fields) -> BehaviorAlert:
-        for key, value in fields.items():
-            setattr(alert, key, value)
-        self.db.commit()
-        self.db.refresh(alert)
-        return alert
-
-    def list_alerts(self, status: Optional[str] = None) -> list[tuple[BehaviorAlert, Employee]]:
-        query = (
-            self.db.query(BehaviorAlert, Employee)
-            .join(Employee, BehaviorAlert.employee_id == Employee.id)
+    def list_pending_nudges(self, employee_id: int) -> List[BehaviorAlert]:
+        """
+        Return all PENDING nudges for an employee, ordered by priority:
+        POSH > EXIT_INTENT > LEAVE_INTENT > GROWTH.
+        """
+        # Define priority order
+        priority_order = {
+            DocumentCategory.POSH: 0,
+            DocumentCategory.EXIT_INTENT: 1,
+            DocumentCategory.LEAVE_INTENT: 2,
+            DocumentCategory.GROWTH: 3,
+        }
+        # We'll fetch all pending and sort in Python, or use CASE in SQL.
+        # Simpler: fetch and sort in Python for clarity.
+        pending = (
+            self.db.query(BehaviorAlert)
+            .filter(
+                BehaviorAlert.employee_id == employee_id,
+                BehaviorAlert.status == NudgeStatus.PENDING,
+            )
+            .all()
         )
-        if status and status != "all":
-            query = query.filter(BehaviorAlert.status == status.upper())
-        return query.order_by(BehaviorAlert.last_triggered_at.desc()).all()
+        # Sort by priority (lower number = higher priority)
+        pending.sort(key=lambda a: priority_order.get(a.category, 99))
+        return pending
 
-    def get_alert(self, alert_id: int) -> Optional[BehaviorAlert]:
-        return self.db.query(BehaviorAlert).filter(BehaviorAlert.id == alert_id).first()
+    def mark_delivered(self, nudge: BehaviorAlert) -> None:
+        """Mark a nudge as delivered and set delivered_at."""
+        nudge.status = NudgeStatus.DELIVERED
+        nudge.delivered_at = datetime.now(timezone.utc)
+        self.db.commit()
+        logger.info("Nudge %d marked delivered", nudge.id)
 
-    def resolve_alert(
+    def mark_dismissed(self, nudge: BehaviorAlert) -> None:
+        """Mark a nudge as dismissed and set dismissed_at."""
+        nudge.status = NudgeStatus.DISMISSED
+        nudge.dismissed_at = datetime.now(timezone.utc)
+        self.db.commit()
+        logger.info("Nudge %d marked dismissed", nudge.id)
+
+    def recent_nudge_exists(
         self,
-        alert: BehaviorAlert,
-        resolved_by_id: int,
-        note: Optional[str] = None,
-    ) -> BehaviorAlert:
-        alert.status = BehaviorAlertStatus.RESOLVED
-        alert.resolved_at = datetime.utcnow()
-        alert.resolved_by_employee_id = resolved_by_id
-        alert.hr_note = note
-        self.db.commit()
-        self.db.refresh(alert)
-        logger.info("BehaviorAlert resolved: id=%d by emp=%d", alert.id, resolved_by_id)
-        return alert
-
-    def get_hr_employees(self) -> list[Employee]:
-        return (
-            self.db.query(Employee)
-            .join(Role, Employee.role_id == Role.id)
-            .filter(
-                Role.name.in_([RoleName.HR, RoleName.ADMIN]),
-                Employee.deleted_at.is_(None),
-            )
-            .all()
-        )
-
-    # ── Analytics aggregation (read-only, dashboard) ───────────────────────────
-
-    def count_alerts_by_category(self, status: Optional[str] = None) -> list[tuple[str, int]]:
-        """Return [(category, count), ...] for alerts, optionally filtered by status."""
-        from sqlalchemy import func
-        query = self.db.query(BehaviorAlert.category, func.count(BehaviorAlert.id))
-        if status and status != "all":
-            query = query.filter(BehaviorAlert.status == status.upper())
-        return query.group_by(BehaviorAlert.category).all()
-
-    def count_alerts_resolved_since(self, since: datetime) -> int:
+        employee_id: int,
+        category: str,
+        since: datetime,
+    ) -> bool:
+        """
+        Check if there is any nudge (any status) for this employee+category
+        that was created after `since`. Used for throttle.
+        """
         return (
             self.db.query(BehaviorAlert)
             .filter(
-                BehaviorAlert.status == BehaviorAlertStatus.RESOLVED,
-                BehaviorAlert.resolved_at >= since,
+                BehaviorAlert.employee_id == employee_id,
+                BehaviorAlert.category == category,
+                BehaviorAlert.first_triggered_at >= since,
             )
-            .count()
-        )
+            .first()
+        ) is not None
 
-    def count_open_alerts(self) -> int:
-        return (
-            self.db.query(BehaviorAlert)
-            .filter(BehaviorAlert.status == BehaviorAlertStatus.OPEN)
-            .count()
-        )
-
-    def avg_resolution_seconds(self, since: datetime) -> Optional[float]:
-        """Average seconds between first_triggered_at and resolved_at for alerts resolved since `since`."""
-        from sqlalchemy import func
-        rows = (
-            self.db.query(BehaviorAlert.first_triggered_at, BehaviorAlert.resolved_at)
-            .filter(
-                BehaviorAlert.status == BehaviorAlertStatus.RESOLVED,
-                BehaviorAlert.resolved_at >= since,
-                BehaviorAlert.resolved_at.isnot(None),
-                BehaviorAlert.first_triggered_at.isnot(None),
-            )
-            .all()
-        )
-        if not rows:
-            return None
-        deltas = [(resolved - triggered).total_seconds() for triggered, resolved in rows]
-        return sum(deltas) / len(deltas)
-
-    def count_access_in_window_total(self, since: datetime) -> int:
-        """Total access log rows (chat + viewer, all employees) since `since`."""
-        return (
-            self.db.query(DocumentAccessLog)
-            .filter(DocumentAccessLog.accessed_at >= since)
-            .count()
-        )
-
-    def count_access_by_day(self, since: datetime) -> list[tuple]:
-        """
-        Return [(date, access_source, count), ...] for daily volume,
-        split by access_source so the dashboard can show chat vs viewer.
-        """
-        from sqlalchemy import func, cast, Date
-        return (
-            self.db.query(
-                cast(DocumentAccessLog.accessed_at, Date).label("day"),
-                DocumentAccessLog.access_source,
-                func.count(DocumentAccessLog.id),
-            )
-            .filter(DocumentAccessLog.accessed_at >= since)
-            .group_by("day", DocumentAccessLog.access_source)
-            .order_by("day")
-            .all()
-        )
-
-    def top_employees_by_access(self, since: datetime, limit: int = 5) -> list[tuple]:
-        """Return [(employee_id, employee_name, count), ...] ordered by access count desc."""
-        from sqlalchemy import func
-        return (
-            self.db.query(
-                Employee.id,
-                Employee.name,
-                func.count(DocumentAccessLog.id).label("cnt"),
-            )
-            .join(DocumentAccessLog, DocumentAccessLog.employee_id == Employee.id)
-            .filter(DocumentAccessLog.accessed_at >= since)
-            .group_by(Employee.id, Employee.name)
-            .order_by(func.count(DocumentAccessLog.id).desc())
-            .limit(limit)
-            .all()
-        )
+    # ── Legacy alert methods removed ──────────────────────────────────────────
+    # get_open_alert, create_alert, update_alert, list_alerts, resolve_alert, get_hr_employees
+    # are gone. They are replaced by the above.

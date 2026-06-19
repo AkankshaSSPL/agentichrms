@@ -21,6 +21,7 @@ class DocumentCategory(str, Enum):
     EXIT_INTENT = "EXIT_INTENT"
     GROWTH = "GROWTH"
     GENERAL = "GENERAL"
+    POSH = "POSH"  # Workplace Conduct / POSH
 
     # Human-readable labels (used in emails, UI messages)
     @property
@@ -31,4 +32,5 @@ class DocumentCategory(str, Enum):
             DocumentCategory.EXIT_INTENT: "Exit Intent",
             DocumentCategory.GROWTH: "Growth & Development",
             DocumentCategory.GENERAL: "General",
+            DocumentCategory.POSH: "Workplace Conduct / POSH",
         }[self]

@@ -224,7 +224,7 @@ HRPanel modal style: `var(--bg-secondary)`, `var(--border)`, rounded, `boxShadow
 
 ## Verification
 
-**Static (no DB needed):** `python -m compileall backend agent scripts`; ruff on
+**Static (no DB needed):** `python -m compile all backend agent scripts`; ruff on
 changed files; confirm Alembic still has a **single head** (`002 → 003` linear);
 `python -c "import backend.api.docs; import backend.services.behavior_service"` with
 a dummy `DATABASE_URL`.

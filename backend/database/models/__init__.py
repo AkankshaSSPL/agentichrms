@@ -13,6 +13,8 @@ from backend.database.models.leave import Leave, LeaveBalance
 from backend.database.models.chat import User, ChatSession, ChatMessage
 from backend.database.models.auth import FaceLoginAttempt, PINVerification
 from backend.database.models.notification import Notification
+from backend.database.models.behaviour_analysis import BehaviourAnalysis
+
 from backend.database.models.workflow import (
     ApprovalRequest,
     Meeting,
@@ -34,6 +36,7 @@ __all__ = [
     "User", "ChatSession", "ChatMessage",
     "FaceLoginAttempt", "PINVerification",
     "Notification",
+    "BehaviourAnalysis",
     "ApprovalRequest", "Meeting", "OnboardingTask", "EmailLog", "SystemSetting",
     "DocumentTag", "DocumentAccessLog", "BehaviorAlert",
 ]

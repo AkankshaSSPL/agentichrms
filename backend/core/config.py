@@ -119,13 +119,17 @@ class Settings(BaseSettings):
     # ── Behavioral Analytics ───────────────────────────────────────────────────
     BEHAVIOR_ANALYTICS_ENABLED: bool = True
     BEHAVIOR_WINDOW_DAYS: int = 7
-    BEHAVIOR_ALERT_EMAIL_ENABLED: bool = True
     BEHAVIOR_THRESHOLD_SENSITIVE: int = 3
     BEHAVIOR_THRESHOLD_LEAVE_INTENT: int = 5
     BEHAVIOR_THRESHOLD_EXIT_INTENT: int = 2
     BEHAVIOR_THRESHOLD_GROWTH: int = 4
+    BEHAVIOR_THRESHOLD_POSH: int = 2          # NEW
+    NUDGE_REPEAT_COOLDOWN_DAYS: int = 14      # NEW
     DOCUMENT_VIEWER_ENABLED: bool = True
     BEHAVIOR_VIEW_COOLDOWN_MINUTES: int = 5
+    BEHAVIOUR_ANALYSIS_ENABLED: bool = True
+    BEHAVIOUR_ANALYSIS_MESSAGE_LIMIT: int = 30
+    BEHAVIOUR_ANALYSIS_MIN_MESSAGES: int = 3
     # GENERAL category is intentionally omitted — never tracked
 
     # ── RAG Models ─────────────────────────────────────────────────────────────

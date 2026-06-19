@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import LeaveRequests from './LeaveRequests'
 import DashboardMetricsSimple from './DashboardMetricsSimple'
 import OnboardingChat from './OnboardingChat'
+import BehaviourAnalysis from './BehaviourAnalysis'
 
 const API = '/api'
 
@@ -293,6 +294,7 @@ export default function AdminPanel({ token: tokenProp }) {
         { id: 'leaves', label: 'Leave Approvals' },
         { id: 'onboarding', label: 'Onboarding' },
         { id: 'email', label: 'Email Settings' },
+        { id: 'behaviour', label: 'Behaviour' },
     ]
 
     const roleBadge = (role) => ({
@@ -418,6 +420,9 @@ export default function AdminPanel({ token: tokenProp }) {
 
                 {/* Email Settings */}
                 {activeTab === 'email' && <EmailSettingsTab token={token} />}
+
+                {/* Behaviour Analysis (admin-only AI chat-history insight) */}
+                {activeTab === 'behaviour' && <BehaviourAnalysis token={token} />}
             </div>
         </>
     )

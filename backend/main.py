@@ -27,6 +27,8 @@ from backend.api.onboarding_router import router as onboarding_profile_router
 from backend.api.pin_auth import router as pin_auth_router
 from backend.api.registration import router as registration_router
 from backend.core.config import settings
+from backend.api.behaviour_analysis_router import router as behaviour_analysis_router
+
 
 try:
     from backend.api.approval_router import router as approval_requests_router
@@ -98,6 +100,9 @@ app.include_router(leaves_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(email_settings_router, prefix=API_PREFIX)
+app.include_router(behaviour_analysis_router, prefix=API_PREFIX)
+
+
 if _has_approvals:
     app.include_router(approval_requests_router, prefix=API_PREFIX)
 app.include_router(behavior_router, prefix=API_PREFIX)

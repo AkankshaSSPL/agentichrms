@@ -10,18 +10,15 @@ Never raises — all errors caught and logged so chat/viewer are never blocked.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
-from backend.core.email import send_email
-from backend.core.render_template import render_template
 from backend.database.models import Employee
-from backend.enums import DocumentCategory, AccessSource
-from backend.notifications.notification_templates import NotifKey
-from backend.notifications.notifier import Notifier
+from backend.enums import DocumentCategory, AccessSource, NudgeStatus
 from backend.repositories.behavior_repository import BehaviorRepository
+from backend.database.models.behavior_analytics import BehaviorAlert
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +29,42 @@ def _thresholds() -> dict[str, int]:
         DocumentCategory.LEAVE_INTENT: settings.BEHAVIOR_THRESHOLD_LEAVE_INTENT,
         DocumentCategory.EXIT_INTENT:  settings.BEHAVIOR_THRESHOLD_EXIT_INTENT,
         DocumentCategory.GROWTH:       settings.BEHAVIOR_THRESHOLD_GROWTH,
+        DocumentCategory.POSH:         settings.BEHAVIOR_THRESHOLD_POSH,
     }
+
+
+# ── Nudge Playbook ───────────────────────────────────────────────────────────
+
+NUDGE_PLAYBOOK = {
+    DocumentCategory.POSH: {
+        "opener": "I noticed you've been looking into our conduct/harassment policies. If you ever want to raise a concern — including a POSH complaint — I can privately walk you through the process whenever you're ready.",
+        "agent_instruction": "If the employee engages, explain the POSH process + Internal Committee confidentially, offer to help them draft/organize their account. Never auto-file or route to HR.",
+        "action": "guidance_only"
+    },
+    DocumentCategory.EXIT_INTENT: {
+        "opener": "Just checking in — if anything about your role or growth is on your mind, I'm here to help, confidentially.",
+        "agent_instruction": "Offer a supportive conversation, surface internal growth/mobility options; if they want, help them think through next steps. No escalation.",
+        "action": "guidance_and_resources"
+    },
+    DocumentCategory.LEAVE_INTENT: {
+        "opener": "I've seen you reviewing leave / WFH policies. Want me to check your balance or help you apply for leave?",
+        "agent_instruction": "If yes → call check_leave_balance / apply_leave (existing tools).",
+        "action": "real_action"
+    },
+    DocumentCategory.GROWTH: {
+        "opener": "Looks like you're exploring development resources. Want suggestions on learning paths or growth opportunities?",
+        "agent_instruction": "Offer learning paths / mentorship ideas; conversational.",
+        "action": "guidance"
+    }
+}
+
+
+def compose_nudge(category: str, filename: Optional[str] = None) -> str:
+    """Return the opener for a category."""
+    playbook = NUDGE_PLAYBOOK.get(category)
+    if not playbook:
+        return ""  # Should not happen
+    return playbook["opener"]
 
 
 class BehaviorService:
@@ -70,7 +102,7 @@ class BehaviorService:
 
                 self.repo.log_access(
                     employee_id, fname, category, session_id,
-                    access_source=AccessSource.CHAT,    # explicit — never ambiguous
+                    access_source=AccessSource.CHAT,
                 )
                 self._evaluate(employee_id, category, fname)
 
@@ -88,7 +120,7 @@ class BehaviorService:
         """
         Log a document open from the Document Library viewer.
         Guarded by a per-(employee, file) cooldown to prevent rapid re-open spam.
-        Reuses the same _evaluate() → alert → notify pipeline as chat accesses.
+        Reuses the same _evaluate() → nudge pipeline as chat accesses.
         """
         try:
             if not settings.BEHAVIOR_ANALYTICS_ENABLED:
@@ -120,13 +152,18 @@ class BehaviorService:
         except Exception as e:  # noqa: BLE001
             logger.warning("record_view skipped for emp=%d file=%s: %s", employee_id, filename, e)
 
-    # ── Alert evaluation ───────────────────────────────────────────────────────
+    # ── Evaluation & nudge creation ───────────────────────────────────────────
 
     def _evaluate(self, employee_id: int, category: str, filename: Optional[str] = None) -> None:
+        """Check threshold and raise a nudge if needed."""
         thresholds = _thresholds()
         try:
             cat_enum = DocumentCategory(category)
         except ValueError:
+            return
+
+        # GENERAL is never nudged
+        if cat_enum == DocumentCategory.GENERAL:
             return
 
         threshold = thresholds.get(cat_enum)
@@ -139,101 +176,101 @@ class BehaviorService:
         if count < threshold:
             return
 
-        existing = self.repo.get_open_alert(employee_id, category)
+        # If we already have an active nudge for this category, update its score and trigger_count
+        existing = self.repo.get_active_nudge(employee_id, category)
         if existing:
-            self.repo.update_alert(
-                existing,
-                score=count,
-                trigger_count=existing.trigger_count + 1,
-                last_triggered_at=datetime.utcnow(),
-                last_filename=filename or existing.last_filename,
-            )
-            logger.info("BehaviorAlert updated: emp=%d category=%s count=%d filename=%s", employee_id, category, count, filename)
-        else:
-            self.repo.create_alert(
-                employee_id=employee_id,
-                category=category,
-                score=count,
-                window_days=settings.BEHAVIOR_WINDOW_DAYS,
-                last_filename=filename,
-            )
-            employee = self.db.query(Employee).filter_by(id=employee_id).first()
-            if employee:
-                self._notify_hr(employee, category, count, filename)
-
-    # ── HR notification ────────────────────────────────────────────────────────
-
-    def _notify_hr(self, employee, category: str, count: int, filename: Optional[str] = None) -> None:
-        try:
-            Notifier(self.db).from_template_to_hr(
-                NotifKey.BEHAVIOR_ALERT_HR,
-                employee_name=employee.name,
-                category=category,
-                filename=filename or "an unspecified document",
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.warning("Behavior in-app notification failed: %s", e)
-
-        if not settings.BEHAVIOR_ALERT_EMAIL_ENABLED:
+            # Update score and trigger_count, but don't change status
+            existing.score = count
+            existing.trigger_count += 1
+            existing.last_triggered_at = datetime.now(timezone.utc)
+            if filename:
+                existing.last_filename = filename
+            self.db.commit()
+            logger.info("Nudge updated: emp=%d category=%s count=%d filename=%s", employee_id, category, count, filename)
             return
 
-        try:
-            hr_employees = self.repo.get_hr_employees()
-            html = render_template(
-                "behavior_alert.html",
-                employee_name=employee.name,
-                category=category,
-                count=count,
-                window_days=settings.BEHAVIOR_WINDOW_DAYS,
-                filename=filename or "an unspecified document",
+        # No active nudge — attempt to create one (respects throttle)
+        self._raise_nudge(employee_id, category, count, filename)
+
+    def _raise_nudge(
+        self,
+        employee_id: int,
+        category: str,
+        count: int,
+        filename: Optional[str],
+    ) -> None:
+        """
+        Create a nudge if throttle allows and no active nudge exists.
+        """
+        # Throttle: check if there was a recent nudge for this category
+        cooldown_days = settings.NUDGE_REPEAT_COOLDOWN_DAYS
+        cooldown_since = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
+        if self.repo.recent_nudge_exists(employee_id, category, cooldown_since):
+            logger.debug(
+                "Nudge throttled: emp=%d category=%s (recent within %d days)",
+                employee_id, category, cooldown_days,
             )
-            for hr in hr_employees:
-                try:
-                    send_email(
-                        to=hr.email,
-                        subject=f"Document Activity Signal — {employee.name} ({category})",
-                        html=html,
-                        triggered_by="behavior_alert",
-                        db=self.db,
-                    )
-                except Exception as e:  # noqa: BLE001
-                    logger.warning("Behavior email failed for hr=%s: %s", hr.email, e)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("Behavior email block failed: %s", e)
+            return
 
-    # ── HR-facing queries ──────────────────────────────────────────────────────
+        # Also check if there is an active nudge (redundant but safe)
+        if self.repo.get_active_nudge(employee_id, category):
+            return
 
-    def list_alerts(self, status: Optional[str] = None) -> list[dict]:
-        rows = self.repo.list_alerts(status)
+        # Compose the nudge text
+        nudge_text = compose_nudge(category, filename)
+        if not nudge_text:
+            # Should not happen if category is in playbook
+            return
+
+        # Create the nudge
+        self.repo.create_nudge(
+            employee_id=employee_id,
+            category=category,
+            score=count,
+            window_days=settings.BEHAVIOR_WINDOW_DAYS,
+            nudge_text=nudge_text,
+            last_filename=filename,
+        )
+        logger.info("Nudge created: emp=%d category=%s count=%d filename=%s", employee_id, category, count, filename)
+
+    # ── Public nudge methods for chat delivery ────────────────────────────────
+
+    def get_pending_nudges(self, employee_id: int) -> List[dict]:
+        """
+        Return a list of pending nudges for the employee, with priority order.
+        Each dict contains id, category, nudge_text.
+        """
+        alerts = self.repo.list_pending_nudges(employee_id)
         return [
             {
-                "id": alert.id,
-                "employee_id": alert.employee_id,
-                "employee_name": emp.name,
-                "employee_email": emp.email,
-                "category": alert.category,
-                "last_filename": alert.last_filename,
-                "status": alert.status,
-                "score": alert.score,
-                "trigger_count": alert.trigger_count,
-                "window_days": alert.window_days,
-                "first_triggered_at": alert.first_triggered_at.isoformat() if alert.first_triggered_at else None,
-                "last_triggered_at": alert.last_triggered_at.isoformat() if alert.last_triggered_at else None,
-                "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
-                "hr_note": alert.hr_note,
+                "id": a.id,
+                "category": a.category,
+                "nudge_text": a.nudge_text,
             }
-            for alert, emp in rows
+            for a in alerts
         ]
 
-    def resolve_alert(self, alert_id: int, hr_id: int, note: Optional[str] = None) -> dict:
-        from fastapi import HTTPException
-        alert = self.repo.get_alert(alert_id)
-        if not alert:
-            raise HTTPException(404, "Alert not found")
-        if alert.status == "RESOLVED":
-            raise HTTPException(400, "Alert is already resolved")
-        self.repo.resolve_alert(alert, hr_id, note)
-        return {"message": "Alert resolved", "alert_id": alert_id}
+    def mark_nudge_delivered(self, nudge_id: int) -> None:
+        """Mark a specific nudge as delivered."""
+        nudge = self.repo.db.query(BehaviorAlert).filter(BehaviorAlert.id == nudge_id).first()
+        if nudge:
+            self.repo.mark_delivered(nudge)
+
+    def dismiss_nudge(self, nudge_id: int, employee_id: int) -> bool:
+        """
+        Dismiss a nudge if it belongs to the employee.
+        Returns True if successful.
+        """
+        nudge = self.repo.db.query(BehaviorAlert).filter(
+            BehaviorAlert.id == nudge_id,
+            BehaviorAlert.employee_id == employee_id,
+        ).first()
+        if nudge and nudge.status in (NudgeStatus.PENDING, NudgeStatus.DELIVERED):
+            self.repo.mark_dismissed(nudge)
+            return True
+        return False
+
+    # ── Tag management (internal config, not HR signalling) ──────────────────
 
     def list_tags(self) -> list[dict]:
         return [
@@ -253,60 +290,3 @@ class BehaviorService:
             )
         tag = self.repo.upsert_tag(filename, category)
         return {"id": tag.id, "filename": tag.filename, "category": tag.category}
-
-    # ── Analytics dashboard ────────────────────────────────────────────────────
-
-    def get_analytics_summary(self, window_days: int = 14, top_n: int = 5) -> dict:
-        """
-        Aggregate data for the HR analytics dashboard.
-        Read-only — never mutates state, safe to call on every dashboard load.
-        """
-        now = datetime.now(tz=timezone.utc)
-        window_since = now - timedelta(days=window_days)
-        thirty_days_ago = now - timedelta(days=30)
-
-        # Stat cards
-        open_alerts = self.repo.count_open_alerts()
-        resolved_30d = self.repo.count_alerts_resolved_since(thirty_days_ago)
-        total_accesses = self.repo.count_access_in_window_total(window_since)
-        avg_resolution_seconds = self.repo.avg_resolution_seconds(thirty_days_ago)
-        avg_resolution_days = (
-            round(avg_resolution_seconds / 86400, 1) if avg_resolution_seconds is not None else None
-        )
-
-        # Category breakdown (open alerts only — what HR needs to act on)
-        category_rows = self.repo.count_alerts_by_category(status="open")
-        by_category = [{"category": cat, "count": count} for cat, count in category_rows]
-
-        # Daily access volume, split by source
-        daily_rows = self.repo.count_access_by_day(window_since)
-        daily_map: dict[str, dict[str, int]] = {}
-        for day, source, count in daily_rows:
-            day_str = day.isoformat() if hasattr(day, "isoformat") else str(day)
-            daily_map.setdefault(day_str, {"chat": 0, "viewer": 0})
-            key = "viewer" if source == AccessSource.VIEWER else "chat"
-            daily_map[day_str][key] = count
-        daily_volume = [
-            {"date": day_str, "chat": vals["chat"], "viewer": vals["viewer"]}
-            for day_str, vals in sorted(daily_map.items())
-        ]
-
-        # Top employees by access count
-        top_rows = self.repo.top_employees_by_access(window_since, limit=top_n)
-        top_employees = [
-            {"employee_id": emp_id, "employee_name": name, "count": count}
-            for emp_id, name, count in top_rows
-        ]
-
-        return {
-            "stats": {
-                "open_alerts": open_alerts,
-                "resolved_30d": resolved_30d,
-                "total_accesses": total_accesses,
-                "window_days": window_days,
-                "avg_resolution_days": avg_resolution_days,
-            },
-            "by_category": by_category,
-            "daily_volume": daily_volume,
-            "top_employees": top_employees,
-        }
