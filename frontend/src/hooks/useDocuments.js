@@ -66,5 +66,24 @@ export function useDocuments() {
         }
     }, [])
 
-    return { documents, loading, error, loadDocuments, openRaw, logView }
+    /**
+     * Upload a new document. HR/Admin only — backend enforces this too,
+     * this is just the client call. Returns the parsed JSON response.
+     */
+    const uploadDocument = useCallback(async (file) => {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch(`${API}/documents/upload`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getToken()}` },
+            body: formData,
+        })
+        if (!res.ok) {
+            const text = await res.text().catch(() => '')
+            throw new Error(text || `Upload failed (${res.status})`)
+        }
+        return res.json()
+    }, [])
+
+    return { documents, loading, error, loadDocuments, openRaw, logView, uploadDocument }
 }

@@ -1,13 +1,18 @@
 """
 backend/services/behaviour_analysis_service.py
 ───────────────────────────────────────────────
-Admin-only, on-demand AI read of an employee's chat history to infer
-mood, personality, traits, and talking points.
+Admin-only, on-demand AI read of an employee's chat history (plus recent
+document-view activity) to infer mood, personality, traits, and talking
+points.
 
 Privacy guardrails (enforced here):
   - Raw ChatMessage content is sent to the model in-memory only.
   - It is NEVER returned to the API caller and NEVER persisted —
     only the model's inferred summary fields are saved.
+  - Document activity (filenames/categories/timestamps) is read live from the
+    existing BehaviorRepository audit trail on every call — it is NOT stored
+    on the BehaviourAnalysis snapshot, so it always reflects current state
+    rather than being frozen at analysis time.
   - Every run records who triggered it (analyzed_by_employee_id) for audit.
 
 Never raises to the caller for expected conditions (disabled / insufficient
@@ -17,6 +22,7 @@ can show a clean message rather than a 500.
 
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from langchain_openai import ChatOpenAI
@@ -24,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.config import settings
 from backend.repositories.behaviour_analysis_repository import BehaviourAnalysisRepository
+from backend.repositories.behavior_repository import BehaviorRepository
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +41,15 @@ history. This is a private, internal signal intended to help a manager start \
 a thoughtful human conversation — it is NOT a performance judgement, NOT \
 evidence of wrongdoing, and must NOT be treated as fact.
 
-Read the following employee <-> assistant conversation messages. Infer:
+Read the following employee <-> assistant conversation messages. You may also \
+be given a short list of internal documents the employee has recently \
+accessed (by category — e.g. exit-related, growth/promotion-related, leave \
+policy, sensitive HR documents). Treat this as weak supporting context only: \
+a single document open proves nothing on its own, but a pattern of activity \
+across both the chat and the document list can support your inference. Never \
+treat document access as direct evidence of intent.
+
+Infer:
   - mood: the employee's general emotional tone (1-3 words, e.g. "Stressed", "Positive", "Neutral")
   - personality: a short paragraph describing communication style and apparent personality traits
   - traits: a list of 3-6 short trait words/phrases (e.g. "Detail-oriented", "Direct communicator")
@@ -58,6 +73,21 @@ def _build_transcript(messages: list[dict]) -> str:
     for m in messages:
         role = "Employee" if m["role"] == "user" else "Assistant"
         lines.append(f"{role}: {m['content']}")
+    return "\n".join(lines)
+
+
+def _build_document_activity_block(accesses: list) -> str:
+    """
+    Render recent document accesses as a short, clearly-labeled block for
+    the LLM prompt. Returns "" if there's nothing to show, so callers can
+    skip appending an empty section.
+    """
+    if not accesses:
+        return ""
+    lines = ["Recently accessed internal documents (most recent first):"]
+    for a in accesses:
+        when = a.accessed_at.strftime("%d %b %Y") if a.accessed_at else "unknown date"
+        lines.append(f"- {a.filename} (category: {a.category}, via {a.access_source}) — {when}")
     return "\n".join(lines)
 
 
@@ -92,12 +122,14 @@ class BehaviourAnalysisService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = BehaviourAnalysisRepository(db)
+        self.behavior_repo = BehaviorRepository(db)
 
     # ── Public entry point ─────────────────────────────────────────────────────
 
     def analyze(self, employee_id: int, admin_id: int) -> dict:
         """
-        Run a fresh AI analysis of the employee's chat history.
+        Run a fresh AI analysis of the employee's chat history (plus recent
+        document-view activity, factored in as weak supporting context).
         Always returns a dict with a "status" key the frontend can branch on:
           "ok"                — analysis succeeded, full result included
           "disabled"          — feature flag off
@@ -124,6 +156,23 @@ class BehaviourAnalysisService:
 
         transcript = _build_transcript(messages)
 
+        # ── Document activity (non-fatal — analysis still works without it) ──
+        doc_activity_block = ""
+        try:
+            since = datetime.now(timezone.utc) - timedelta(
+                days=settings.BEHAVIOUR_ANALYSIS_DOC_WINDOW_DAYS
+            )
+            accesses = self.behavior_repo.list_recent_accesses(employee_id, since, limit=20)
+            doc_activity_block = _build_document_activity_block(accesses)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Could not fetch document activity for employee %d: %s", employee_id, e
+            )
+
+        full_input = transcript
+        if doc_activity_block:
+            full_input = f"{transcript}\n\n{doc_activity_block}"
+
         try:
             llm = ChatOpenAI(
                 model=settings.AI_MODEL,
@@ -132,7 +181,7 @@ class BehaviourAnalysisService:
             )
             response = llm.invoke([
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": transcript},
+                {"role": "user", "content": full_input},
             ])
             raw_text = response.content if hasattr(response, "content") else str(response)
         except Exception as e:  # noqa: BLE001
@@ -143,7 +192,7 @@ class BehaviourAnalysisService:
         if not parsed:
             return {"status": "error", "detail": "Could not parse AI response. Please try again."}
 
-        # Persist only the inferred summary — never raw messages
+        # Persist only the inferred summary — never raw messages, never document content
         traits_list = parsed.get("traits", [])
         talking_points_list = parsed.get("suggested_talking_points", [])
 
@@ -167,7 +216,9 @@ class BehaviourAnalysisService:
             logger.exception("Failed to save behaviour analysis snapshot: %s", e)
             return {"status": "error", "detail": "Analysis succeeded but could not be saved."}
 
-        return self._serialize(snapshot, status="ok")
+        result = self._serialize(snapshot, status="ok")
+        result["recent_document_activity"] = self._get_recent_document_activity(employee_id)
+        return result
 
     # ── Read endpoints ──────────────────────────────────────────────────────────
 
@@ -176,7 +227,9 @@ class BehaviourAnalysisService:
         snapshot = self.repo.get_latest(employee_id)
         if not snapshot:
             return None
-        return self._serialize(snapshot, status="ok")
+        result = self._serialize(snapshot, status="ok")
+        result["recent_document_activity"] = self._get_recent_document_activity(employee_id)
+        return result
 
     def get_dashboard(self) -> list[dict]:
         """Return the latest snapshot per employee, for the overview list."""
@@ -253,6 +306,35 @@ class BehaviourAnalysisService:
             ],
             "top_traits": [{"label": k, "count": v} for k, v in top_traits],
         }
+
+    # ── Document activity (live, never persisted on the snapshot) ──────────────
+
+    def _get_recent_document_activity(self, employee_id: int) -> list[dict]:
+        """
+        Live read of this employee's recent document access log — computed
+        fresh on every call rather than frozen at analysis time, so the admin
+        always sees current activity even when viewing an older snapshot.
+        """
+        try:
+            since = datetime.now(timezone.utc) - timedelta(
+                days=settings.BEHAVIOUR_ANALYSIS_DOC_WINDOW_DAYS
+            )
+            accesses = self.behavior_repo.list_recent_accesses(employee_id, since, limit=20)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Could not fetch document activity for employee %d: %s", employee_id, e
+            )
+            return []
+
+        return [
+            {
+                "filename": a.filename,
+                "category": a.category,
+                "access_source": a.access_source,
+                "accessed_at": a.accessed_at.isoformat() if a.accessed_at else None,
+            }
+            for a in accesses
+        ]
 
     # ── Serialization ──────────────────────────────────────────────────────────
 

@@ -71,6 +71,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "onboarding.manage",
         "behavior.manage",   # Admin only — tagging configuration
         "behaviour.analyze", # Admin only — AI chat-history mood/personality analysis
+        "documents.upload",  # HR + Admin — upload docs to library & ChromaDB
         # "behavior.view" removed — no HR dashboard alerts
     },
     RoleName.HR: {
@@ -85,6 +86,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "approval.action",
         "onboarding.view",
         "onboarding.manage",
+        "documents.upload",  # HR + Admin — upload docs to library & ChromaDB
         # "behavior.view" removed — HR no longer sees behavioral alerts
     },
     RoleName.EMPLOYEE: {

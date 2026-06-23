@@ -56,6 +56,48 @@ class ChatResponse(BaseModel):
     steps: List[dict] = []
 
 
+def _extract_sources_from_steps(intermediate_steps: list) -> list[dict]:
+    """
+    AgentExecutor.invoke() never returns a top-level "sources" key — that
+    field only exists inside the search_policies tool's own return dict,
+    which shows up as the "observation" half of each (action, observation)
+    pair in intermediate_steps. This pulls those out, across every
+    search_policies call the agent made (it may call it more than once),
+    and dedupes by (source_file, section) so the same chunk isn't shown twice.
+    """
+    collected: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    for action, observation in intermediate_steps:
+        tool_name = getattr(action, "tool", "")
+        if tool_name != "search_policies":
+            continue
+
+        if isinstance(observation, str):
+            try:
+                observation = json.loads(observation)
+            except Exception:  # noqa: BLE001
+                continue
+
+        if not isinstance(observation, dict):
+            continue
+
+        for src in observation.get("sources", []):
+            if not isinstance(src, dict):
+                continue
+            key = (src.get("source_file", ""), src.get("section", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            collected.append({
+                "source_file": src.get("source_file", "unknown"),
+                "section": src.get("section", ""),
+                "content": src.get("content", ""),
+            })
+
+    return collected
+
+
 # ── Chat endpoint ─────────────────────────────────────────────────────────────
 @router.post("/", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = Depends(get_db)):
@@ -119,12 +161,17 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         })
 
         answer = result.get("output", "")
-        sources = result.get("sources", [])
         steps = result.get("steps", [])
+        intermediate = result.get("intermediate_steps", [])
+
+        # ── Extract RAG sources from search_policies tool calls ──────────────
+        # (Fixed: previously read result.get("sources", []), which is always
+        # empty — AgentExecutor.invoke() has no such top-level key. Sources
+        # live inside the tool's own observation, same place conflict data does.)
+        sources = _extract_sources_from_steps(intermediate)
 
         # Conflict detection
         conflict_payload = None
-        intermediate = result.get("intermediate_steps", [])
         for action, observation in intermediate:
             tool_name = getattr(action, "tool", "")
             if tool_name == "apply_leave":
@@ -166,7 +213,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         try:
             BehaviorService(db).record_access(
                 employee_id=employee.id,
-                sources=[s if isinstance(s, dict) else s.dict() for s in sources],
+                sources=sources,
                 session_id=payload.session_id,
             )
         except Exception as _be:  # noqa: BLE001

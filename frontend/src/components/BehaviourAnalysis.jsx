@@ -453,7 +453,7 @@ function HistoryTrend({ history, loading }) {
 }
 
 /* ── Per-employee mini behavioral dashboard ───────────────────────────────── */
-function AnalysisCard({ result, employeeName, history, loadingHistory }) {
+function AnalysisCard({ result, employeeName, history, loadingHistory, onReanalyse, analyzing }) {
     if (!result) return null
 
     if (result.status === 'disabled') {
@@ -497,13 +497,57 @@ function AnalysisCard({ result, employeeName, history, loadingHistory }) {
             animation: 'baFadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1)',
         }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 16 }}>
                 <div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{employeeName}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Based on {result.message_count} messages · {result.analyzed_at ? new Date(result.analyzed_at).toLocaleString('en-IN') : ''}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span>Based on {result.message_count} messages</span>
+                        {result.analyzed_at && (() => {
+                            const analyzedDate = new Date(result.analyzed_at)
+                            const daysSince = Math.floor((Date.now() - analyzedDate.getTime()) / 86400000)
+                            const isStale = daysSince >= 1
+                            return (
+                                <>
+                                    <span>· Last analysed {analyzedDate.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                    {isStale && (
+                                        <span style={{
+                                            padding: '2px 8px', borderRadius: 6,
+                                            background: 'rgba(251,191,36,0.12)', color: '#fbbf24',
+                                            fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                                        }}>
+                                            {daysSince === 1 ? '1 day old' : `${daysSince} days old`} — may not reflect recent chats
+                                        </span>
+                                    )}
+                                </>
+                            )
+                        })()}
                     </div>
                 </div>
+                {onReanalyse && (
+                    <button
+                        onClick={onReanalyse}
+                        disabled={analyzing}
+                        style={{
+                            flexShrink: 0,
+                            padding: '7px 14px', borderRadius: 8,
+                            border: '1px solid rgba(79,142,247,0.3)',
+                            background: 'rgba(79,142,247,0.1)', color: 'var(--accent)',
+                            fontSize: 12, fontWeight: 600, cursor: analyzing ? 'default' : 'pointer',
+                            opacity: analyzing ? 0.5 : 1,
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            transition: 'background 0.15s, transform 0.15s',
+                        }}
+                        onMouseEnter={e => { if (!analyzing) e.currentTarget.style.background = 'rgba(79,142,247,0.22)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(79,142,247,0.1)' }}
+                    >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                            <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10" />
+                            <path d="M20.49 15a9 9 0 01-14.85 3.36L1 14" />
+                        </svg>
+                        {analyzing ? 'Analysing…' : 'Re-analyse now'}
+                    </button>
+                )}
             </div>
 
             {/* Top row: 3 clean stat cards — no overlap, generous spacing */}
@@ -555,18 +599,62 @@ function AnalysisCard({ result, employeeName, history, loadingHistory }) {
             {/* History trend — only when 2+ analyses exist */}
             <HistoryTrend history={history} loading={loadingHistory} />
 
-            {/* Prose sections */}
+            {/* Personality — character sketch, framed like a quoted insight */}
             {result.personality && (
                 <div style={{ marginTop: 18, marginBottom: 18, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>Personality</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{result.personality}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <span style={{
+                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                            background: 'rgba(167,139,250,0.15)', color: '#a78bfa',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                                <circle cx="12" cy="8" r="3.6" />
+                                <path d="M5 20c0-3.6 3.1-6.4 7-6.4s7 2.8 7 6.4" />
+                            </svg>
+                        </span>
+                        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 700 }}>Personality</span>
+                    </div>
+                    <div style={{
+                        position: 'relative',
+                        padding: '14px 18px 14px 20px',
+                        borderRadius: 12,
+                        background: 'rgba(167,139,250,0.06)',
+                        borderLeft: '3px solid rgba(167,139,250,0.45)',
+                    }}>
+                        <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.75, fontStyle: 'italic' }}>
+                            {result.personality}
+                        </div>
+                    </div>
                 </div>
             )}
 
+            {/* Observations — evidence log, distinct from the personality sketch above */}
             {result.observations && (
                 <div style={{ marginBottom: 18 }}>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 6 }}>Observations</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{result.observations}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <span style={{
+                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                            background: 'rgba(96,165,250,0.15)', color: '#60a5fa',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M9 11l3 3L22 4" />
+                                <path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11" />
+                            </svg>
+                        </span>
+                        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 700 }}>Observations</span>
+                    </div>
+                    <div style={{
+                        padding: '14px 16px',
+                        borderRadius: 12,
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                    }}>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                            {result.observations}
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -747,7 +835,14 @@ export default function BehaviourAnalysis({ token }) {
                             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Analysing {selected.name}'s chat history…</div>
                         </div>
                     ) : (
-                        <AnalysisCard result={analysis} employeeName={selected.name} history={history} loadingHistory={loadingHistory} />
+                        <AnalysisCard
+                            result={analysis}
+                            employeeName={selected.name}
+                            history={history}
+                            loadingHistory={loadingHistory}
+                            onReanalyse={() => handleAnalyse(selected)}
+                            analyzing={analyzing}
+                        />
                     )}
 
                     <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>

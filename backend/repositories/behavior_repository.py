@@ -110,6 +110,32 @@ class BehaviorRepository:
             .count()
         )
 
+    def list_recent_accesses(
+        self,
+        employee_id: int,
+        since: datetime,
+        limit: int = 20,
+    ) -> List[DocumentAccessLog]:
+        """
+        Return this employee's most recent document accesses (chat + viewer
+        combined), newest-first, within the given window.
+
+        Used by BehaviourAnalysisService to surface "what this person has
+        been reading" alongside the chat-derived mood/trait summary the admin
+        sees — same underlying audit trail, no separate tracking, no
+        duplicated logic.
+        """
+        return (
+            self.db.query(DocumentAccessLog)
+            .filter(
+                DocumentAccessLog.employee_id == employee_id,
+                DocumentAccessLog.accessed_at >= since,
+            )
+            .order_by(DocumentAccessLog.accessed_at.desc())
+            .limit(limit)
+            .all()
+        )
+
     # ── Nudge ledger operations (replaces alert methods) ──────────────────────
 
     def get_active_nudge(

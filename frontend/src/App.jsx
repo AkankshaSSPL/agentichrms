@@ -19,7 +19,7 @@ import { useAuth } from './hooks/useAuth'
 import { useChatSessions } from './hooks/useChatSessions'
 import { useChatMessages } from './hooks/useChatMessages'
 import { useSpeech } from './hooks/useSpeech'
-import { useNudges } from './hooks/useNudges'
+import { useNudges } from './hooks/useNudges'  // <-- NEW
 
 const API = '/api'
 
@@ -74,7 +74,7 @@ export default function App() {
 
     // ── Nudges ─────────────────────────────────────────────────────────────────
     const nudge = useNudges()
-    const nudgeInserted = useRef(false)
+    const nudgeInserted = useRef(false)   // prevent duplicate insertion
 
     // ── Speech ────────────────────────────────────────────────────────────────
     const speech = useSpeech()
@@ -135,12 +135,12 @@ export default function App() {
         const token = localStorage.getItem('hrms_token')
         if (!token) return
         nudge.fetchPendingNudge(token).then((data) => {
-            if (data && data.id && data.nudge_text) {
+            if (data) {
                 const already = chat.messages.some(m => m.nudgeId === data.id)
                 if (!already) {
                     chat.setMessages(prev => [...prev, {
                         role: 'assistant',
-                        content: data.nudge_text,
+                        content: data.nudge_text || '',   // ← FIX: guard against null
                         isNudge: true,
                         nudgeId: data.id,
                         sources: [],
@@ -159,7 +159,7 @@ export default function App() {
         sessions.setCurrentSessionId(id)
         chat.loadMessages(id)
         sessions.setMenuOpen(null)
-        nudgeInserted.current = false
+        nudgeInserted.current = false  // allow nudge fetch for new session
     }
 
     const onDeleteSession = (id) => {
@@ -360,7 +360,7 @@ export default function App() {
                 </main>
             ) : view === 'documents' ? (
                 <main style={{ gridColumn: '2 / -1', overflow: 'auto', background: 'var(--bg-primary)', minHeight: '100vh' }}>
-                    <DocumentLibrary onBack={() => setView('chat')} />
+                    <DocumentLibrary employee={employee} onBack={() => setView('chat')} />
                 </main>
             ) : (
                 <main className="dashboard-panel">
