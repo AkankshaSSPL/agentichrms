@@ -130,6 +130,12 @@ body {
   grid-template-columns: 260px 1fr 380px;
   height: 100vh;
   overflow: hidden;
+  transition: grid-template-columns 0.22s ease;
+}
+
+/* Collapsed sidebar rail mode */
+.app-layout.sidebar-collapsed {
+  grid-template-columns: 64px 1fr 380px;
 }
 
 /* Dynamic Profile View Mask Mode */

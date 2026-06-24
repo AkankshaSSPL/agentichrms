@@ -27,13 +27,14 @@ Pillow==10.2.0
 # SMS Service
 twilio==8.12.0
 
-# LangGraph & RAG (your existing dependencies)
+# LangGraph & AI
 langchain==0.1.6
 langchain-openai==0.0.5
 langgraph==0.0.20
-chromadb==0.4.22
-sentence-transformers==2.3.1
 openai==1.12.0
+
+# RAG — BM25 (replaces chromadb + sentence-transformers)
+rank-bm25==0.2.2
 
 # Utilities
 requests==2.31.0

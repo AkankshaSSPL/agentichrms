@@ -1,6 +1,6 @@
 /**
- * useDocuments — fetch document list, serve raw files, log views.
- * Mirrors the useBehaviorAlerts pattern: API='/api', token from localStorage.
+ * useDocuments — fetch document list, serve raw files, log views, upload, delete, re-tag.
+ * API='/api', token from localStorage.
  */
 
 import { useState, useCallback } from 'react'
@@ -13,10 +13,10 @@ function getToken() {
 
 export function useDocuments() {
     const [documents, setDocuments] = useState([])
-    const [loading, setLoading]     = useState(false)
-    const [error, setError]         = useState(null)
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState(null)
 
-    /** Fetch the full document list from ChromaDB metadata. */
+    /** Fetch the full document list from DOCS_DIR. */
     const loadDocuments = useCallback(async () => {
         setLoading(true)
         setError(null)
@@ -31,6 +31,23 @@ export function useDocuments() {
             setError(e.message)
         } finally {
             setLoading(false)
+        }
+    }, [])
+
+    /**
+     * Fetch available document categories from the backend enum.
+     * Returns an array of category strings.
+     */
+    const fetchCategories = useCallback(async () => {
+        try {
+            const res = await fetch(`${API}/documents/categories`, {
+                headers: { Authorization: `Bearer ${getToken()}` },
+            })
+            if (!res.ok) throw new Error(`Server ${res.status}`)
+            const data = await res.json()
+            return data.categories || []
+        } catch {
+            return []
         }
     }, [])
 
@@ -67,12 +84,17 @@ export function useDocuments() {
     }, [])
 
     /**
-     * Upload a new document. HR/Admin only — backend enforces this too,
-     * this is just the client call. Returns the parsed JSON response.
+     * Upload a new document. HR/Admin only — backend enforces this too.
+     * @param {File} file
+     * @param {string} [category] — optional DocumentCategory value (e.g. "sensitive")
+     * Returns the parsed JSON response.
      */
-    const uploadDocument = useCallback(async (file) => {
+    const uploadDocument = useCallback(async (file, category) => {
         const formData = new FormData()
         formData.append('file', file)
+        if (category) {
+            formData.append('category', category)
+        }
         const res = await fetch(`${API}/documents/upload`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${getToken()}` },
@@ -85,5 +107,56 @@ export function useDocuments() {
         return res.json()
     }, [])
 
-    return { documents, loading, error, loadDocuments, openRaw, logView, uploadDocument }
+    /**
+     * Delete a document. HR/Admin only — backend enforces this too.
+     * @param {string} filename
+     * Returns the parsed JSON response.
+     */
+    const deleteDocument = useCallback(async (filename) => {
+        const enc = encodeURIComponent(filename)
+        const res = await fetch(`${API}/documents/${enc}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${getToken()}` },
+        })
+        if (!res.ok) {
+            const text = await res.text().catch(() => '')
+            throw new Error(text || `Delete failed (${res.status})`)
+        }
+        return res.json()
+    }, [])
+
+    /**
+     * Re-tag a document with a new category. HR/Admin only.
+     * @param {string} filename
+     * @param {string} category — DocumentCategory value
+     * Returns the parsed JSON response.
+     */
+    const updateCategory = useCallback(async (filename, category) => {
+        const res = await fetch(`${API}/behavior/tags`, {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${getToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ filename, category }),
+        })
+        if (!res.ok) {
+            const text = await res.text().catch(() => '')
+            throw new Error(text || `Re-tag failed (${res.status})`)
+        }
+        return res.json()
+    }, [])
+
+    return {
+        documents,
+        loading,
+        error,
+        loadDocuments,
+        fetchCategories,
+        openRaw,
+        logView,
+        uploadDocument,
+        deleteDocument,
+        updateCategory,
+    }
 }

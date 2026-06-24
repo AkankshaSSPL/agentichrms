@@ -11,8 +11,7 @@ Endpoints declare which permission they need via:
     Depends(require_permission("leave.approve"))
 
 The dependency reads the caller's role fresh from the DB on every request
-(same approach as require_role) so role changes take effect immediately
-without re-login.
+so role changes take effect immediately without re-login.
 
 PERMISSION STRINGS
 ------------------
@@ -37,10 +36,13 @@ Format: "<resource>.<action>"
     onboarding.view     — view onboarding tasks
     onboarding.manage   — create / complete onboarding tasks
 
+    documents.upload    — upload documents to the library (HR + Admin)
+    documents.delete    — delete documents from the library (HR + Admin)
+
 ROLE → PERMISSION MAPPING
 --------------------------
     admin    — everything
-    hr       — leave + employee (no delete) + approval + onboarding
+    hr       — leave + employee (no delete) + approval + onboarding + documents
     manager  — leave.view + leave.approve + leave.reject + employee.view
     employee — leave.apply + onboarding.view (own data only, enforced in route)
 """
@@ -69,10 +71,10 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "admin.settings",
         "onboarding.view",
         "onboarding.manage",
-        "behavior.manage",   # Admin only — tagging configuration
-        "behaviour.analyze", # Admin only — AI chat-history mood/personality analysis
-        "documents.upload",  # HR + Admin — upload docs to library & ChromaDB
-        # "behavior.view" removed — no HR dashboard alerts
+        "behavior.manage",    # Admin only — tagging configuration
+        "behaviour.analyze",  # Admin only — AI chat-history mood/personality analysis
+        "documents.upload",   # HR + Admin — upload docs to library
+        "documents.delete",   # HR + Admin — delete docs from library
     },
     RoleName.HR: {
         "leave.view",
@@ -86,8 +88,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "approval.action",
         "onboarding.view",
         "onboarding.manage",
-        "documents.upload",  # HR + Admin — upload docs to library & ChromaDB
-        # "behavior.view" removed — HR no longer sees behavioral alerts
+        "documents.upload",   # HR + Admin — upload docs to library
+        "documents.delete",   # HR + Admin — delete docs from library
     },
     RoleName.EMPLOYEE: {
         "leave.apply",
@@ -143,7 +145,6 @@ def require_permission(permission: str):
         if not employee_id:
             raise HTTPException(status_code=401, detail="Invalid token: missing subject")
 
-        # Read role fresh from DB — role changes take effect on next API call
         db = SessionLocal()
         try:
             emp = db.query(Employee).filter(Employee.id == int(employee_id)).first()
@@ -178,11 +179,11 @@ def require_permission(permission: str):
     return _check
 
 
-# -- Authenticated-only dependency (no permission check) ----------------------
+# ── Authenticated-only dependency (no permission check) ─────────────────────
 
 def require_authenticated(request: Request) -> dict:
     """
-    FastAPI dependency -- requires a valid JWT token, but does not check
+    FastAPI dependency — requires a valid JWT token, but does not check
     role or permissions. Use for endpoints any logged-in employee can access.
 
     Returns the decoded token payload (contains 'sub' = employee ID).

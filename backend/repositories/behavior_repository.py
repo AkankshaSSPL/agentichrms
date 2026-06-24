@@ -46,6 +46,20 @@ class BehaviorRepository:
         logger.info("DocumentTag upserted: %s → %s", filename, category)
         return tag
 
+    def delete_tag(self, filename: str) -> bool:
+        """
+        Delete the DocumentTag for the given filename.
+        Returns True if a row was deleted, False if it didn't exist.
+        """
+        tag = self.db.query(DocumentTag).filter(DocumentTag.filename == filename).first()
+        if not tag:
+            logger.warning("delete_tag: no tag found for filename=%s", filename)
+            return False
+        self.db.delete(tag)
+        self.db.commit()
+        logger.info("DocumentTag deleted: %s", filename)
+        return True
+
     # ── Access log operations ──────────────────────────────────────────────────
 
     def log_access(

@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -12,8 +12,8 @@ from agent.agent import build_agent
 from backend.core.security import verify_token
 from backend.database.models import ChatMessage, ChatSession, Employee, User
 from backend.database.session import get_db
-from backend.enums import ChatRole, DocumentCategory
-from backend.services.behavior_service import BehaviorService, NUDGE_PLAYBOOK
+from backend.enums import ChatRole
+from backend.services.behavior_service import BehaviorService
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -133,23 +133,6 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
             elif m["role"] == ChatRole.ASSISTANT:
                 lc_history.append(AIMessage(content=text))
 
-        # ── Nudge system instruction injection ────────────────────────────────
-        behavior_svc = BehaviorService(db)
-        pending_nudges = behavior_svc.get_pending_nudges(employee.id)
-        if pending_nudges:
-            top_nudge = pending_nudges[0]
-            category = top_nudge["category"]
-            playbook_entry = NUDGE_PLAYBOOK.get(category)
-            if playbook_entry:
-                instruction = playbook_entry.get("agent_instruction", "")
-                tone = (
-                    "You are a supportive, private, and non‑accusatory assistant. "
-                    "Never imply that you are monitoring the employee. "
-                    "Respond with empathy and confidentiality."
-                )
-                system_text = f"{tone}\n\n{instruction}"
-                lc_history.insert(0, SystemMessage(content=system_text))
-
         executor = build_agent(
             employee_email=employee.email,
             employee_name=safe_name,
@@ -164,10 +147,6 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
         steps = result.get("steps", [])
         intermediate = result.get("intermediate_steps", [])
 
-        # ── Extract RAG sources from search_policies tool calls ──────────────
-        # (Fixed: previously read result.get("sources", []), which is always
-        # empty — AgentExecutor.invoke() has no such top-level key. Sources
-        # live inside the tool's own observation, same place conflict data does.)
         sources = _extract_sources_from_steps(intermediate)
 
         # Conflict detection
@@ -226,52 +205,6 @@ async def chat_endpoint(payload: ChatRequest, request: Request, db: Session = De
     except Exception as e:  # noqa: BLE001
         print(f"❌ Chat error: {e}")  # noqa: T201
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── Nudge endpoints ───────────────────────────────────────────────────────────
-
-@router.get("/pending-nudge")
-async def get_pending_nudge(request: Request, db: Session = Depends(get_db)):
-    """Fetch the top-priority pending nudge for the current employee."""
-    employee = get_current_employee(request, db)
-    behavior_svc = BehaviorService(db)
-    pending = behavior_svc.get_pending_nudges(employee.id)
-    if not pending:
-        return {}
-
-    nudge = pending[0]
-    nudge_id = nudge["id"]
-    nudge_text = nudge["nudge_text"]
-
-    behavior_svc.mark_nudge_delivered(nudge_id)
-
-    user = db.query(User).filter(User.employee_id == employee.id).first()
-    if user:
-        session = db.query(ChatSession).filter(
-            ChatSession.user_id == user.id,
-            ChatSession.deleted_at.is_(None)
-        ).order_by(ChatSession.created_at.desc()).first()
-        if session:
-            assistant_msg = ChatMessage(
-                session_id=session.id,
-                role=ChatRole.ASSISTANT,
-                content=nudge_text,
-            )
-            db.add(assistant_msg)
-            db.commit()
-
-    return {"id": nudge_id, "nudge_text": nudge_text}
-
-
-@router.post("/nudge/{nudge_id}/dismiss")
-async def dismiss_nudge(nudge_id: int, request: Request, db: Session = Depends(get_db)):
-    """Dismiss a nudge (mark DISMISSED). Only the owner can dismiss."""
-    employee = get_current_employee(request, db)
-    behavior_svc = BehaviorService(db)
-    success = behavior_svc.dismiss_nudge(nudge_id, employee.id)
-    if not success:
-        raise HTTPException(404, "Nudge not found or not owned by you")
-    return {"message": "Nudge dismissed"}
 
 
 # ── Session management endpoints ──────────────────────────────────────────────

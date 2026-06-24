@@ -1,24 +1,27 @@
 """
 Documents API
 
-GET  /documents               — list viewable documents from DOCS_DIR on disk
-GET  /documents/{filename}   — check existence in DOCS_DIR
-GET  /documents/{filename}/raw  — stream the file (auth required, path-traversal guarded)
-POST /documents/{filename}/view — log a viewer open into the analytics pipeline (non-fatal)
-POST /documents/upload        — upload + ingest a document (HR + Admin only)
+GET    /documents                  — list viewable documents from DOCS_DIR on disk
+GET    /documents/categories       — list available document categories
+GET    /documents/{filename}       — check existence in DOCS_DIR
+GET    /documents/{filename}/raw   — stream the file (auth required, path-traversal guarded)
+POST   /documents/{filename}/view  — log a viewer open into the analytics pipeline (non-fatal)
+POST   /documents/upload           — upload + ingest a document (HR + Admin only)
+DELETE /documents/{filename}       — delete a document (HR + Admin only)
 """
 
 import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
 from backend.core.permissions import require_authenticated, require_permission
 from backend.database.session import SessionLocal
+from backend.enums import DocumentCategory
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +86,23 @@ async def list_documents(payload: dict = Depends(require_authenticated)):
                 continue
             if entry.suffix.lower() not in _VIEWABLE_EXTENSIONS:
                 continue
-            documents.append({"filename": entry.name})
+            documents.append({
+                "filename": entry.name,
+                "size_bytes": entry.stat().st_size,
+            })
 
         return {"documents": documents}
     except Exception as e:  # noqa: BLE001
         logger.warning("Error listing documents from DOCS_DIR: %s", e)
         return {"documents": []}
+
+
+# ── List categories ────────────────────────────────────────────────────────────
+
+@router.get("/documents/categories")
+async def list_categories(payload: dict = Depends(require_authenticated)):
+    """Return all valid document category values."""
+    return {"categories": [c.value for c in DocumentCategory]}
 
 
 # ── Check document existence ───────────────────────────────────────────────────
@@ -172,12 +186,15 @@ _MAX_UPLOAD_MB = 20
 @router.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
+    category: str = Form("general"),
     payload: dict = Depends(require_permission("documents.upload")),
+    db: Session = Depends(get_db),
 ):
     """
-    Upload a document to DOCS_DIR and ingest it into ChromaDB.
+    Upload a document to DOCS_DIR and rebuild the BM25 index.
     Allowed: HR and Admin only (documents.upload permission).
     Accepted formats: PDF, MD, TXT, DOCX (max 20 MB).
+    Optionally tag the document with a category via the 'category' form field.
     """
     original_name = file.filename or ""
     safe_name = os.path.basename(original_name)
@@ -204,103 +221,69 @@ async def upload_document(
         fh.write(data)
     logger.info("Document uploaded: %s (%d bytes)", safe_name, len(data))
 
+    # ── Auto-tag if a valid category was supplied ──────────────────────────
+    tag_result = None
+    if category and category.lower() != "general":
+        try:
+            from backend.services.behavior_service import BehaviorService
+            BehaviorService(db).set_tag(safe_name, category.lower())
+            tag_result = category.lower()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Auto-tag failed for %s: %s", safe_name, exc)
+
+    # ── Rebuild BM25 index ─────────────────────────────────────────────────
     try:
-        _ingest_file(dest, safe_name)
+        from rag.bm25_index import rebuild as bm25_rebuild
+        bm25_rebuild()
         ingested = True
         ingest_error = None
     except Exception as exc:  # noqa: BLE001
-        logger.warning("ChromaDB ingest failed for %s: %s", safe_name, exc)
+        logger.warning("BM25 rebuild failed after upload of %s: %s", safe_name, exc)
         ingested = False
         ingest_error = str(exc)
 
     return {
         "filename": safe_name,
         "size_bytes": len(data),
+        "category": tag_result,
         "ingested": ingested,
         "ingest_error": ingest_error,
     }
 
 
-def _ingest_file(path: Path, filename: str) -> None:
+# ── Delete document (HR + Admin only) ─────────────────────────────────────────
+
+@router.delete("/documents/{filename}")
+async def delete_document(
+    filename: str,
+    payload: dict = Depends(require_permission("documents.delete")),
+    db: Session = Depends(get_db),
+):
     """
-    Chunk a single file and upsert into ChromaDB.
-    Mirrors tools_registry.py: same SentenceTransformer model, same collection.
-    Deletes old chunks first so re-uploading replaces content cleanly.
+    Delete a document from DOCS_DIR, remove its behavior tag, and rebuild
+    the BM25 index. Allowed: HR and Admin only (documents.delete permission).
     """
-    import chromadb
-    from sentence_transformers import SentenceTransformer
+    path = _safe_resolve(filename)
 
-    suffix = path.suffix.lower()
-
-    # ── Extract text ──────────────────────────────────────────────────────
-    if suffix == ".pdf":
-        try:
-            import pypdf
-            reader = pypdf.PdfReader(str(path))
-            pages = [page.extract_text() or "" for page in reader.pages]
-            raw_text = "\n".join(pages)
-        except Exception as exc:
-            raise RuntimeError(f"PDF extraction failed: {exc}") from exc
-
-    elif suffix == ".docx":
-        try:
-            import docx
-            doc = docx.Document(str(path))
-            paragraphs = [p.text for p in doc.paragraphs]
-            raw_text = "\n".join(paragraphs)
-        except Exception as exc:
-            raise RuntimeError(f"DOCX extraction failed: {exc}") from exc
-
-    elif suffix in (".md", ".txt"):
-        raw_text = path.read_text(encoding="utf-8", errors="replace")
-
-    else:
-        raise ValueError(f"Unsupported extension: {suffix}")
-
-    if not raw_text.strip():
-        raise ValueError("File produced no extractable text.")
-
-    # ── Chunk ─────────────────────────────────────────────────────────────
-    chunk_size = 500
-    overlap = 100
-    chunks = []
-    start = 0
-    while start < len(raw_text):
-        chunk = raw_text[start:start + chunk_size].strip()
-        if chunk:
-            chunks.append(chunk)
-        start += chunk_size - overlap
-
-    if not chunks:
-        raise ValueError("File produced no text chunks after processing.")
-
-    # ── Embed ─────────────────────────────────────────────────────────────
-    model = SentenceTransformer(settings.EMBEDDING_MODEL)
-    embeddings = model.encode(chunks).tolist()
-
-    # ── Upsert into ChromaDB ──────────────────────────────────────────────
-    chroma_client = chromadb.PersistentClient(path=str(settings.CHROMA_DIR))
+    # Remove behavioral tag if present
     try:
-        col = chroma_client.get_collection(settings.CHROMA_COLLECTION_NAME)
-    except Exception:
-        col = chroma_client.create_collection(settings.CHROMA_COLLECTION_NAME)
+        from backend.repositories.behavior_repository import BehaviorRepository
+        BehaviorRepository(db).delete_tag(filename)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not remove behavior tag for %s: %s", filename, exc)
 
-    # Delete old chunks so re-upload replaces content cleanly
+    # Delete file from disk
     try:
-        existing = col.get(where={"source": filename})
-        if existing and existing.get("ids"):
-            col.delete(ids=existing["ids"])
-            logger.info("Deleted %d old chunks for %s", len(existing["ids"]), filename)
+        path.unlink()
+        logger.info("Document deleted: %s", filename)
     except Exception as exc:
-        logger.warning("Could not delete old chunks for %s: %s", filename, exc)
+        raise HTTPException(status_code=500, detail=f"Could not delete file: {exc}") from exc
 
-    ids = [f"{filename}__chunk_{i}" for i in range(len(chunks))]
-    metadatas = [{"source": filename, "chunk": i} for i in range(len(chunks))]
+    # Rebuild BM25 index
+    try:
+        from rag.bm25_index import rebuild as bm25_rebuild
+        bm25_rebuild()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("BM25 rebuild failed after deletion of %s: %s", filename, exc)
 
-    col.upsert(
-        ids=ids,
-        embeddings=embeddings,
-        documents=chunks,
-        metadatas=metadatas,
-    )
-    logger.info("Ingested %d chunks for %s into ChromaDB", len(chunks), filename)
+    return {"filename": filename, "deleted": True}

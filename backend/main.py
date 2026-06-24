@@ -53,6 +53,15 @@ async def lifespan(app: FastAPI):
     # broken schema boot silently (R16). (Re-removed after the notification_rbac
     # branch reintroduced it — see CLEANUP_LOG.md.)
     logger.info("🚀 Starting...")
+
+    # Warm up BM25 index so first query is instant
+    try:
+        from rag.bm25_index import rebuild as build
+        build()
+        logger.info("✅ BM25 index ready")
+    except Exception as e:
+        logger.warning("⚠️  BM25 warm-up failed (non-fatal): %s", e)
+
     logger.info("✅ Application startup complete")
     yield
     logger.info("👋 Shutting down...")
@@ -101,7 +110,6 @@ app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(email_settings_router, prefix=API_PREFIX)
 app.include_router(behaviour_analysis_router, prefix=API_PREFIX)
-
 
 if _has_approvals:
     app.include_router(approval_requests_router, prefix=API_PREFIX)
