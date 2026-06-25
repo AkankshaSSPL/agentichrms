@@ -3,6 +3,7 @@ Documents API
 
 GET    /documents                  — list viewable documents from DOCS_DIR on disk
 GET    /documents/categories       — list available document categories
+GET    /documents/grouped          — list documents grouped by file extension (dynamic, disk-derived)
 GET    /documents/{filename}       — check existence in DOCS_DIR
 GET    /documents/{filename}/raw   — stream the file (auth required, path-traversal guarded)
 POST   /documents/{filename}/view  — log a viewer open into the analytics pipeline (non-fatal)
@@ -103,20 +104,6 @@ async def list_documents(payload: dict = Depends(require_authenticated)):
 async def list_categories(payload: dict = Depends(require_authenticated)):
     """Return all valid document category values."""
     return {"categories": [c.value for c in DocumentCategory]}
-
-
-# ── Check document existence ───────────────────────────────────────────────────
-
-@router.get("/documents/{filename}")
-async def get_document_status(
-    filename: str,
-    payload: dict = Depends(require_authenticated),
-):
-    """Check if a specific document exists in DOCS_DIR."""
-    file_path = Path(settings.DOCS_DIR) / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Document not found")
-    return {"filename": filename, "status": "available"}
 
 
 # ── Serve raw file ─────────────────────────────────────────────────────────────
@@ -287,3 +274,60 @@ async def delete_document(
         logger.warning("BM25 rebuild failed after deletion of %s: %s", filename, exc)
 
     return {"filename": filename, "deleted": True}
+
+# ── Grouped-by-type view (dynamic, disk-derived — no hardcoded types) ──────────
+
+@router.get("/documents/grouped")
+async def list_documents_grouped(payload: dict = Depends(require_authenticated)):
+    """
+    Group every viewable document in DOCS_DIR by its file extension.
+    Fully dynamic: whatever extensions actually exist on disk become the
+    groups returned. No fixed list of types anywhere — if a new extension
+    is added to _MIME/_VIEWABLE_EXTENSIONS and a file of that type is
+    uploaded, its group appears automatically with no code change here.
+    """
+    docs_dir = Path(settings.DOCS_DIR)
+    groups: dict[str, list[dict]] = {}
+
+    if docs_dir.exists():
+        for entry in sorted(docs_dir.iterdir()):
+            if not entry.is_file():
+                continue
+            suffix = entry.suffix.lower()
+            if suffix not in _VIEWABLE_EXTENSIONS:
+                continue
+            groups.setdefault(suffix, []).append({
+                "filename": entry.name,
+                "size_bytes": entry.stat().st_size,
+            })
+
+    result = [
+        {
+            "type": suffix.lstrip("."),               # e.g. "pdf"
+            "label": suffix.lstrip(".").upper(),       # e.g. "PDF"
+            "count": len(docs),
+            "documents": docs,
+        }
+        for suffix, docs in sorted(groups.items())
+    ]
+    return {"groups": result}
+
+
+# ── Check document existence ───────────────────────────────────────────────────
+# NOTE: this route MUST be declared after every static single-segment path
+# under /documents/ (grouped, categories, upload) — {filename} is a wildcard
+# that matches any one path segment, so if it were declared first, a request
+# like GET /documents/grouped would be captured here instead of by the real
+# /documents/grouped route, with "grouped" treated as a filename.
+# FastAPI/Starlette match routes top-to-bottom, so order is load-bearing here.
+
+@router.get("/documents/{filename}")
+async def get_document_status(
+    filename: str,
+    payload: dict = Depends(require_authenticated),
+):
+    """Check if a specific document exists in DOCS_DIR."""
+    file_path = Path(settings.DOCS_DIR) / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"filename": filename, "status": "available"}

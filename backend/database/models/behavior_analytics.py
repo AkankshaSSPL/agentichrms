@@ -37,13 +37,29 @@ from backend.database.models.base import BaseModel
 from backend.enums import BehaviorAlertStatus, DocumentCategory, AccessSource, NudgeStatus
 
 
+class DocumentFolder(BaseModel):
+    """HR/Admin-created named folders for organising documents."""
+    __tablename__ = "document_folders"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    name        = Column(String(120), unique=True, index=True, nullable=False)
+    description = Column(String(255), nullable=True)
+    created_by  = Column(Integer, ForeignKey("employees.id"), nullable=True)
+
+    creator   = relationship("Employee", foreign_keys=[created_by])
+    documents = relationship("DocumentTag", back_populates="folder", lazy="dynamic")
+
+
 class DocumentTag(BaseModel):
-    """Admin-managed map of document filename → category."""
+    """Admin-managed map of document filename → category + folder."""
     __tablename__ = "document_tags"
 
-    id       = Column(Integer, primary_key=True, index=True)
-    filename = Column(String, unique=True, index=True, nullable=False)
-    category = Column(String(30), nullable=False, default=DocumentCategory.GENERAL)
+    id        = Column(Integer, primary_key=True, index=True)
+    filename  = Column(String, unique=True, index=True, nullable=False)
+    category  = Column(String(30), nullable=False, default=DocumentCategory.GENERAL)
+    folder_id = Column(Integer, ForeignKey("document_folders.id"), nullable=True, index=True)
+
+    folder = relationship("DocumentFolder", back_populates="documents")
 
 
 class DocumentAccessLog(BaseModel):

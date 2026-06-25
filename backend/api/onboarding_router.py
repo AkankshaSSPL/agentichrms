@@ -106,8 +106,15 @@ class ProfileSaveRequest(BaseModel):
 
     @validator("bank_account_number")
     def bank_account_alphanumeric(cls, v):
-        if v and not v.replace(" ", "").isalnum():
-            raise ValueError("Bank account number must contain only letters and digits")
+        if v:
+            stripped = v.replace(" ", "")
+            if not stripped.isalnum():
+                raise ValueError("Bank account number must contain only letters and digits (no special characters)")
+            if not (9 <= len(stripped) <= 18):
+                raise ValueError(
+                    f"Bank account number must be between 9 and 18 characters long "
+                    f"(got {len(stripped)})"
+                )
         return v
 
     @validator("base_salary")
@@ -120,8 +127,49 @@ class ProfileSaveRequest(BaseModel):
     def emergency_phone_format(cls, v):
         if v:
             import re
-            if not re.match(r"^\+?[\d\s\-]{7,20}$", v.strip()):
-                raise ValueError("Emergency contact phone must be a valid phone number")
+            stripped = re.sub(r"[\s\-\(\)]", "", v)
+            if not re.match(r"^\+?\d{7,15}$", stripped):
+                raise ValueError("Emergency contact phone must be 7–15 digits and may start with + for country code")
+        return v
+
+    @validator("emergency_contact_name")
+    def emergency_contact_name_valid(cls, v):
+        if v:
+            import re
+            if not v.strip():
+                raise ValueError("Emergency contact name cannot be empty")
+            if re.search(r"\d", v):
+                raise ValueError("Emergency contact name should not contain numbers")
+        return v
+
+    @validator("date_of_birth")
+    def dob_min_age(cls, v):
+        # Secondary check — minimum age 18 (format + not-future already checked above)
+        if v:
+            from datetime import date, datetime
+            try:
+                parsed = datetime.strptime(v, "%Y-%m-%d").date()
+            except ValueError:
+                return v  # already caught by dob_not_future
+            from dateutil.relativedelta import relativedelta
+            age = relativedelta(date.today(), parsed).years
+            if age < 18:
+                raise ValueError("Age must be at least 18 years")
+            if age > 80:
+                raise ValueError("Please check the date of birth — age cannot exceed 80 years")
+        return v
+
+    @validator("bank_name", "bank_branch", pre=True)
+    def bank_fields_not_empty(cls, v):
+        if v is not None and not str(v).strip():
+            raise ValueError("This field cannot be empty")
+        return v
+
+    @validator("employment_type")
+    def employment_type_valid(cls, v):
+        allowed = {"Full-time", "Part-time", "Contract", "Intern", "Consultant"}
+        if v and v not in allowed:
+            raise ValueError(f"Employment type must be one of: {', '.join(sorted(allowed))}")
         return v
 
 class HRDirectUpdateRequest(BaseModel):

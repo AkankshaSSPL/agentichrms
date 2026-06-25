@@ -43,9 +43,9 @@ COLUMN_LABELS = {
     "department": "Department",
     "designation": "Job Title / Designation",
     "join_date": "Date of Joining (YYYY-MM-DD)",
-    "employment_type": "Employment Type (Full-time / Part-time / Contract)",
+    "employment_type": "Employment Type (Full-time / Part-time / Contract / Intern)",
     "date_of_birth": "Date of Birth (YYYY-MM-DD)",
-    "gender": "Gender (Male / Female / Other)",
+    "gender": "Gender (Male / Female / Other / Prefer not to say)",
     "address_line1": "Address Line 1",
     "address_line2": "Address Line 2 (optional)",
     "city": "City",
@@ -235,6 +235,12 @@ def _validate_field_value(field: str, value: str) -> Optional[str]:
     """
     Validate a field value before saving or submitting for approval.
     Returns an error message string if invalid, or None if valid.
+
+    Covers every field in ProfileSaveRequest / COLUMN_LABELS. This is the
+    single source of truth for field validation — every write path in this
+    service (chat tags, self_chat, save_profile, hr_direct_update) must call
+    this before persisting a value, so a field can never be rejected by one
+    path and silently accepted by another.
     """
     v = str(value).strip()
 
@@ -258,16 +264,38 @@ def _validate_field_value(field: str, value: str) -> Optional[str]:
             return "Date of birth must be a valid date (e.g. 1990-06-15)."
         if parsed > date.today():
             return "Date of birth cannot be in the future."
+        age_years = (date.today() - parsed).days / 365.25
+        if age_years < 16:
+            return "That date of birth would make the employee younger than 16 — please double-check."
+
+    elif field == "join_date":
+        from datetime import date, timedelta
+        parsed = None
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"):
+            try:
+                parsed = datetime.strptime(v[:10], fmt).date()
+                break
+            except ValueError:
+                continue
+        if not parsed:
+            return "Date of joining must be a valid date (e.g. 2024-01-15)."
+        if parsed < date(1950, 1, 1):
+            return "Date of joining looks too far in the past — please double-check."
+        if parsed > date.today() + timedelta(days=730):
+            return "Date of joining looks too far in the future — please double-check."
 
     elif field == "emergency_contact_phone":
         if not re.match(r"^\+?[\d\s\-]{7,20}$", v):
             return "Emergency contact phone must be a valid phone number (7–20 digits)."
 
     elif field == "base_salary":
+        cleaned = v.replace(",", "").lstrip("+")
         try:
-            salary = float(v.replace(",", ""))
+            salary = float(cleaned)
             if salary < 0:
                 return "Base salary cannot be negative."
+            if salary > 100_000_000:
+                return "That salary looks unusually high — please double-check for a typo."
         except ValueError:
             return "Base salary must be a valid number."
 
@@ -275,6 +303,44 @@ def _validate_field_value(field: str, value: str) -> Optional[str]:
         allowed = {"Male", "Female", "Other", "Prefer not to say"}
         if v not in allowed:
             return f"Gender must be one of: {', '.join(sorted(allowed))}."
+
+    elif field == "employment_type":
+        allowed = {"Full-time", "Part-time", "Contract", "Intern"}
+        if v not in allowed:
+            return f"Employment type must be one of: {', '.join(sorted(allowed))}."
+
+    elif field == "emergency_contact_relation":
+        allowed = {"Father", "Mother", "Spouse", "Sibling", "Friend", "Relative", "Guardian", "Other"}
+        if v not in allowed:
+            return f"Emergency contact relation must be one of: {', '.join(sorted(allowed))}."
+
+    elif field in ("department", "designation", "bank_name", "bank_branch"):
+        if not v:
+            return f"{COLUMN_LABELS.get(field, field)} cannot be empty."
+        if len(v) > 100:
+            return f"{COLUMN_LABELS.get(field, field)} is too long (max 100 characters)."
+
+    elif field in ("city", "state", "country"):
+        if not v:
+            return f"{COLUMN_LABELS.get(field, field)} cannot be empty."
+        if len(v) > 100:
+            return f"{COLUMN_LABELS.get(field, field)} is too long (max 100 characters)."
+        if v.isdigit():
+            return f"{COLUMN_LABELS.get(field, field)} cannot be just numbers."
+
+    elif field in ("address_line1", "address_line2"):
+        if field == "address_line1" and not v:
+            return "Address line 1 cannot be empty."
+        if len(v) > 255:
+            return f"{COLUMN_LABELS.get(field, field)} is too long (max 255 characters)."
+
+    elif field == "emergency_contact_name":
+        if not v:
+            return "Emergency contact name cannot be empty."
+        if len(v) > 100:
+            return "Emergency contact name is too long (max 100 characters)."
+        if not re.match(r"^[A-Za-z\s'\-.]+$", v):
+            return "Emergency contact name should contain only letters, spaces, hyphens, and apostrophes."
 
     return None  # valid
 
@@ -314,16 +380,32 @@ class OnboardingService:
         }
 
     def save_profile(self, employee: Employee, fields: dict, requested_by_id: Optional[int] = None) -> dict:
+        """
+        FIXED: every field is now validated via _validate_field_value before
+        either being saved directly or submitted as an approval request.
+        Previously this method had zero validation — bad data could be saved
+        directly, and worse, garbage could be submitted into the HR approval
+        queue for a human to review. Invalid fields are now collected in
+        `invalid` and skipped entirely (neither saved nor sent to HR).
+        """
         approval_repo = ApprovalRepository(self.db)
         requester_id = requested_by_id or employee.id
 
         directly_saved = []
         pending_approval = []
         skipped = []
+        invalid = []
 
         for field, value in fields.items():
             if value is None:
                 continue
+
+            if str(value).strip():
+                err = _validate_field_value(field, str(value))
+                if err:
+                    invalid.append({"field": field, "error": err})
+                    logger.warning("save_profile blocked invalid value for %s: %s — %s", field, value, err)
+                    continue
 
             if field in EMPLOYEE_EDITABLE_FIELDS:
                 apply_fields(employee, {field: value}, self.db)
@@ -377,34 +459,86 @@ class OnboardingService:
             "directly_saved": directly_saved,
             "pending_approval": pending_approval,
             "skipped": skipped,
+            "invalid": invalid,
             "onboarding_completed": employee.onboarding_completed,
         }
 
     def hr_direct_update(self, employee: Employee, fields: dict) -> dict:
+        """
+        FIXED: previously the only completely unvalidated write path in the
+        whole system — straight setattr with type coercion only, no field
+        validation at all. Now every non-empty value is validated first.
+
+        Judgment call: HR can still explicitly CLEAR a field (empty string
+        or null) without validation — that's a deliberate "let HR fix a bad
+        value by blanking it" allowance, not a hole. Validation only blocks
+        writing a NEW invalid value, never clearing an existing one.
+
+        Also fixes a latent inconsistency: the date coercion below now tries
+        the same three formats _validate_field_value accepts, so a date that
+        passes validation can never then fail the actual save.
+        """
         date_fields = {"join_date", "date_of_birth"}
+        updated_fields = []
+        invalid = []
+
         for key, val in fields.items():
             if not hasattr(employee, key):
                 continue
+
+            is_clearing = val is None or str(val).strip() == ""
+
+            if not is_clearing:
+                err = _validate_field_value(key, str(val))
+                if err:
+                    invalid.append({"field": key, "error": err})
+                    logger.warning("hr_direct_update blocked invalid value for %s: %s — %s", key, val, err)
+                    continue
+
             if key in date_fields and val:
-                try:
-                    parsed = datetime.strptime(val, "%Y-%m-%d").date()
+                parsed = None
+                for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"):
+                    try:
+                        parsed = datetime.strptime(str(val).strip()[:10], fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                if parsed:
                     setattr(employee, key, parsed)
-                except Exception:  # noqa: BLE001
-                    pass
+                    updated_fields.append(key)
+                else:
+                    invalid.append({
+                        "field": key,
+                        "error": f"{COLUMN_LABELS.get(key, key)} must be a valid date.",
+                    })
+                continue
+
             elif key == "base_salary" and val:
                 try:
-                    setattr(employee, key, float(val))
+                    setattr(employee, key, float(str(val).replace(",", "")))
+                    updated_fields.append(key)
                 except Exception:  # noqa: BLE001
-                    pass
+                    invalid.append({"field": key, "error": "Base salary must be a valid number."})
+                continue
+
             else:
                 setattr(employee, key, val)
+                updated_fields.append(key)
+
         self.db.commit()
-        Notifier(self.db).to_employee(
-            employee.id,
-            title="Profile Updated by HR",
-            message=f"HR has updated: {', '.join(fields.keys())}. Please review your profile.",
-        )
-        return {"message": "Profile updated", "updated_fields": list(fields.keys())}
+
+        if updated_fields:
+            Notifier(self.db).to_employee(
+                employee.id,
+                title="Profile Updated by HR",
+                message=f"HR has updated: {', '.join(updated_fields)}. Please review your profile.",
+            )
+
+        return {
+            "message": "Profile updated",
+            "updated_fields": updated_fields,
+            "invalid": invalid,
+        }
 
     def build_hr_system_prompt(self, employee: Employee) -> str:
         profile = self.get_profile_columns(employee)
@@ -689,14 +823,32 @@ RULES:
         answer = await _call_openai(messages, max_tokens=800)
 
         # ── Direct-save fields (employee‑updatable) ──────────────────────────
+        # FIXED: previously called apply_fields() with zero validation — any
+        # value the LLM emitted in a PARTIAL_SAVE tag was written straight to
+        # the DB. Now validated per-field via _validate_field_value, same
+        # pattern as _parse_tags above. Invalid fields are skipped (not
+        # saved) and the rejection reason is appended to the reply.
+        self_save_errors = []
         for m in re.finditer(r"<PARTIAL_SAVE>(.*?)</PARTIAL_SAVE>", answer, re.DOTALL):
             try:
                 raw = json.loads(m.group(1).strip())
                 allowed = {k: v for k, v in raw.items() if k in EMPLOYEE_EDITABLE_FIELDS}
-                apply_fields(employee, allowed, self.db)
+                valid_fields = {}
+                for field, value in allowed.items():
+                    if value and str(value).strip():
+                        err = _validate_field_value(field, str(value))
+                        if err:
+                            self_save_errors.append(err)
+                            logger.warning("Blocked invalid value for %s: %s — %s", field, value, err)
+                        else:
+                            valid_fields[field] = value
+                if valid_fields:
+                    apply_fields(employee, valid_fields, self.db)
             except Exception as e:  # noqa: BLE001
                 logger.warning("Self partial save failed: %s", e)
         answer = re.sub(r"<PARTIAL_SAVE>.*?</PARTIAL_SAVE>", "", answer, flags=re.DOTALL).strip()
+        if self_save_errors:
+            answer = (answer + f"\n\n⚠ {' '.join(self_save_errors)} Please provide a valid value.").strip()
 
         # ── HR approval request tags ─────────────────────────────────────────
         approval_requests_created = []
@@ -766,6 +918,12 @@ RULES:
         answer = re.sub(r"<APPROVAL_REQUEST>.*?</APPROVAL_REQUEST>", "", answer, flags=re.DOTALL).strip()
 
         # ── Profile complete tag ─────────────────────────────────────────────
+        # FIXED: this was a 5th unvalidated write path discovered while fixing
+        # the others — same bug as the PARTIAL_SAVE block above (apply_fields
+        # called directly with no validation), just triggered by the
+        # completion tag instead of an in-progress save. Now mirrors
+        # _parse_tags exactly: validate each field, only apply the valid
+        # ones, and only mark the profile complete if nothing was blocked.
         profile_data = None
         profile_complete = False
         pm = re.search(r"<PROFILE_DATA>(.*?)</PROFILE_DATA>", answer, re.DOTALL)
@@ -773,11 +931,25 @@ RULES:
             try:
                 raw = pm.group(1).strip()
                 profile_data = json.loads(raw) if raw and raw != "{}" else {}
-                profile_complete = True
                 answer = re.sub(r"<PROFILE_DATA>.*?</PROFILE_DATA>", "", answer, flags=re.DOTALL).strip()
+                profile_errors = []
                 if profile_data:
                     allowed = {k: v for k, v in profile_data.items() if k in EMPLOYEE_EDITABLE_FIELDS}
-                    apply_fields(employee, allowed, self.db)
+                    valid_fields = {}
+                    for field, value in allowed.items():
+                        if value and str(value).strip():
+                            err = _validate_field_value(field, str(value))
+                            if err:
+                                profile_errors.append(err)
+                                logger.warning("Blocked invalid value for %s: %s — %s", field, value, err)
+                            else:
+                                valid_fields[field] = value
+                    if valid_fields:
+                        apply_fields(employee, valid_fields, self.db)
+                if not profile_errors:
+                    profile_complete = True
+                else:
+                    answer = (answer + f"\n\n⚠ {' '.join(profile_errors)} Please provide a valid value.").strip()
             except Exception as e:  # noqa: BLE001
                 logger.error("Self profile parse failed: %s", e)
 

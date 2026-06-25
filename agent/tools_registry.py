@@ -713,20 +713,112 @@ def request_profile_update(employee_email: str, field: str, new_value: str) -> d
         if field in EMPLOYEE_UPDATABLE:
             if not hasattr(emp, field):
                 return {"answer": f"Field '{field}' does not exist."}
+
+            # ── Validation for directly-updatable fields ───────────────────────
+            import re as _re
+            from datetime import datetime as _dt, date as _date
+
             if field == "date_of_birth":
-                from datetime import datetime as _dt
+                parsed_dob = None
                 for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d %B %Y"):
                     try:
-                        new_value = _dt.strptime(new_value.strip(), fmt).date()
+                        parsed_dob = _dt.strptime(new_value.strip(), fmt).date()
                         break
                     except ValueError:
                         continue
+                if parsed_dob is None:
+                    return {"answer": "Date of birth must be a valid date (e.g. 1990-06-15)."}
+                if parsed_dob > _date.today():
+                    return {"answer": "Date of birth cannot be in the future."}
+                from dateutil.relativedelta import relativedelta
+                age = relativedelta(_date.today(), parsed_dob).years
+                if age < 18:
+                    return {"answer": "Age must be at least 18 years."}
+                if age > 80:
+                    return {"answer": "Please check the date of birth — age cannot exceed 80 years."}
+                new_value = parsed_dob
+
+            elif field == "gender":
+                allowed_genders = {"Male", "Female", "Other", "Prefer not to say"}
+                if new_value not in allowed_genders:
+                    return {"answer": f"Gender must be one of: {', '.join(sorted(allowed_genders))}."}
+
+            elif field == "phone":
+                stripped_phone = _re.sub(r"[\s\-\(\)]", "", new_value)
+                if not _re.match(r"^\+?\d{7,15}$", stripped_phone):
+                    return {"answer": "Phone number must be 7–15 digits and may start with + for country code (e.g. +919876543210)."}
+
+            elif field == "phone_country_code":
+                if not _re.match(r"^\+\d{1,3}$", new_value.strip()):
+                    return {"answer": "Phone country code must be in the format +1, +44, +91, etc."}
+
+            elif field == "emergency_contact_phone":
+                stripped_ep = _re.sub(r"[\s\-\(\)]", "", new_value)
+                if not _re.match(r"^\+?\d{7,15}$", stripped_ep):
+                    return {"answer": "Emergency contact phone must be 7–15 digits and may start with + for country code."}
+
+            elif field == "emergency_contact_name":
+                if not new_value.strip():
+                    return {"answer": "Emergency contact name cannot be empty."}
+                if _re.search(r"\d", new_value):
+                    return {"answer": "Emergency contact name should not contain numbers."}
+
+            elif field in ("bank_name", "bank_branch", "account_holder_name"):
+                if not new_value.strip():
+                    return {"answer": f"{EMPLOYEE_UPDATABLE[field]} cannot be empty."}
+
+            elif field in ("address_line1", "city", "state", "country"):
+                if not new_value.strip():
+                    return {"answer": f"{EMPLOYEE_UPDATABLE[field]} cannot be empty."}
+
             setattr(emp, field, new_value)
             db.commit()
             field_label = EMPLOYEE_UPDATABLE[field]
             return {"answer": f"Done! Your {field_label} has been updated to '{new_value}'."}
 
         elif field in HR_APPROVAL_REQUIRED:
+            # ── Field-level validation before submitting for approval ──────────
+            import re as _re
+
+            if field == "bank_account_number":
+                stripped = new_value.replace(" ", "")
+                if not stripped:
+                    return {"answer": "Bank account number cannot be empty."}
+                if not stripped.isalnum():
+                    return {"answer": "Bank account number must contain only letters and digits (no special characters)."}
+                if not (9 <= len(stripped) <= 18):
+                    return {"answer": f"Bank account number must be between 9 and 18 characters long. You entered {len(stripped)} character(s). Please check and try again."}
+
+            elif field == "base_salary":
+                try:
+                    salary_val = float(new_value)
+                    if salary_val < 0:
+                        return {"answer": "Base salary cannot be negative."}
+                except (ValueError, TypeError):
+                    return {"answer": "Base salary must be a valid number."}
+
+            elif field == "email":
+                if not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", new_value.strip()):
+                    return {"answer": "Please provide a valid email address (e.g. name@company.com)."}
+
+            elif field == "name":
+                if not new_value.strip():
+                    return {"answer": "Full name cannot be empty."}
+                if _re.search(r"\d", new_value):
+                    return {"answer": "Full name should not contain numbers."}
+                if len(new_value.strip()) < 2:
+                    return {"answer": "Full name must be at least 2 characters long."}
+
+            elif field == "employment_type":
+                allowed_types = {"Full-time", "Part-time", "Contract", "Intern", "Consultant"}
+                if new_value not in allowed_types:
+                    return {"answer": f"Employment type must be one of: {', '.join(sorted(allowed_types))}."}
+
+            elif field == "status":
+                allowed_statuses = {"active", "inactive", "terminated", "on_leave"}
+                if new_value.lower() not in allowed_statuses:
+                    return {"answer": f"Status must be one of: {', '.join(sorted(allowed_statuses))}."}
+
             existing = db.query(ApprovalRequest).filter(
                 ApprovalRequest.employee_id == emp.id,
                 ApprovalRequest.field_name == field,
