@@ -328,7 +328,8 @@ function GroupCard({ group, color, onClick }) {
 // ── Root: type-group grid ─────────────────────────────────────────────────────
 export default function DocumentLibrary({ onBack, userRole }) {
     const { openRaw, logView } = useDocuments()
-    const canManage = userRole === 'hr' || userRole === 'admin'
+    const normalizedRole = (userRole || '').toString().trim().toLowerCase()
+    const canManage = normalizedRole === 'hr' || normalizedRole === 'admin'
 
     const [groups, setGroups]               = useState([])
     const [loadingGroups, setLoadingGroups] = useState(true)

@@ -2,7 +2,7 @@
 
 .register-container {
     min-height: 100vh;
-    background: #060812;
+    background: var(--bg-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -17,14 +17,14 @@
     /* Prevent card from overflowing viewport height */
     max-height: calc(100vh - 32px);
     overflow-y: auto;
-    background: #111520;
-    border: 1px solid #1e2433;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 24px;
     padding: 18px 22px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-xl);
     box-sizing: border-box;
     scrollbar-width: thin;
-    scrollbar-color: #1e2433 transparent;
+    scrollbar-color: var(--border) transparent;
 }
 
 .register-card::-webkit-scrollbar {
@@ -32,21 +32,21 @@
 }
 
 .register-card::-webkit-scrollbar-thumb {
-    background: #1e2433;
+    background: var(--border);
     border-radius: 4px;
 }
 
 .register-header h2 {
     font-size: 19px;
     font-weight: 700;
-    color: #e2e8f0;
+    color: var(--text-primary);
     text-align: center;
     margin: 0 0 2px;
 }
 
 .subtitle {
     font-size: 12px;
-    color: #4a5168;
+    color: var(--text-muted);
     text-align: center;
     margin-bottom: 14px;
 }
@@ -65,19 +65,19 @@
     border-radius: 20px;
     font-size: 11px;
     font-weight: 600;
-    background: #0d1017;
-    color: #4a5168;
-    border: 1px solid #1e2433;
+    background: var(--bg-input);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
 }
 
 .step.active {
-    background: #4f8ef7;
+    background: var(--accent);
     color: #fff;
     border: none;
 }
 
 .step.completed {
-    background: #10b981;
+    background: var(--green);
     color: #fff;
     border: none;
 }
@@ -91,9 +91,9 @@
 }
 
 .message.error {
-    background: rgba(248, 113, 113, 0.08);
-    border: 1px solid rgba(248, 113, 113, 0.25);
-    color: #f87171;
+    background: var(--red-dim);
+    border: 1px solid var(--red);
+    color: var(--red);
 }
 
 .register-form {
@@ -110,24 +110,24 @@
 
 .form-group label {
     font-size: 11px;
-    color: #8b95a9;
+    color: var(--text-secondary);
     letter-spacing: 0.3px;
 }
 
 .form-group input {
     padding: 8px 12px;
-    background: #0a0e1a;
-    border: 1px solid #1e2433;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 13px;
-    color: #e2e8f0;
+    color: var(--text-primary);
     outline: none;
     box-sizing: border-box;
     width: 100%;
 }
 
 .form-group input:focus {
-    border-color: #4f8ef7;
+    border-color: var(--accent);
 }
 
 .face-capture-step {
@@ -143,7 +143,7 @@
     max-width: 300px;
     border-radius: 16px;
     overflow: hidden;
-    border: 1px solid #1e2433;
+    border: 1px solid var(--border);
     background: #000;
 }
 
@@ -198,7 +198,7 @@
     transform: translateX(-50%);
     font-size: 14px;
     font-weight: 600;
-    color: #4f8ef7;
+    color: var(--accent);
     background: rgba(0, 0, 0, 0.5);
     padding: 2px 8px;
     border-radius: 20px;
@@ -213,12 +213,12 @@
 .instruction-title {
     font-size: 13px;
     font-weight: 500;
-    color: #e2e8f0;
+    color: var(--text-primary);
     margin: 0 0 4px;
 }
 
 .start-button {
-    background: #4f8ef7;
+    background: var(--accent);
     color: white;
     border: none;
     border-radius: 40px;
@@ -230,7 +230,7 @@
 }
 
 .start-button:hover {
-    background: #3b6fd4;
+    background: var(--accent-hover);
 }
 
 .thumbnails-grid {
@@ -247,7 +247,7 @@
     height: 42px;
     border-radius: 8px;
     overflow: hidden;
-    border: 1px solid #1e2433;
+    border: 1px solid var(--border);
 }
 
 .thumbnail-item img {
@@ -262,7 +262,7 @@
     right: -5px;
     width: 18px;
     height: 18px;
-    background: #f87171;
+    background: var(--red);
     border: none;
     border-radius: 50%;
     color: white;
@@ -289,7 +289,7 @@
 }
 
 .btn-primary {
-    background: #4f8ef7;
+    background: var(--accent);
     color: white;
 }
 
@@ -300,8 +300,8 @@
 
 .btn-secondary {
     background: transparent;
-    border: 1px solid #1e2433;
-    color: #8b95a9;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
 }
 
 /* Face bounding box canvas */
@@ -315,8 +315,8 @@
 }
 
 .webcam-wrapper.multiple-faces {
-    border-color: #f87171;
-    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.5);
+    border-color: var(--red);
+    box-shadow: 0 0 0 2px var(--red);
     transition: border-color 0.2s;
 }
 
@@ -340,4 +340,9 @@
     .webcam-wrapper {
         max-width: 260px;
     }
+}
+/* Auto-dismiss progress bar on details error banner */
+@keyframes shrink-bar {
+    from { width: 100%; }
+    to   { width: 0%; }
 }

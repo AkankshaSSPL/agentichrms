@@ -7,6 +7,27 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import LeaveRequests from './LeaveRequests'
+
+// Shared semantic color tokens for role badges and status indicators (inlined
+// here to avoid an extra file — keep in sync with the same block in AdminPanel.jsx
+// if you ever copy this elsewhere).
+const ROLE_COLORS = {
+    admin:    { bg: 'rgba(239,68,68,0.15)',  color: '#f87171', border: 'rgba(239,68,68,0.3)' },
+    hr:       { bg: 'rgba(16,185,129,0.15)', color: '#34d399', border: 'rgba(16,185,129,0.3)' },
+    employee: { bg: 'rgba(79,142,247,0.15)', color: '#60a5fa', border: 'rgba(79,142,247,0.3)' },
+}
+const ROLE_COLOR_DEFAULT = { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' }
+const roleColor = (role) => ROLE_COLORS[role] || ROLE_COLOR_DEFAULT
+
+const STATUS_COLORS = {
+    pending:           { bg: 'rgba(79,142,247,0.15)',  color: '#60a5fa', label: 'Pending' },
+    awaiting_document: { bg: 'rgba(245,158,11,0.15)',  color: '#fbbf24', label: 'Awaiting Doc' },
+    approved:          { bg: 'rgba(16,185,129,0.15)',  color: '#34d399', label: 'Approved' },
+    rejected:          { bg: 'rgba(239,68,68,0.15)',   color: '#f87171', label: 'Rejected' },
+    sent:              { bg: 'rgba(52,211,153,0.12)',  color: '#34d399', label: 'Sent' },
+    failed:            { bg: 'rgba(248,113,113,0.12)', color: '#f87171', label: 'Failed' },
+}
+const statusColor = (status) => STATUS_COLORS[status] || ROLE_COLOR_DEFAULT
 // import BehaviorAlerts from './BehaviorAlerts'  // removed — HR signals tab is deleted
 
 const API = '/api'
@@ -14,11 +35,11 @@ const API = '/api'
 /* ── Sweet Alert ─────────────────────────────────────────────────────────── */
 function Alert({ alerts, remove }) {
     return (
-        <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 99999, display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 99999, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
             {alerts.map(a => (
                 <div key={a.id} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '13px 18px', borderRadius: 14, pointerEvents: 'all',
+                    padding: '12px 16px', borderRadius: 14, pointerEvents: 'all',
                     background: a.type === 'success' ? 'rgba(52,211,153,0.12)' : a.type === 'error' ? 'rgba(248,113,113,0.12)' : 'rgba(79,142,247,0.12)',
                     border: `1px solid ${a.type === 'success' ? 'rgba(52,211,153,0.35)' : a.type === 'error' ? 'rgba(248,113,113,0.35)' : 'rgba(79,142,247,0.35)'}`,
                     backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
@@ -26,7 +47,7 @@ function Alert({ alerts, remove }) {
                 }}>
                     <span style={{ fontSize: 18 }}>{a.type === 'success' ? '✅' : a.type === 'error' ? '❌' : 'ℹ️'}</span>
                     <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>{a.message}</span>
-                    <button onClick={() => remove(a.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>×</button>
+                    <button onClick={() => remove(a.id)} aria-label="Dismiss notification" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>×</button>
                 </div>
             ))}
         </div>
@@ -36,7 +57,7 @@ function Alert({ alerts, remove }) {
 /* ── Completion Ring ─────────────────────────────────────────────────────── */
 function Ring({ pct, size = 36 }) {
     const r = (size - 4) / 2, circ = 2 * Math.PI * r
-    const color = pct === 100 ? '#34d399' : pct > 0 ? 'var(--accent)' : 'var(--border)'
+    const color = pct === 100 ? 'var(--green, #34d399)' : pct > 0 ? 'var(--accent)' : 'var(--border)'
     return (
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
             <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth="3" />
@@ -129,20 +150,20 @@ function OnboardingChatModal({ employee, token, onClose, onDone, nameChange = fa
             <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 20, width: '92%', maxWidth: 520, height: '78vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'hrPopIn 0.2s ease' }}>
 
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border)' }}>
                     <div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{nameChange ? ' Update Profile — ' : '📋 Fill Profile — '}{employee.name}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{nameChange ? 'Update Profile — ' : 'Fill Profile — '}{employee.name}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{nameChange ? 'Update any profile field — name, department, title, contact details, etc.' : 'Complete missing profile fields for this employee'}</div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', padding: '4px 10px' }}>✕</button>
+                    <button onClick={onClose} aria-label="Close chat" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', padding: '4px 10px' }}>✕</button>
                 </div>
 
                 {/* Messages */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {messages.map((m, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                             <div style={{
-                                maxWidth: '82%', padding: '10px 14px', lineHeight: 1.55, fontSize: 13, whiteSpace: 'pre-wrap',
+                                maxWidth: '82%', padding: '8px 16px', lineHeight: 1.55, fontSize: 13, whiteSpace: 'pre-wrap',
                                 borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
                                 background: m.role === 'user' ? 'var(--accent)' : 'var(--bg-card)',
                                 border: m.role === 'user' ? 'none' : '1px solid var(--border)',
@@ -161,14 +182,14 @@ function OnboardingChatModal({ employee, token, onClose, onDone, nameChange = fa
                 </div>
 
                 {/* Input */}
-                <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                     <textarea
                         value={input}
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
                         placeholder="Type your answer… (Enter to send)"
                         rows={1}
-                        style={{ flex: 1, background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', color: 'var(--text-primary)', fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5, maxHeight: 100, overflowY: 'auto', transition: 'border-color 0.15s' }}
+                        style={{ flex: 1, background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 16px', color: 'var(--text-primary)', fontSize: 13, resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5, maxHeight: 100, overflowY: 'auto', transition: 'border-color 0.15s' }}
                         onFocus={e => e.target.style.borderColor = 'var(--accent)'}
                         onBlur={e => e.target.style.borderColor = 'var(--border)'}
                     />
@@ -206,17 +227,13 @@ function EmployeeDirectory({ token, onFillProfile, onAlert }) {
 
     useEffect(() => { fetchEmployees() }, [fetchEmployees])
 
-    const roleBadge = r => ({
-        admin:    { bg: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: 'rgba(167,139,250,0.3)' },
-        hr:       { bg: 'rgba(79,142,247,0.12)',  color: 'var(--accent)', border: 'rgba(79,142,247,0.3)' },
-        employee: { bg: 'rgba(52,211,153,0.1)',   color: '#34d399', border: 'rgba(52,211,153,0.25)' },
-    }[r] || { bg: 'rgba(100,116,139,0.1)', color: 'var(--text-muted)', border: 'var(--border)' })
+    const roleBadge = roleColor
 
     const filtered = employees.filter(e =>
         !search || e.name?.toLowerCase().includes(search.toLowerCase()) || e.email?.toLowerCase().includes(search.toLowerCase()) || e.department?.toLowerCase().includes(search.toLowerCase())
     )
 
-    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}> Loading employees…</div>
+    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading employees…</div>
 
     return (
         <div style={{ padding: '28px 32px' }}>
@@ -269,12 +286,12 @@ function EmployeeDirectory({ token, onFillProfile, onAlert }) {
                                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(79,142,247,0.2)' }}
                                     onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent-dim)' }}
                                 >
-                                     Fill Profile via Chat
+                                    Fill Profile via Chat
                                 </button>
                             )}
                             {!incomplete && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    <div style={{ textAlign: 'center', fontSize: 12, color: '#34d399', fontWeight: 600 }}> Profile Complete</div>
+                                    <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--green, #34d399)', fontWeight: 600 }}>Profile Complete</div>
                                     <button
                                         onClick={() => onFillProfile(emp, true)}
                                         style={{ width: '100%', padding: '7px 0', background: 'transparent', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit' }}
@@ -356,14 +373,9 @@ function NameChangeRequests({ token, onAlert }) {
     })
 
     const statusBadge = (status) => {
-        const map = {
-            pending:            { bg: 'rgba(79,142,247,0.15)',  color: '#60a5fa', label: 'Pending' },
-            awaiting_document:  { bg: 'rgba(245,158,11,0.15)', color: '#fbbf24', label: 'Awaiting Doc' },
-            approved:           { bg: 'rgba(16,185,129,0.15)', color: '#34d399', label: 'Approved' },
-            rejected:           { bg: 'rgba(239,68,68,0.15)',  color: '#f87171', label: 'Rejected' },
-        }
-        const s = map[status] || { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', label: status }
-        return <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}40`, padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600, letterSpacing: '0.04em' }}>{s.label}</span>
+        const s = statusColor(status)
+        const label = s.label || status
+        return <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}40`, padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600, letterSpacing: '0.04em' }}>{label}</span>
     }
 
     const actionBtn = (label, color, onClick, disabled) => (
@@ -385,7 +397,7 @@ function NameChangeRequests({ token, onAlert }) {
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, maxWidth: 400, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
-                            {noteModal.action === 'approve' ? ' Approve Request' : noteModal.action === 'reject' ? ' Reject Request' : '📎 Request Document'}
+                            {noteModal.action === 'approve' ? 'Approve Request' : noteModal.action === 'reject' ? 'Reject Request' : 'Request Document'}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>Add an optional note for the employee (optional)</div>
                         <textarea
@@ -427,23 +439,22 @@ function NameChangeRequests({ token, onAlert }) {
                             fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                         }}>{f.label}</button>
                     ))}
-                    <button onClick={fetchRequests} style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>↻ Refresh</button>
+                    <button onClick={fetchRequests} style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Refresh</button>
                 </div>
             </div>
 
             {/* Content */}
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 13 }}>⏳ Loading…</div>
+                <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
             ) : filtered.length === 0 ? (
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '48px 24px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 28, marginBottom: 10 }}>📭</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No {filter === 'all' ? '' : filter.replace('_', ' ')} requests</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>No {filter === 'all' ? '' : filter.replace('_', ' ')} requests</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Name change requests from employees will appear here.</div>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {filtered.map(r => (
-                        <div key={r.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+                        <div key={r.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 24px' }}>
                             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                                 {/* Left: employee info */}
                                 <div style={{ flex: 1, minWidth: 200 }}>
@@ -457,7 +468,7 @@ function NameChangeRequests({ token, onAlert }) {
                                         </div>
                                         {statusBadge(r.status)}
                                         {!r.document_provided && r.status !== 'approved' && r.status !== 'rejected' && (
-                                            <span style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)', padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>No Document</span>
+                                            <span style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--amber, #fbbf24)', border: '1px solid rgba(245,158,11,0.3)', padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>No Document</span>
                                         )}
                                     </div>
                                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
@@ -479,16 +490,16 @@ function NameChangeRequests({ token, onAlert }) {
                                     {r.document_provided && (
                                         <a href={`/api/name-change/${r.id}/document`} target="_blank" rel="noopener noreferrer"
                                             style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid rgba(79,142,247,0.3)', background: 'rgba(79,142,247,0.08)', color: 'var(--accent)', fontSize: 11, fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                            📎 View Doc
+                                            View Doc
                                         </a>
                                     )}
                                     {(r.status === 'pending' || r.status === 'awaiting_document') && (<>
-                                        {actionBtn('✅ Approve', '#10b981', () => openNote(r.id, 'approve'), !!actionLoading)}
-                                        {actionBtn('❌ Reject',  '#ef4444', () => openNote(r.id, 'reject'),  !!actionLoading)}
-                                        {!r.document_provided && actionBtn('📎 Request Doc', '#f59e0b', () => openNote(r.id, 'request_document'), !!actionLoading)}
+                                        {actionBtn('✅ Approve', 'var(--green, #10b981)', () => openNote(r.id, 'approve'), !!actionLoading)}
+                                        {actionBtn('❌ Reject',  'var(--red, #ef4444)', () => openNote(r.id, 'reject'),  !!actionLoading)}
+                                        {!r.document_provided && actionBtn('Request Doc', '#f59e0b', () => openNote(r.id, 'request_document'), !!actionLoading)}
                                     </>)}
-                                    {r.status === 'approved' && <span style={{ fontSize: 12, color: '#34d399', fontWeight: 500 }}>✅ Name updated</span>}
-                                    {r.status === 'rejected' && <span style={{ fontSize: 12, color: '#f87171', fontWeight: 500 }}>❌ Rejected</span>}
+                                    {r.status === 'approved' && <span style={{ fontSize: 12, color: 'var(--green, #34d399)', fontWeight: 500 }}>✅ Name updated</span>}
+                                    {r.status === 'rejected' && <span style={{ fontSize: 12, color: 'var(--red, #f87171)', fontWeight: 500 }}>❌ Rejected</span>}
                                 </div>
                             </div>
                         </div>
@@ -546,13 +557,9 @@ function ApprovalRequests({ token, onAlert }) {
     }
 
     const statusBadge = (status) => {
-        const map = {
-            pending:  { bg: 'rgba(79,142,247,0.15)',  color: '#60a5fa', label: 'Pending' },
-            approved: { bg: 'rgba(16,185,129,0.15)', color: '#34d399', label: 'Approved' },
-            rejected: { bg: 'rgba(239,68,68,0.15)',  color: '#f87171', label: 'Rejected' },
-        }
-        const s = map[status] || { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', label: status }
-        return <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}40`, padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>{s.label}</span>
+        const s = statusColor(status)
+        const label = s.label || status
+        return <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}40`, padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>{label}</span>
     }
 
     const pendingCount = requests.filter(r => r.status === 'pending').length
@@ -564,7 +571,7 @@ function ApprovalRequests({ token, onAlert }) {
                 <div style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                     <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:14, padding:28, maxWidth:400, width:'90%' }}>
                         <div style={{ fontSize:15, fontWeight:700, color:'var(--text-primary)', marginBottom:6 }}>
-                            {noteModal.action === 'approve' ? ' Approve Change' : ' Reject Request'}
+                            {noteModal.action === 'approve' ? 'Approve Change' : 'Reject Request'}
                         </div>
                         <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:14 }}>Optional note to the employee</div>
                         <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
@@ -602,22 +609,21 @@ function ApprovalRequests({ token, onAlert }) {
                             color: filter === f.id ? 'var(--accent)' : 'var(--text-muted)',
                         }}>{f.label}</button>
                     ))}
-                    <button onClick={fetchRequests} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--text-muted)', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>↻</button>
+                    <button onClick={fetchRequests} style={{ padding:'5px 12px', borderRadius:8, border:'1px solid var(--border)', background:'transparent', color:'var(--text-muted)', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>Refresh</button>
                 </div>
             </div>
 
             {loading ? (
-                <div style={{ textAlign:'center', padding:60, color:'var(--text-muted)', fontSize:13 }}>⏳ Loading…</div>
+                <div style={{ textAlign:'center', padding:60, color:'var(--text-muted)', fontSize:13 }}>Loading…</div>
             ) : requests.length === 0 ? (
                 <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, padding:'48px 24px', textAlign:'center' }}>
-                    <div style={{ fontSize:28, marginBottom:10 }}>📭</div>
-                    <div style={{ fontSize:14, fontWeight:600, color:'var(--text-primary)', marginBottom:4 }}>No {filter === 'all' ? '' : filter} requests</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:'var(--text-primary)', marginBottom:4 }}>No {filter === 'all' ? '' : filter} requests</div>
                     <div style={{ fontSize:12, color:'var(--text-muted)' }}>Profile update requests from employees will appear here.</div>
                 </div>
             ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                     {requests.map(r => (
-                        <div key={r.id} style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, padding:'16px 20px' }}>
+                        <div key={r.id} style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, padding:'16px 24px' }}>
                             <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
                                 <div style={{ flex:1, minWidth:200 }}>
                                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
@@ -646,17 +652,17 @@ function ApprovalRequests({ token, onAlert }) {
                                 {r.status === 'pending' && (
                                     <div style={{ display:'flex', gap:6, flexShrink:0 }}>
                                         <button onClick={() => setNoteModal({ id:r.id, action:'approve' })} disabled={!!actionLoading}
-                                            style={{ padding:'6px 14px', borderRadius:7, border:'1px solid rgba(16,185,129,0.3)', background:'rgba(16,185,129,0.1)', color:'#10b981', fontSize:11, fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>
+                                            style={{ padding:'6px 14px', borderRadius:7, border:'1px solid rgba(16,185,129,0.3)', background:'rgba(16,185,129,0.1)', color:'var(--green, #10b981)', fontSize:11, fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>
                                             ✅ Approve
                                         </button>
                                         <button onClick={() => setNoteModal({ id:r.id, action:'reject' })} disabled={!!actionLoading}
-                                            style={{ padding:'6px 14px', borderRadius:7, border:'1px solid rgba(239,68,68,0.3)', background:'rgba(239,68,68,0.1)', color:'#ef4444', fontSize:11, fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>
+                                            style={{ padding:'6px 14px', borderRadius:7, border:'1px solid rgba(239,68,68,0.3)', background:'rgba(239,68,68,0.1)', color:'var(--red, #ef4444)', fontSize:11, fontWeight:500, cursor:'pointer', fontFamily:'inherit' }}>
                                             ❌ Reject
                                         </button>
                                     </div>
                                 )}
-                                {r.status === 'approved' && <span style={{ fontSize:12, color:'#34d399', fontWeight:500 }}>✅ Applied</span>}
-                                {r.status === 'rejected' && <span style={{ fontSize:12, color:'#f87171', fontWeight:500 }}>❌ Rejected</span>}
+                                {r.status === 'approved' && <span style={{ fontSize:12, color:'var(--green, #34d399)', fontWeight:500 }}>✅ Applied</span>}
+                                {r.status === 'rejected' && <span style={{ fontSize:12, color:'var(--red, #f87171)', fontWeight:500 }}>❌ Rejected</span>}
                             </div>
                         </div>
                     ))}
@@ -683,9 +689,9 @@ export default function HRPanel({ token: tokenProp }) {
     const removeAlert = useCallback(id => setAlerts(p => p.filter(a => a.id !== id)), [])
 
     const TABS = [
-        { id: 'directory', label: ' Employee Directory' },
-        { id: 'leaves',    label: ' Leave Approvals' },
-        { id: 'approvals', label: ' Update Requests' },
+        { id: 'directory', label: 'Employee Directory' },
+        { id: 'leaves',    label: 'Leave Approvals' },
+        { id: 'approvals', label: 'Update Requests' },
         // 'signals' tab removed — HR no longer sees behavioral signals
     ]
 
@@ -703,6 +709,10 @@ export default function HRPanel({ token: tokenProp }) {
                 ::-webkit-scrollbar-thumb:hover { background: var(--border-hover, rgba(79,142,247,0.4)); }
                 ::-webkit-scrollbar-corner { background: transparent; }
                 * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+                button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+                    outline: 2px solid var(--accent);
+                    outline-offset: 2px;
+                }
             `}</style>
 
             <Alert alerts={alerts} remove={removeAlert} />

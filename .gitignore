@@ -17,3 +17,10 @@ data/dataset_raw/
 data/dataset_cropped/
 data/face_models/*.pkl
 data/face_models/*.npy
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

@@ -39,7 +39,42 @@ class EmployeeRegisterRequest(BaseModel):
     designation: Optional[str] = None
 
 
-def _mask(phone: str) -> str:
+class AvailabilityCheckRequest(BaseModel):
+    email: EmailStr
+    phone: str = Field(..., description="Phone in E.164 format, e.g. +919876543210")
+
+
+@router.post("/check-availability")
+def check_availability(payload: AvailabilityCheckRequest, db: Session = Depends(get_db)):
+    """
+    Lightweight pre-registration check — called from the details screen before
+    face capture begins. Returns which fields (if any) are already taken so the
+    user can fix them without wasting time on face enrolment.
+    No auth required — this is a public registration helper.
+    """
+    from sqlalchemy import func
+
+    errors = {}
+
+    # Email check — case-insensitive to catch case-mismatch dirty data
+    if db.query(Employee).filter(
+        func.lower(Employee.email) == payload.email.lower()
+    ).first():
+        errors["email"] = "This email address is already registered. Please log in or use a different email."
+
+    # Phone check — strip leading + before comparing so records stored without
+    # the + prefix (dirty data from before E.164 validation was enforced) are
+    # still found correctly.
+    phone_digits = payload.phone.lstrip("+")
+    if db.query(Employee).filter(
+        func.replace(Employee.phone, "+", "") == phone_digits
+    ).first():
+        errors["phone"] = "This phone number is already registered. Please use a different phone number."
+
+    return {"available": len(errors) == 0, "errors": errors}
+
+
+
     return f"{'*' * max(0, len(phone) - 4)}{phone[-4:]}"
 
 

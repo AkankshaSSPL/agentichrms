@@ -318,7 +318,7 @@ export default function App() {
                 </main>
             ) : view === 'documents' ? (
                 <main style={{ gridColumn: '2 / -1', overflow: 'auto', background: 'var(--bg-primary)', minHeight: '100vh' }}>
-                    <DocumentLibrary employee={employee} onBack={() => setView('chat')} />
+                    <DocumentLibrary userRole={employee?.role} onBack={() => setView('chat')} />
                 </main>
             ) : (
                 <main className="dashboard-panel">

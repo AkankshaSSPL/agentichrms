@@ -4,16 +4,37 @@ import DashboardMetricsSimple from './DashboardMetricsSimple'
 import OnboardingChat from './OnboardingChat'
 import BehaviourAnalysis from './BehaviourAnalysis'
 
+// Shared semantic color tokens for role badges and status indicators (inlined
+// here to avoid an extra file — keep in sync with the same block in HRPanel.jsx
+// if you ever copy this elsewhere).
+const ROLE_COLORS = {
+    admin:    { bg: 'rgba(239,68,68,0.15)',  color: '#f87171', border: 'rgba(239,68,68,0.3)' },
+    hr:       { bg: 'rgba(16,185,129,0.15)', color: '#34d399', border: 'rgba(16,185,129,0.3)' },
+    employee: { bg: 'rgba(79,142,247,0.15)', color: '#60a5fa', border: 'rgba(79,142,247,0.3)' },
+}
+const ROLE_COLOR_DEFAULT = { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' }
+const roleColor = (role) => ROLE_COLORS[role] || ROLE_COLOR_DEFAULT
+
+const STATUS_COLORS = {
+    pending:           { bg: 'rgba(79,142,247,0.15)',  color: '#60a5fa', label: 'Pending' },
+    awaiting_document: { bg: 'rgba(245,158,11,0.15)',  color: '#fbbf24', label: 'Awaiting Doc' },
+    approved:          { bg: 'rgba(16,185,129,0.15)',  color: '#34d399', label: 'Approved' },
+    rejected:          { bg: 'rgba(239,68,68,0.15)',   color: '#f87171', label: 'Rejected' },
+    sent:              { bg: 'rgba(52,211,153,0.12)',  color: '#34d399', label: 'Sent' },
+    failed:            { bg: 'rgba(248,113,113,0.12)', color: '#f87171', label: 'Failed' },
+}
+const statusColor = (status) => STATUS_COLORS[status] || ROLE_COLOR_DEFAULT
+
 const API = '/api'
 
 /* ── Sweet Alert ────────────────────────────────────────────────────────────── */
 function Alert({ alerts, remove }) {
     return (
-        <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'none' }}>
+        <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
             {alerts.map(a => (
                 <div key={a.id} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '14px 18px', borderRadius: 12,
+                    padding: '12px 16px', borderRadius: 12,
                     background: a.type === 'success' ? 'rgba(16,185,129,0.12)' : a.type === 'error' ? 'rgba(239,68,68,0.12)' : a.type === 'warning' ? 'rgba(245,158,11,0.12)' : 'rgba(79,142,247,0.12)',
                     border: `1px solid ${a.type === 'success' ? 'rgba(16,185,129,0.35)' : a.type === 'error' ? 'rgba(239,68,68,0.35)' : a.type === 'warning' ? 'rgba(245,158,11,0.35)' : 'rgba(79,142,247,0.35)'}`,
                     backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
@@ -21,7 +42,7 @@ function Alert({ alerts, remove }) {
                 }}>
                     <span style={{ fontSize: 18 }}>{a.type === 'success' ? '✓' : a.type === 'error' ? '✕' : a.type === 'warning' ? '⚠' : 'ℹ'}</span>
                     <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>{a.message}</span>
-                    <button onClick={() => remove(a.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, padding: '0 4px', lineHeight: 1 }}>×</button>
+                    <button onClick={() => remove(a.id)} aria-label="Dismiss notification" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, padding: '0 4px', lineHeight: 1 }}>×</button>
                 </div>
             ))}
         </div>
@@ -34,10 +55,9 @@ function ConfirmDialog({ dialog, onConfirm, onCancel }) {
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 16, padding: 32, maxWidth: 400, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', animation: 'popIn 0.2s ease' }}>
-                <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>🗑</div>
-                <h3 style={{ color: 'var(--text-primary)', textAlign: 'center', margin: '0 0 8px', fontSize: 16 }}>{dialog.title}</h3>
+                <h3 style={{ color: 'var(--text-primary)', textAlign: 'center', margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>{dialog.title}</h3>
                 <p style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: '0 0 24px', fontSize: 13, lineHeight: 1.5 }}>{dialog.message}</p>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={onCancel} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
                     <button onClick={onConfirm} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.9)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{dialog.confirmLabel || 'Confirm'}</button>
                 </div>
@@ -49,16 +69,11 @@ function ConfirmDialog({ dialog, onConfirm, onCancel }) {
 /* ── Role Change Success Dialog ─────────────────────────────────────────────── */
 function RoleSuccessDialog({ info, onClose }) {
     if (!info) return null
-    const roleColors = {
-        admin: { color: '#f87171', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' },
-        hr: { color: '#34d399', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.3)' },
-        employee: { color: '#60a5fa', bg: 'rgba(79,142,247,0.12)', border: 'rgba(79,142,247,0.3)' },
-    }
-    const s = roleColors[info.role] || roleColors.employee
+    const s = roleColor(info.role)
     return (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.70)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: 'var(--bg-card)', border: `1px solid ${s.border}`, borderRadius: 20, padding: '40px 36px', maxWidth: 420, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', animation: 'popIn 0.22s ease', textAlign: 'center', position: 'relative' }}>
-                <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>✕</button>
+                <button onClick={onClose} aria-label="Close dialog" style={{ position: 'absolute', top: 14, right: 16, background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '2px 6px', borderRadius: 6 }}>✕</button>
                 <h3 style={{ color: 'var(--text-primary)', margin: '0 0 10px', fontSize: 17, fontWeight: 700 }}>Role Updated Successfully</h3>
                 <p style={{ color: 'var(--text-secondary)', margin: '0 0 18px', fontSize: 13, lineHeight: 1.6 }}>
                     <strong style={{ color: 'var(--text-primary)' }}>{info.name}</strong>'s role has been changed to{' '}
@@ -92,7 +107,7 @@ function EmailSettingsTab({ token }) {
     return (
         <div style={{ padding: '28px 32px', maxWidth: 860 }}>
             <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)' }}>
+                <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)' }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Email Log</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Last emails</span>
                 </div>
@@ -101,7 +116,7 @@ function EmailSettingsTab({ token }) {
                         <thead>
                             <tr style={{ background: 'var(--bg-secondary)' }}>
                                 {['Time', 'Recipient', 'Subject', 'Triggered by', 'Status'].map(h => (
-                                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{h}</th>
+                                    <th key={h} style={{ padding: '8px 16px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -112,16 +127,16 @@ function EmailSettingsTab({ token }) {
                                 <tr><td colSpan={5} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No emails sent yet</td></tr>
                             ) : logs.map((log, i) => (
                                 <tr key={log.id} style={{ borderBottom: i < logs.length - 1 ? '1px solid var(--border)' : 'none', background: log.status === 'failed' ? 'rgba(248,113,113,0.04)' : 'transparent' }}>
-                                    <td style={{ padding: '10px 14px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(log.sent_at).toLocaleString()}</td>
-                                    <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{log.recipient}</td>
-                                    <td style={{ padding: '10px 14px', color: 'var(--text-primary)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.subject}>{log.subject}</td>
-                                    <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{triggerLabel[log.triggered_by] || log.triggered_by || '—'}</td>
-                                    <td style={{ padding: '10px 14px' }}>
-                                        <span style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: log.status === 'sent' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)', color: log.status === 'sent' ? '#34d399' : '#f87171', border: `1px solid ${log.status === 'sent' ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}` }}>
+                                    <td style={{ padding: '8px 16px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(log.sent_at).toLocaleString()}</td>
+                                    <td style={{ padding: '8px 16px', color: 'var(--text-secondary)' }}>{log.recipient}</td>
+                                    <td style={{ padding: '8px 16px', color: 'var(--text-primary)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.subject}>{log.subject}</td>
+                                    <td style={{ padding: '8px 16px', color: 'var(--text-secondary)' }}>{triggerLabel[log.triggered_by] || log.triggered_by || '—'}</td>
+                                    <td style={{ padding: '8px 16px' }}>
+                                        <span style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: statusColor(log.status).bg, color: statusColor(log.status).color, border: `1px solid ${log.status === 'sent' ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}`, display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                                             {log.status === 'sent' ? '✓ Sent' : '✗ Failed'}
                                         </span>
                                         {log.status === 'failed' && log.error && (
-                                            <div style={{ fontSize: 10, color: '#f87171', marginTop: 3, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.error}>{log.error}</div>
+                                            <div style={{ fontSize: 10, color: 'var(--red, #f87171)', marginTop: 3, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.error}>{log.error}</div>
                                         )}
                                     </td>
                                 </tr>
@@ -157,9 +172,9 @@ function HROnboardingTab({ token }) {
         return (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '12px 24px', borderBottom: '1px solid rgba(79,142,247,0.1)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                    <button onClick={() => { setSelected(null); fetchPending() }} style={{ background: 'rgba(79,142,247,0.1)', border: '1px solid rgba(79,142,247,0.25)', borderRadius: 7, padding: '5px 14px', color: '#60a5fa', fontSize: 12, cursor: 'pointer' }}>← Back</button>
-                    <span style={{ color: '#e2e8f0', fontSize: 14, fontWeight: 600 }}>Filling profile for: <span style={{ color: '#60a5fa' }}>{selected.name}</span></span>
-                    <span style={{ fontSize: 11, color: '#475569' }}>{selected.email}</span>
+                    <button onClick={() => { setSelected(null); fetchPending() }} style={{ background: 'rgba(79,142,247,0.1)', border: '1px solid rgba(79,142,247,0.25)', borderRadius: 7, padding: '5px 14px', color: 'var(--accent)', fontSize: 12, cursor: 'pointer' }}>← Back</button>
+                    <span style={{ color: 'var(--text-primary)', fontSize: 14, fontWeight: 600 }}>Filling profile for: <span style={{ color: 'var(--accent)' }}>{selected.name}</span></span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{selected.email}</span>
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                     <OnboardingChat
@@ -176,23 +191,22 @@ function HROnboardingTab({ token }) {
     return (
         <div style={{ padding: '24px 28px' }}>
             <div style={{ marginBottom: 20 }}>
-                <h3 style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Employee Onboarding</h3>
-                <p style={{ color: '#475569', fontSize: 13, margin: 0 }}>Employees with incomplete profiles. Click to fill their details via chat.</p>
+                <h3 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>Employee Onboarding</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>Employees with incomplete profiles. Click to fill their details via chat.</p>
             </div>
 
             {loading ? (
-                <div style={{ color: '#475569', fontSize: 13, padding: 24 }}>Loading…</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 24 }}>Loading…</div>
             ) : employees.length === 0 ? (
                 <div style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 12, padding: '32px 24px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 32, marginBottom: 10 }}></div>
-                    <div style={{ color: '#34d399', fontSize: 14, fontWeight: 600 }}>All employee profiles are complete!</div>
+                    <div style={{ color: 'var(--green, #34d399)', fontSize: 14, fontWeight: 600 }}>All employee profiles are complete!</div>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {employees.map(emp => (
                         <div key={emp.id} style={{
                             background: 'rgba(15,18,25,0.8)', border: '1px solid rgba(79,142,247,0.1)',
-                            borderRadius: 12, padding: '16px 20px',
+                            borderRadius: 12, padding: '16px 24px',
                             display: 'flex', alignItems: 'center', gap: 16,
                             cursor: 'pointer', transition: 'all 0.15s',
                         }}
@@ -200,17 +214,17 @@ function HROnboardingTab({ token }) {
                             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(79,142,247,0.4)'; e.currentTarget.style.background = 'rgba(79,142,247,0.05)' }}
                             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(79,142,247,0.1)'; e.currentTarget.style.background = 'rgba(15,18,25,0.8)' }}
                         >
-                            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,#4f8ef7,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent),#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                                 {emp.name?.[0]?.toUpperCase()}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{emp.name}</div>
-                                <div style={{ fontSize: 12, color: '#475569' }}>{emp.email}</div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{emp.name}</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emp.email}</div>
                             </div>
                             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                                {!emp.department && <span style={{ fontSize: 10, background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10, padding: '2px 8px' }}>No dept</span>}
-                                {!emp.designation && <span style={{ fontSize: 10, background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 10, padding: '2px 8px' }}>No title</span>}
-                                <span style={{ fontSize: 10, background: 'rgba(79,142,247,0.1)', color: '#60a5fa', border: '1px solid rgba(79,142,247,0.2)', borderRadius: 10, padding: '2px 8px' }}>Fill via chat →</span>
+                                {!emp.department && <span style={{ fontSize: 10, background: 'rgba(251,191,36,0.1)', color: 'var(--amber, #fbbf24)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10, padding: '2px 8px' }}>No dept</span>}
+                                {!emp.designation && <span style={{ fontSize: 10, background: 'rgba(248,113,113,0.1)', color: 'var(--red, #f87171)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 10, padding: '2px 8px' }}>No title</span>}
+                                <span style={{ fontSize: 10, background: 'rgba(79,142,247,0.1)', color: 'var(--accent)', border: '1px solid rgba(79,142,247,0.2)', borderRadius: 10, padding: '2px 8px' }}>Fill via chat →</span>
                             </div>
                         </div>
                     ))}
@@ -297,11 +311,7 @@ export default function AdminPanel({ token: tokenProp }) {
         { id: 'behaviour', label: 'Behaviour' },
     ]
 
-    const roleBadge = (role) => ({
-        admin: { bg: 'rgba(239,68,68,0.15)', color: '#f87171', border: 'rgba(239,68,68,0.3)' },
-        hr: { bg: 'rgba(16,185,129,0.15)', color: '#34d399', border: 'rgba(16,185,129,0.3)' },
-        employee: { bg: 'rgba(79,142,247,0.15)', color: '#60a5fa', border: 'rgba(79,142,247,0.3)' },
-    }[role] || { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' })
+    const roleBadge = roleColor
 
     return (
         <>
@@ -310,9 +320,13 @@ export default function AdminPanel({ token: tokenProp }) {
                 @keyframes popIn   { from { opacity:0; transform:scale(0.92); }     to { opacity:1; transform:scale(1); } }
                 .admin-row:hover { background: var(--bg-card-hover) !important; }
                 .admin-tab:hover { border-color: rgba(79,142,247,0.5) !important; color: var(--accent) !important; }
-                .role-select:focus { outline: none; border-color: var(--accent) !important; }
+                .role-select:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-dim); }
                 .delete-btn:hover { background: rgba(239,68,68,0.25) !important; }
                 .role-select { background: var(--bg-input) !important; color: var(--text-primary) !important; }
+                button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+                    outline: 2px solid var(--accent);
+                    outline-offset: 2px;
+                }
                 ::-webkit-scrollbar { width: 6px; height: 6px; }
                 ::-webkit-scrollbar-track { background: transparent; }
                 ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
@@ -358,7 +372,7 @@ export default function AdminPanel({ token: tokenProp }) {
                     <div style={{ flex: 1 }}>
                         {loading ? (
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: 'var(--text-muted)', fontSize: 13 }}>
-                                <span style={{ marginRight: 10 }}></span> Loading employees...
+                                Loading employees...
                             </div>
                         ) : (
                             <div style={{ background: 'var(--bg-card)', borderRadius: 14, border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -367,7 +381,7 @@ export default function AdminPanel({ token: tokenProp }) {
                                         <thead>
                                             <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
                                                 {['ID', 'Name', 'Email', 'Current Role', 'Change Role', 'Actions'].map(h => (
-                                                    <th key={h} style={{ padding: '14px 18px', textAlign: h === 'Actions' ? 'center' : 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</th>
+                                                    <th key={h} style={{ padding: '12px 16px', textAlign: h === 'Actions' ? 'center' : 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</th>
                                                 ))}
                                             </tr>
                                         </thead>
@@ -378,21 +392,21 @@ export default function AdminPanel({ token: tokenProp }) {
                                                 const badge = roleBadge(emp.role)
                                                 return (
                                                     <tr key={emp.id} className="admin-row" style={{ borderBottom: i < employees.length - 1 ? '1px solid var(--border)' : 'none', transition: 'background 0.15s' }}>
-                                                        <td style={{ padding: '13px 18px', color: 'var(--text-muted)', fontSize: 12 }}>#{emp.id}</td>
-                                                        <td style={{ padding: '13px 18px', color: 'var(--text-primary)', fontWeight: 500 }}>{emp.name}</td>
-                                                        <td style={{ padding: '13px 18px', color: 'var(--text-secondary)' }}>{emp.email}</td>
-                                                        <td style={{ padding: '13px 18px' }}>
+                                                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)', fontSize: 12 }}>#{emp.id}</td>
+                                                        <td style={{ padding: '12px 16px', color: 'var(--text-primary)', fontWeight: 500 }}>{emp.name}</td>
+                                                        <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>{emp.email}</td>
+                                                        <td style={{ padding: '12px 16px' }}>
                                                             <span style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, letterSpacing: '0.04em' }}>{emp.role}</span>
                                                         </td>
-                                                        <td style={{ padding: '13px 18px' }}>
+                                                        <td style={{ padding: '12px 16px' }}>
                                                             <select className="role-select" value={emp.role} onChange={e => updateRole(emp.id, e.target.value, emp.name)} style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)', padding: '6px 10px', borderRadius: 7, fontSize: 12, cursor: 'pointer', transition: 'border-color 0.15s' }}>
                                                                 <option value="employee">Employee</option>
                                                                 <option value="hr">HR</option>
                                                                 <option value="admin">Admin</option>
                                                             </select>
                                                         </td>
-                                                        <td style={{ padding: '13px 18px', textAlign: 'center' }}>
-                                                            <button className="delete-btn" onClick={() => deleteEmployee(emp.id, emp.name)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', padding: '5px 14px', borderRadius: 7, fontSize: 12, cursor: 'pointer', transition: 'background 0.15s' }}>Delete</button>
+                                                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                                            <button className="delete-btn" onClick={() => deleteEmployee(emp.id, emp.name)} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: 'var(--red, #f87171)', padding: '5px 14px', borderRadius: 7, fontSize: 12, cursor: 'pointer', transition: 'background 0.15s' }}>Delete</button>
                                                         </td>
                                                     </tr>
                                                 )
